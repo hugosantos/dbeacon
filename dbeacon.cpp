@@ -359,7 +359,7 @@ void handle_gc() {
 	map<string, beaconSource>::iterator i = sources.begin();
 
 	uint64_t now = get_timestamp();
-	
+
 	while (i != sources.end()) {
 		if (i->second.hasstats) {
 			if ((now - i->second.lasttimestamp) > 60000)
@@ -586,19 +586,22 @@ void beaconSource::refresh(uint32_t seq) {
 	hasstats = false;
 }
 
+template<typename T>
+T udiff(T a, T b) {
+	if (a > b)
+		return a - b;
+	return b - a;
+}
+
 void beaconSource::update(const in6_addr *from, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 	// int64_t diff = now - (int64_t)timestamp;
 
 	// if (diff < 0)
 	//	return;
 
-	int64_t diff;
-	if (now > timestamp)
-		diff = now - timestamp;
-	else
-		diff = timestamp - now;
+	int64_t diff = udiff(now, timestamp);
 
-	if (seqnum < lastseq && (lastseq - seqnum) > PACKETS_VERY_OLD) {
+	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
 		refresh(seqnum - 1);
 	}
 
