@@ -462,7 +462,7 @@ sub render_matrix {
 				# Removing port number from id and link toward RIPE whois db
 			        my $ip = $a;
 			        $ip =~ s/\/\d+$//;
-			        print "<td class=\"addr\"><a href=\"" . make_ripe_search_url($ip) . "\"> $ip</a></td>";
+			        print "<td class=\"addr\"><a href=\"" . make_ripe_search_url($ip) . "\">$ip</a></td>";
 				print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";
 
 				my $urls;
