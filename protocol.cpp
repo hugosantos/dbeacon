@@ -33,7 +33,7 @@ static bool write_tlv_uint(uint8_t *buff, int maxlen, int &ptr, uint8_t type, ui
 	if (!write_tlv_start(buff, maxlen, ptr, type, 4))
 		return false;
 	uint32_t v = htonl(val);
-	memcpy(buff + ptr + 2, &v, 4);
+	memcpy(buff + ptr, &v, 4);
 	ptr += 4;
 	return true;
 }

@@ -1157,7 +1157,7 @@ void do_dump() {
 						j != i->second.webSites.end(); j++) {
 			const char *typnam = j->first == T_WEBSITE_GENERIC ?
 				"generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
-			fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n",
+			fprintf(fp, "\t\t<website type=\"%s\" url=\"%s\" />\n",
 						typnam, j->second.c_str());
 		}
 
