@@ -260,11 +260,6 @@ sub start_document {
 	print "<h1 style=\"margin: 0\">$title</h1>\n";
 
 	print "<small>Current server time is " . localtime() . "</small><br />\n";
-
-	my $last_update_time = check_outdated_dump();
-	if ($last_update_time) {
-		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
-	}
 }
 
 sub build_header {
@@ -274,7 +269,14 @@ sub build_header {
 	if ($ssm_sessiongroup) {
 		print " (SSM: <code>$ssm_sessiongroup</code>)";
 	}
-	print "<br /><br />\n";
+	print "<br />\n";
+
+	my $last_update_time = check_outdated_dump();
+	if ($last_update_time) {
+		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
+	}
+
+	print "<br />\n";
 
 	my $hideatt;
 
