@@ -1181,7 +1181,7 @@ int build_nreport(uint8_t *buff, int maxlen, bool map) {
 		if (!i->second.identified)
 			continue;
 
-		if (!map && !i->second.ASM.s.valid && !i->second.SSM.s.valid)
+		if (!i->second.ASM.s.valid && !i->second.SSM.s.valid)
 			continue;
 
 		int len = 18;
