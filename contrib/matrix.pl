@@ -27,6 +27,7 @@ our $history_enabled = 1;
 our $css_file;
 our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
 our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
+our $default_ssm_group = "ff3e::beac/10000";
 
 do("matrix.conf");
 
@@ -335,38 +336,44 @@ sub build_header {
 	my ($attname, $atthideinfo, $attwhat, $start, $step) = @_;
 
 	if (defined($step)) { # From history
-		print "<br /><b>Snapshot stats at ".localtime($start)."</b> ($step seconds average) ";
-		print "<br /><br />\n";
+		print "<p><b>Snapshot stats at " . localtime($start) . "</b> ($step seconds average)</p>\n";
 
-		print '<form name="timenavigator">';
-		print 'Time navigation: ';
-		print '<script language="javascript">
+		print '<form id="timenavigator" action=";">';
+		print '<script type="text/javascript">
 			function move(way) {
-				selectedvalue = document.timenavigator.offset.options[document.timenavigator.offset.selectedIndex].value;
-				newdate = '.$at.' + selectedvalue * way;
-				url = "'."$url?what=$attwhat&amp;att=$attname&amp;at=".'"+newdate;
-				location.href=url;
-			}</script>';
+				var timenavoff = document.getElementById("timenavigator").offset;
+				var selectedvalue = timenavoff.options[timenavoff.selectedIndex].value;
+				var newdate = ' . $at . ' + selectedvalue * way;
+				var url = "' . "$url?what=$attwhat&amp;tt=$attname" . '&amp;ammount=" + selectedvalue + "&amp;at="+newdate;
+				location.href = url;
+			}
+			</script>';
 
+		print '<p>Time navigation: ';
 		print '<a href="javascript:move(-1)"><small>Move backward</small> &lt;</a>';
 
-		#print '<select name="offset" onChange="location = this.options[this.selectedIndex].value;">'."\n";
-		print '<select name="offset">'."\n";
+		print '<select name="offset" style="margin-left: 0.5em; margin-right: 0.5em">'."\n";
 
-		print '<option value="60"> 60 s';
-		print '<option value="600"> 10 mn';
-		print '<option value="3600"> 60 mn';
-		print '<option value="36000"> 10 h';
-		print '<option value="86400"> 24 h';
-		print '<option value="604800"> 7 days';
-		print '<option value="2592000"> 30 days';
-		print '<option value="7884000"> 3 months';
+		my $ammount = $page->param('ammount');
+		if (not defined($ammount)) {
+			$ammount = 60;
+		}
+
+		my @ammounts = ([60, "60 s"], [600, "10m"], [3600, "60m"], [36000, "10h"], [86400, "24h"], [604800, "7d"], [2592000, "30d"]);
+		# 7884000 3 months
+
+		foreach my $ammitem (@ammounts) {
+			print '<option value="' . $ammitem->[0] . '"';
+			if ($ammitem->[0] == $ammount) {
+				print ' selected="selected"';
+			}
+			print '> ' . $ammitem->[1] . '</option>';
+		}
 
 		print "</select>";
 
 		print '<a href="javascript:move(1)">&gt; <small>Move forward</small></a>';
-		print '<br />';
-		print '</form>';
+		print '</p></form>';
 
 	} else {
 		print "<p><b>Current stats for</b> <code>$sessiongroup</code>";
@@ -490,7 +497,7 @@ sub render_matrix {
 	if ($attat > 0) {
 		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname\">Live stats</a>)";
 	} else {
-		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=".time()."\">Past stats</a>)"
+		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=" . (time() - 60) ."\">Past stats</a>)"
 	}
 
 	start_document($addinfo);
@@ -719,8 +726,11 @@ sub render_matrix {
 	} else {
 		print " with the following parameters:</p>\n";
 		print "<p><code>./dbeacon -n NAME -b $sessiongroup";
-		if ($ssm_sessiongroup) {
-			print " -S $ssm_sessiongroup";
+		if (defined($ssm_sessiongroup)) {
+			print " -S";
+			if ($ssm_sessiongroup ne $default_ssm_group) {
+				print " $ssm_sessiongroup";
+			}
 		}
 		print " -a CONTACT</code></p>\n";
 	}
@@ -980,7 +990,7 @@ sub get_name_from_host {
 sub do_list_beacs {
 	my ($name, $dst, $src, @vals) = @_;
 
-	print '<select name="'.$name.'" onChange="location = this.options[this.selectedIndex].value;">'."\n";
+	print '<select name="'.$name.'" onchange="location = this.options[this.selectedIndex].value;">'."\n";
 
 	my $def;
 	if ($name eq 'srcc') {
@@ -992,14 +1002,14 @@ sub do_list_beacs {
 	foreach my $foo (@vals) {
 		print '<option value="'.$url.'?history=1&amp;dst=';
 		if ($name eq 'srcc') {
-			print $dst.'&src='.$foo;
+			print $dst.'&amp;src='.$foo;
 		} else {
 			print $foo;
 		}
 		print '"';
 
 		if ($foo eq $def) {
-			print " selected";
+			print ' selected="selected"';
 		}
 
 		print ">" . (get_name_from_host($foo))[0] ;
@@ -1016,16 +1026,14 @@ sub do_list_beacs {
 sub graphthumb {
 	my ($type) = shift;
 	print '<a href="' . full_url0() . "&amp;history=1&amp;type=$type\">\n";
-	print '<img style="margin-right: 0.5em; margin-bottom: 0.5em" border="0" src="'.full_url0()."&amp;type=$type&amp;img=true&amp;thumb=true&amp;age=$age\" /></a><br />\n";
+	print '<img style="margin-right: 0.5em; margin-bottom: 0.5em; border: 0" alt="thumb" src="'.full_url0()."&amp;type=$type&amp;img=true&amp;thumb=true&amp;age=$age\" /></a><br />\n";
 }
 
 sub list_graph {
 	start_document(" (<a href=\"$url\">Live stats</a>)");
 
-	print "<br />\n";
-
         if (defined($dst)) {
-               print "To ";
+               print "<p>To ";
 
                do_list_beacs("dstc", $dst, undef, get_beacons($historydir));
 
@@ -1038,12 +1046,12 @@ sub list_graph {
 
                                my @types = (["-- All --", "", ""], ["TTL", "ttl", ""], ["Loss", "loss", ""], ["Delay", "delay", ""], ["Jitter", "jitter", ""]);
 
-				print '<select name="type" onChange="location = this.options[this.selectedIndex].value;">'."\n";
+				print '<select name="type" onchange="location = this.options[this.selectedIndex].value;">'."\n";
 
 				foreach my $foo (@types) {
-					print '<option value="'.full_url0() . '&history=1&type=' . $$foo[1].'" ';
+					print '<option value="'.full_url0() . '&amp;history=1&amp;type=' . $$foo[1].'"';
 					if ($type eq $$foo[1]) {
-						print 'selected';
+						print ' selected="selected"';
 					}
 					print '>'.$$foo[0]."\n";;
 				}
@@ -1051,14 +1059,14 @@ sub list_graph {
 			}
 		}
 
-		print "<br />";
+		print "</p>";
 	}
 
 	if (not defined($dst)) {
 
 		# List beacon receiving infos
 
-		print 'Select a receiver:';
+		print '<p>Select a receiver:</p>';
 
 		my @beacs = get_beacons($historydir);
 
