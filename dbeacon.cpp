@@ -22,7 +22,7 @@
 // not everyone have this
 #ifndef MCAST_JOIN_SOURCE_GROUP
 #define MCAST_JOIN_SOURCE_GROUP 46
-#define MCAST_LEAVE_SOURCE_GROUP 46
+#define MCAST_LEAVE_SOURCE_GROUP 47
 
 struct group_source_req {
 	uint32_t gsr_interface;
@@ -529,7 +529,7 @@ void next_event(struct timeval *eventm) {
 
 	if (timercmp(eventm, &now, <)) {
 		eventm->tv_sec = 0;
-		eventm->tv_usec = 0;
+		eventm->tv_usec = 1;
 	} else {
 		tv_diff(eventm, &now);
 	}
