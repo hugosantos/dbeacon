@@ -225,8 +225,8 @@ sub graphgen
 	{
 		case "ttl"	{ $title='TTL'   ; $ytitle='Hops'; $unit='%3.0lf hops' }
 		case "loss"	{ $title='Loss'  ; $ytitle='% of packet loss'; $unit='%2.1lf %%' }
-		case "delay"	{ $title='Delay' ; $ytitle='Seconds'; $unit='%2.2lf s' }
-		case "jitter"	{ $title='Jitter'; $ytitle='Seconds'; $unit='%2.2lf s' }
+		case "delay"	{ $title='Delay' ; $ytitle='Seconds'; $unit='%2.2lf %ss' }
+		case "jitter"	{ $title='Jitter'; $ytitle='Seconds'; $unit='%2.2lf %ss' }
 		else		{ die "Unknown type\n"; }
 	}
 
