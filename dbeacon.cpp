@@ -779,6 +779,9 @@ void handle_probe(int sock, content_type type) {
 	if (len < 0)
 		return;
 
+	if (from.is_equal(beaconUnicastAddr))
+		return;
+
 	if (verbose > 3) {
 		char tmp[64];
 		from.print(tmp, sizeof(tmp));
