@@ -158,7 +158,7 @@ foreach $a (@V) {
 
 					if ($attwhat eq "asm") {
 						if ($txt eq "") {
-							print "<td class=\"noinfo\">N/A</td>";
+							print "<td $what_td class=\"blackhole\">XX</td>";
 						} else {
 							print "<td class=\"fulladjacent\">";
 							make_history_link($b, $a, "asm", $txt, "historyurl");
@@ -168,7 +168,7 @@ foreach $a (@V) {
 						my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
 
 						if (($txt eq "") and ($txtssm eq "")) {
-							print "<td colspan=\"2\" class=\"noinfo\">N/A</td>";
+							print "<td $what_td class=\"blackhole\">XX</td>";
 						} else {
 							make_matrix_cell($b, $a, "asm", $txt, "historyurl");
 							make_matrix_cell($b, $a, "ssm", $txtssm, "historyurl");
@@ -451,9 +451,6 @@ table#adj td.fulladjacent, table#adj td.adjacent_asm, table#adj td.adjacent_ssm 
 table#adj td.blackhole {
 	background-color: #000000;
 }
-table#adj td.noinfo {
-	background-color: #ff0000;
-}
 table#adj td.noinfo_asm, table#adj td.noinfo_ssm {
 	background-color: #b6ffb6;
 	width: 20px;
@@ -466,7 +463,7 @@ table#adj td.adjacent_asm {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.blackhole, table#adj td.noinfo, table#adj td.fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
+table#adj td.blackhole, table#adj td.fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
 	border-right: 0.2em solid white;
 }
 
