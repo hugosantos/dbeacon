@@ -48,7 +48,7 @@ using namespace std;
 
 #define NEW_BEAC_INT	5
 #define NEW_BEAC_PCOUNT	10
-#define NEW_BEAC_VER	0
+#define NEW_BEAC_VER	1
 
 static const char *magicString = "beacon0600";
 static const int magicLen = 10;
@@ -77,6 +77,14 @@ enum content_type {
 	NPROBE,
 	NSSMPROBE,
 	NREPORT
+};
+
+enum {
+	T_BEAC_NAME = 'n',
+	T_ADMIN_CONTACT = 'a',
+	T_SOURCE_INFO = 'I',
+	T_ASM_STATS = 'A',
+	T_SSM_STATS = 'S'
 };
 
 static vector<pair<sockaddr_in6, content_type> > mcastListen;
@@ -108,6 +116,7 @@ struct Stats {
 	Stats() : valid(false) {}
 
 	bool valid;
+	uint64_t timestamp;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 	uint8_t rttl;
 };
@@ -161,11 +170,10 @@ static Sources sources;
 struct beaconExternalStats {
 	beaconExternalStats() : identified(false) {}
 
-	uint64_t timestamp;
 	uint64_t lastlocalupdate;
 	uint32_t age;
 
-	Stats s;
+	Stats ASM, SSM;
 
 	bool identified;
 	string name, contact;
@@ -802,6 +810,39 @@ static inline beaconSource &getSource(const in6_addr &addr, uint16_t port, const
 	return src;
 }
 
+static inline uint8_t *tlv_begin(uint8_t *hd, int &len) {
+	if (len < 2 || hd[1] > len)
+		return 0;
+	return hd;
+}
+
+static inline uint8_t *tlv_next(uint8_t *hd, int &len) {
+	len -= hd[1];
+	return tlv_begin(hd + hd[1] + 2, len);
+}
+
+static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
+	if (tlv[1] != 20)
+		return false;
+
+	st.timestamp = ntohl(*(uint32_t *)(tlv + 2));
+	extb.age = ntohl(*(uint32_t *)(tlv + 6));
+	st.rttl = tlv[10];
+
+	uint32_t tmp = ntohl(*(uint32_t *)(tlv + 11));
+	st.avgdelay = *(float *)&tmp;
+	tmp = ntohl(*(uint32_t *)(tlv + 15));
+	st.avgjitter = *(float *)&tmp;
+
+	st.avgloss = tlv[19] / 255.;
+	st.avgdup = tlv[20] / 255.;
+	st.avgooo = tlv[21] / 255.;
+
+	st.valid = true;
+
+	return true;
+}
+
 void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, int len, bool ssm) {
 	if (len < 4)
 		return;
@@ -826,78 +867,45 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 		return;
 
 	if (buff[3] == 1) {
-		if (len < 7 || (7 + buff[5]) > len || (7 + buff[5] + buff[6 + buff[5]]) > len)
+		if (len < 5)
 			return;
 
 		beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts);
 
 		src.sttl = buff[4];
 
-		string beacName((char *)buff + 6, buff[5]);
+		len -= 5;
 
-		src.setName(beacName);
-		src.adminContact = string((char *)buff + 7 + buff[5], buff[6 + buff[5]]);
+		for (uint8_t *hd = tlv_begin(buff + 5, len); hd; hd = tlv_next(hd, len)) {
+			if (hd[0] == T_BEAC_NAME) {
+				string name((char *)hd + 2, hd[1]);
+				src.setName(name);
+			} else if (hd[0] == T_ADMIN_CONTACT) {
+				src.adminContact = string((char *)hd + 2, hd[1]);
+			} else if (hd[0] == T_SOURCE_INFO) {
+				if (hd[1] < 18)
+					continue;
+				in6_addr addr;
+				memcpy(&addr, hd + 2, sizeof(in6_addr));
+				uint16_t port = ntohs(*(uint16_t *)(hd + 18));
 
-		int hlen = 7 + buff[5] + buff[6 + buff[5]];
-		uint8_t *ptr = buff + hlen;
-		int plen = hlen;
+				beaconExternalStats &stats = src.getExternal(addr, port, recvdts);
 
-		uint32_t tmp;
+				int plen = hd[1] - 18;
+				for (uint8_t *pd = tlv_begin(hd + 2 + 18, plen); pd; pd = tlv_next(pd, plen)) {
+					if (pd[0] == T_BEAC_NAME) {
+						stats.name = string((char *)hd + 2, hd[1]);
+						stats.identified = !stats.name.empty();
+					} else if (pd[0] == T_ADMIN_CONTACT) {
+						stats.contact = string((char *)hd + 2, hd[1]);
+					} else if (pd[0] == T_ASM_STATS || pd[0] == T_SSM_STATS) {
+						Stats *st = (pd[0] == T_ASM_STATS ? &stats.ASM : &stats.SSM);
 
-		while (plen < len) {
-			int elen = 4 + 4 + 1 + 4 * 2 + 3;
-			if ((plen + 18 + elen) > len)
-				break;
-
-			in6_addr addr;
-			memcpy(&addr, ptr, sizeof(in6_addr));
-			beaconExternalStats &stats = src.getExternal(addr, ntohs(*((uint16_t *)(ptr + 16))), recvdts);
-
-			ptr += 18;
-
-			stats.timestamp = ntohl(*(uint32_t *)ptr);
-			stats.age = ntohl(*((((uint32_t *)ptr)+1)));
-			stats.s.rttl = ptr[8];
-			tmp = ntohl(*(uint32_t *)(ptr + 9));
-			stats.s.avgdelay = *(float *)&tmp;
-			tmp = ntohl(*(uint32_t *)(ptr + 13));
-			stats.s.avgjitter = *(float *)&tmp;
-
-			stats.s.avgloss = ptr[17] / 255.;
-			stats.s.avgdup = ptr[18] / 255.;
-			stats.s.avgooo = ptr[19] / 255.;
-
-			stats.s.valid = true;
-
-			ptr += 20;
-
-			plen += 18 + elen;
-		}
-	} else if (buff[3] == 2) {
-		int plen = 4;
-		uint8_t *ptr = buff + 4;
-
-		beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts);
-
-		while (plen < len) {
-			if ((plen + 18 + 2) > len)
-				break;
-			int namelen = ptr[18];
-			if ((plen + 18 + 2 + namelen) > len)
-				break;
-			int contactlen = ptr[19 + namelen];
-			if ((plen + 18 + 2 + namelen + contactlen) > len)
-				break;
-			in6_addr addr;
-			memcpy(&addr, ptr, sizeof(in6_addr));
-			beaconExternalStats &stats = src.getExternal(addr, ntohs(*((uint16_t *)(ptr + 16))), recvdts);
-
-			stats.name = string((char *)ptr + 19, namelen);
-			stats.contact = string((char *)ptr + 20 + namelen, contactlen);
-			stats.identified = true;
-
-			plen += 18 + 2 + namelen + contactlen;
-			ptr += 18 + 2 + namelen + contactlen;
+						if (!read_tlv_stats(pd, stats, *st))
+							break;
+					}
+				}
+			}
 		}
 	}
 }
@@ -954,20 +962,20 @@ int parse_jreport(uint8_t *buffer, int len, uint64_t recvdts, string &session, s
 
 		if (!buf.read_string(name))
 			return -1;
-		if (!buf.read_longlong(stats.timestamp))
+		if (!buf.read_longlong(stats.ASM.timestamp))
 			return -1;
-		if (!buf.read_float(stats.s.avgdelay))
+		if (!buf.read_float(stats.ASM.avgdelay))
 			return -1;
-		if (!buf.read_float(stats.s.avgjitter))
+		if (!buf.read_float(stats.ASM.avgjitter))
 			return -1;
-		if (!buf.read_float(stats.s.avgloss))
+		if (!buf.read_float(stats.ASM.avgloss))
 			return -1;
-		if (!buf.read_float(stats.s.avgooo))
+		if (!buf.read_float(stats.ASM.avgooo))
 			return -1;
-		if (!buf.read_float(stats.s.avgdup))
+		if (!buf.read_float(stats.ASM.avgdup))
 			return -1;
-		stats.s.rttl = 0;
-		stats.s.valid = true;
+		stats.ASM.rttl = 0;
+		stats.ASM.valid = true;
 		stats.age = 0;
 
 		rpt.jsources[name] = stats;
@@ -1167,13 +1175,51 @@ int send_nprobe() {
 	return len;
 }
 
-int build_nreport(uint8_t *buff, int maxlen) {
-	int nl = strlen(beaconName);
-	int cl = adminContact.size();
+static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer, uint8_t type, const char *str) {
+	if ((pointer + 2 + (int)strlen(str)) > maxlen)
+		return false;
+	buf[pointer + 0] = type;
+	buf[pointer + 1] = strlen(str);
+	memcpy(buf + pointer + 2, str, buf[pointer + 1]);
+	pointer += buf[pointer + 1];
+	return true;
+}
 
-	int len = 4 + 1 + 1 + nl + 1 + cl;
+bool write_tlv_start(uint8_t *buff, int maxlen, int &ptr, uint8_t type, int len) {
+	if ((ptr + len + 2) > maxlen)
+		return false;
 
-	if (maxlen < len)
+	buff[ptr] = type;
+	buff[ptr+1] = len;
+
+	ptr += 2;
+
+	return true;
+}
+
+bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t age, int sttl, const beaconMcastState &st) {
+	if (!write_tlv_start(buff, maxlen, ptr, type, 20))
+		return false;
+
+	uint8_t *b = buff + ptr;
+
+	*((uint32_t *)(b + 0)) = htonl((uint32_t)st.lasttimestamp);
+	*((uint32_t *)(b + 4)) = htonl(age);
+	b[8] = sttl - st.s.rttl;
+
+	uint32_t *stats = (uint32_t *)(b + 9);
+	stats[0] = htonl(*((uint32_t *)&st.s.avgdelay));
+	stats[1] = htonl(*((uint32_t *)&st.s.avgjitter));
+
+	b[17] = (uint8_t)(st.s.avgloss * 0xff);
+	b[18] = (uint8_t)(st.s.avgdup * 0xff);
+	b[19] = (uint8_t)(st.s.avgooo * 0xff);
+
+	return true;
+}
+
+int build_nreport(uint8_t *buff, int maxlen, bool map) {
+	if (maxlen < 4)
 		return -1;
 
 	// 0-2 magic
@@ -1187,88 +1233,53 @@ int build_nreport(uint8_t *buff, int maxlen) {
 
 	buff[4] = 127; // Original Hop Limit
 
-	buff[5] = nl;
-	memcpy(buff + 6, beaconName, nl);
+	int ptr = 5;
 
-	buff[6 + nl] = cl;
-	memcpy(buff + 7 + nl, adminContact.c_str(), cl);
-
-	uint8_t *ptr = buff + 7 + nl + cl;
-
-	uint64_t now = get_timestamp();
-
-	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-		if (!i->second.ASM.s.valid || !i->second.identified)
-			continue;
-
-		int plen = 4 + 4 + 1 + 4 * 2 + 3;
-		if ((len + 18 + plen) > maxlen)
-			return -1;
-
-		memcpy(ptr, &i->first.first, sizeof(in6_addr));
-		*((uint16_t *)(ptr + 16)) = htons(i->first.second);
-
-		ptr += 18;
-
-		*((uint32_t *)ptr) = htonl((uint32_t)i->second.ASM.lasttimestamp);
-		*((uint32_t *)(ptr + 4)) = htonl((uint32_t)((now - i->second.creation) / 1000));
-		ptr[8] = i->second.sttl - i->second.ASM.s.rttl;
-
-		uint32_t *stats = (uint32_t *)(ptr + 9);
-		stats[0] = htonl(*((uint32_t *)&i->second.ASM.s.avgdelay));
-		stats[1] = htonl(*((uint32_t *)&i->second.ASM.s.avgjitter));
-
-		ptr[17] = (uint8_t)(i->second.ASM.s.avgloss * 0xff);
-		ptr[18] = (uint8_t)(i->second.ASM.s.avgdup * 0xff);
-		ptr[19] = (uint8_t)(i->second.ASM.s.avgooo * 0xff);
-
-		ptr += plen;
-		len += 18 + plen;
-	}
-
-	return len;
-}
-
-int build_nmapreport(uint8_t *buff, int maxlen) {
-	if (maxlen < 4)
+	if (!write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, beaconName))
+		return -1;
+	if (!write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, adminContact.c_str()))
 		return -1;
 
-	// 0-2 magic
-	*((uint16_t *)buff) = htons(0xbeac);
-
-	// 3 version
-	buff[2] = NEW_BEAC_VER;
-
-	// 4 packet type
-	buff[3] = 2; // Map Report
-
-	uint8_t *ptr = buff + 4;
-	int len = 4;
+	uint64_t now = get_timestamp();
 
 	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
 		if (!i->second.identified)
 			continue;
 
-		int namelen = i->second.name.size();
-		int contactlen = i->second.adminContact.size();
-		int plen = 18 + 2 + namelen + contactlen;
+		if (!map && !i->second.ASM.s.valid && !i->second.SSM.s.valid)
+			continue;
 
-		if ((len + plen) > maxlen)
-			return -1;
+		int len = 18;
 
-		memcpy(ptr, &i->first.first, sizeof(in6_addr));
-		*((uint16_t *)(ptr + 16)) = htons(i->first.second);
+		if (map) {
+			int namelen = i->second.name.size();
+			int contactlen = i->second.adminContact.size();
+			len += 2 + namelen + 2 + contactlen;
+		} else {
+			len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
+		}
 
-		ptr[18] = namelen;
-		memcpy(ptr + 19, i->second.name.c_str(), namelen);
-		ptr[19 + namelen] = contactlen;
-		memcpy(ptr + 20 + namelen, i->second.adminContact.c_str(), contactlen);
+		if (!write_tlv_start(buff, maxlen, ptr, T_SOURCE_INFO, len))
+			break;
 
-		ptr += plen;
-		len += plen;
+		memcpy(buff + ptr, &i->first.first, sizeof(in6_addr));
+		*((uint16_t *)(buff + ptr + 16)) = htons(i->first.second);
+		ptr += 18;
+
+		if (map) {
+			write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
+			write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
+		} else {
+			uint32_t age = (now - i->second.creation) / 1000;
+
+			if (i->second.ASM.s.valid)
+				write_tlv_stats(buff, maxlen, ptr, T_ASM_STATS, age, i->second.sttl, i->second.ASM);
+			if (i->second.SSM.s.valid)
+				write_tlv_stats(buff, maxlen, ptr, T_SSM_STATS, age, i->second.sttl, i->second.SSM);
+		}
 	}
 
-	return len;
+	return ptr;
 }
 
 int build_jreport(uint8_t *buffer, int maxlen) {
@@ -1321,10 +1332,7 @@ int send_report(bool map) {
 	int len;
 
 	if (newProtocol) {
-		if (map)
-			len = build_nmapreport(buffer, sizeof(buffer));
-		else
-			len = build_nreport(buffer, sizeof(buffer));
+		len = build_nreport(buffer, sizeof(buffer), map);
 	} else {
 		len = build_jreport(buffer, sizeof(buffer));
 	}
@@ -1471,9 +1479,12 @@ void do_dump() {
 				}
 				inet_ntop(AF_INET6, &j->first.first, tmp, sizeof(tmp));
 				fprintf(fp, " addr=\"%s/%d\"", tmp, j->first.second);
-				if (j->second.s.valid) {
-					fprintf(fp, " age=\"%u\"\n\t\t\t", j->second.age);
-					dumpStats(fp, j->second.s, i->second.sttl, false);
+				fprintf(fp, " age=\"%u\"\n\t\t\t\t", j->second.age);
+				if (j->second.ASM.valid) {
+					dumpStats(fp, j->second.ASM, i->second.sttl, false);
+				}
+				if (j->second.SSM.valid) {
+					dumpStats(fp, j->second.SSM, i->second.sttl, false);
 				}
 				fprintf(fp, " />\n");
 			}
@@ -1491,7 +1502,7 @@ void do_dump() {
 					j != i->second.jsources.end(); j++) {
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", j->first.c_str());
-				dumpStats(fp, j->second.s, 0, true);
+				dumpStats(fp, j->second.ASM, 0, true);
 				fprintf(fp, " />\n");
 			}
 
