@@ -34,6 +34,7 @@
 #include <map>
 
 #include "address.h"
+#include "ptime.h"
 
 #ifdef __sun__
 #define TTLType		uint8_t
@@ -137,8 +138,6 @@ extern address beaconUnicastAddr;
 
 beaconSource &getSource(const address &, const char *name, uint64_t now, bool rxlocal);
 void removeSource(const address &, bool);
-
-extern uint64_t get_timestamp();
 
 extern int verbose;
 

@@ -3,7 +3,7 @@ CXXFLAGS ?= -g -Wall
 
 PREFIX ?= /usr/local
 
-OBJS = dbeacon.o address_posix.o msocket_posix.o protocol.o
+OBJS = dbeacon.o address_posix.o msocket_posix.o ptime_posix.o protocol.o
 
 all: dbeacon
 
@@ -12,13 +12,15 @@ dbeacon: $(OBJS)
 
 dbeacon.o: dbeacon.cpp dbeacon.h address.h msocket.h protocol.h
 
-dbeacon.h: address.h
+dbeacon.h: address.h ptime.h
 
 address_posix.o: address_posix.cpp dbeacon.h address.h
 
 msocket_posix.o: msocket_posix.cpp dbeacon.h msocket.h
 
 msocket.h: address.h
+
+ptime_posix.o: ptime_posix.cpp dbeacon.h ptime.h
 
 protocol.o: protocol.cpp dbeacon.h protocol.h
 

@@ -123,7 +123,7 @@ static int dumpInterval = 5;
 static const char *multicastInterface = 0;
 int forceFamily = AF_UNSPEC;
 
-static void next_event(struct timeval *);
+static void next_event(timeval *);
 static void insert_event(uint32_t, uint32_t);
 static void handle_probe(int, content_type);
 static void handle_mcast(int, content_type);
@@ -317,6 +317,7 @@ int main(int argc, char **argv) {
 
 	addrlen = beaconUnicastAddr.addrlen();
 
+	// Retrieve the used port
 	if (getsockname(mcastSock, beaconUnicastAddr.saddr(), &addrlen) != 0) {
 		perror("getsockname");
 		return -1;
@@ -354,13 +355,14 @@ int main(int argc, char **argv) {
 
 	beaconUnicastAddr.print(tmp, sizeof(tmp), false);
 
-	fprintf(stdout, "Local name is %s [Beacon group: %s, Local address: %s]\n", beaconName.c_str(), sessionName, tmp);
+	fprintf(stdout, "Local name is %s [Beacon group: %s, Local address: %s]\n",
+					beaconName.c_str(), sessionName, tmp);
 
 	startTime = lastDumpBwTS = lastDumpDumpBwTS = get_timestamp();
 
 	while (1) {
 		fd_set readset;
-		struct timeval eventm;
+		timeval eventm;
 
 		memcpy(&readset, &readSet, sizeof(fd_set));
 
@@ -498,46 +500,28 @@ int parse_arguments(int argc, char **argv) {
 
 struct timer {
 	uint32_t type, interval;
-	struct timeval target;
+	uint64_t target;
 };
-
-void tv_diff(struct timeval *l, struct timeval *r) {
-	if (l->tv_usec >= r->tv_usec) {
-		l->tv_sec -= r->tv_sec;
-		l->tv_usec -= r->tv_usec;
-	} else {
-		l->tv_sec -= (r->tv_sec + 1);
-		l->tv_usec = r->tv_usec - l->tv_usec;
-	}
-}
 
 static list<timer> timers;
 
-void next_event(struct timeval *eventm) {
-	timeval now;
-	gettimeofday(&now, 0);
+void next_event(timeval *eventm) {
+	int64_t diff = get_timestamp() - (int64_t)timers.begin()->target;
 
-	*eventm = timers.begin()->target;
-
-	if (timercmp(eventm, &now, <)) {
-		eventm->tv_sec = 0;
-		eventm->tv_usec = 1;
-	} else {
-		tv_diff(eventm, &now);
+	if (diff <= 0) {
+		diff = 1;
 	}
+
+	eventm->tv_sec = diff / 1000;
+	eventm->tv_usec = (diff % 1000) * 1000;
 }
 
 void insert_sorted_event(timer &t) {
-	gettimeofday(&t.target, 0);
-	t.target.tv_usec += t.interval * 1000;
-	while (t.target.tv_usec > 1000000) {
-		t.target.tv_usec -= 1000000;
-		t.target.tv_sec++;
-	}
+	t.target = get_timestamp() + t.interval * 1000;
 
 	list<timer>::iterator i = timers.begin();
 
-	while (i != timers.end() && timercmp(&i->target, &t.target, <))
+	while (i != timers.end() && i->target < t.target)
 		i++;
 
 	timers.insert(i, t);
@@ -603,13 +587,13 @@ void handle_event() {
 	} else if (t.type == SSM_SENDING_EVENT && send_ssm_count == NEW_BEAC_PCOUNT) {
 		insert_event(WILLSEND_SSM_EVENT, timeFact(1, true));
 	} else if (t.type == REPORT_EVENT) {
-		insert_event(REPORT_EVENT, timeFact(2));
+		insert_event(REPORT_EVENT, timeFact(2, true));
 	} else if (t.type == SSM_REPORT_EVENT) {
-		insert_event(SSM_REPORT_EVENT, timeFact(3));
+		insert_event(SSM_REPORT_EVENT, timeFact(3, true));
 	} else if (t.type == MAP_REPORT_EVENT) {
-		insert_event(MAP_REPORT_EVENT, timeFact(6));
+		insert_event(MAP_REPORT_EVENT, timeFact(6, true));
 	} else if (t.type == WEBSITE_REPORT_EVENT) {
-		insert_event(WEBSITE_REPORT_EVENT, timeFact(24));
+		insert_event(WEBSITE_REPORT_EVENT, timeFact(24, true));
 	} else {
 		insert_sorted_event(t);
 	}
@@ -669,7 +653,7 @@ void handle_probe(int sock, content_type type) {
 	if (verbose > 3) {
 		char tmp[64];
 		from.print(tmp, sizeof(tmp));
-		fprintf(stderr, "recvmsg(%s): len = %u\n", tmp, len);
+		fprintf(stderr, "RecvMsg(%s): len = %u\n", tmp, len);
 	}
 
 	bytesReceived += len;
@@ -680,25 +664,10 @@ void handle_probe(int sock, content_type type) {
 	handle_nmsg(from, recvdts, ttl, buffer, len, type == NSSMPROBE);
 }
 
-
 void handle_mcast(int sock, content_type cnt) {
 	if (cnt == NPROBE || cnt == NSSMPROBE) {
 		handle_probe(sock, cnt);
 	}
-}
-
-uint64_t get_timestamp() {
-	struct timeval tv;
-	uint64_t timestamp;
-
-	if (gettimeofday(&tv, 0) != 0)
-		return 0;
-
-	timestamp = tv.tv_sec;
-	timestamp *= 1000;
-	timestamp += tv.tv_usec / 1000;
-
-	return timestamp;
 }
 
 Stats::Stats() {
@@ -747,7 +716,14 @@ beaconSource &getSource(const address &baddr, const char *name, uint64_t now, bo
 		src.lastlocalevent = now;
 
 	if (ssmMcastSock) {
-		SSMJoin(ssmMcastSock, ssmProbeAddr, baddr);
+		if (SSMJoin(ssmMcastSock, ssmProbeAddr, baddr) != 0) {
+			if (verbose) {
+				char tmp[64];
+				baddr.print(tmp, sizeof(tmp));
+				fprintf(stderr, "Failed to join SSM (S,G) where S = %s, reason: %s\n",
+								tmp, strerror(errno));
+			}
+		}
 	}
 
 	return src;
@@ -762,9 +738,11 @@ void removeSource(const address &baddr, bool timeout) {
 			baddr.print(tmp, sizeof(tmp));
 
 			if (i->second.identified) {
-				fprintf(stderr, "Removing source %s [%s]%s\n", tmp, i->second.name.c_str(), (timeout ? " by Timeout" : ""));
+				fprintf(stderr, "Removing source %s [%s]%s\n",
+					tmp, i->second.name.c_str(), (timeout ? " by Timeout" : ""));
 			} else {
-				fprintf(stderr, "Removing source %s%s\n", tmp, (timeout ? " by Timeout" : ""));
+				fprintf(stderr, "Removing source %s%s\n",
+					tmp, (timeout ? " by Timeout" : ""));
 			}
 		}
 
@@ -813,7 +791,8 @@ template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; 
 
 void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now, bool ssm) {
 	if (verbose > 2)
-		fprintf(stderr, "beacon(%s%s) update %u, %llu, %llu\n", name.c_str(), (ssm ? "/SSM" : ""), seqnum, timestamp, now);
+		fprintf(stderr, "beacon(%s%s) update %u, %llu, %llu\n",
+			name.c_str(), (ssm ? "/SSM" : ""), seqnum, timestamp, now);
 
 	beaconMcastState *st = ssm ? &SSM : &ASM;
 
