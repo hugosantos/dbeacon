@@ -1428,7 +1428,10 @@ void dumpStats(FILE *fp, const Stats &s, uint64_t now, int sttl, bool diff) {
 }
 
 void do_dump() {
-	FILE *fp = fopen(dumpFile.c_str(), "w");
+	string tmpf = ".working.";
+	tmpf += dumpFile;
+
+	FILE *fp = fopen(tmpf.c_str(), "w");
 	if (!fp)
 		return;
 
@@ -1543,6 +1546,8 @@ void do_dump() {
 	fprintf(fp, "</beacons>\n");
 
 	fclose(fp);
+
+	rename(tmpf.c_str(), dumpFile.c_str());
 }
 
 void do_bw_dump(bool big) {
