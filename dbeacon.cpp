@@ -49,6 +49,8 @@ static fd_set readSet;
 static int verbose = 0;
 static bool newProtocol = false;
 
+static string dumpFile = "dump.xml";
+
 enum content_type {
 	JREPORT,
 	JPROBE,
@@ -181,7 +183,8 @@ void usage() {
 	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -M REDIST_ADDR/PORT    Redistribute and listen for reports in multicast addr\n");
-	fprintf(stderr, "  -d                     Dump reports to dump.xml each 5 secs\n");
+	fprintf(stderr, "  -d                     Dump reports to xml each 5 secs\n");
+	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
 	fprintf(stderr, "  -L REPORT_ADDR/PORT    Listen to reports from other probs in multicast group REPORT_ADDR\n");
 	fprintf(stderr, "  -P                     Use new protocol\n");
@@ -228,7 +231,7 @@ int main(int argc, char **argv) {
 	bool dump_bw = false;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:b:r:M:l:L:dhvPfU");
+		res = getopt(argc, argv, "n:a:b:r:M:l:L:dD:hvPfU");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -278,6 +281,8 @@ int main(int argc, char **argv) {
 			redist.push_back(addr);
 		} else if (res == 'd') {
 			dump = true;
+		} else if (res == 'D') {
+			dumpFile = optarg;
 		} else if (res == 'l' || res == 'L') {
 			struct sockaddr_in6 addr;
 			if (!parse_addr_port(optarg, &addr)) {
@@ -1141,7 +1146,7 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 }
 
 void do_dump() {
-	FILE *fp = fopen("dump.xml", "w");
+	FILE *fp = fopen(dumpFile.c_str(), "w");
 	if (!fp)
 		return;
 
