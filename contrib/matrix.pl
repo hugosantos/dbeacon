@@ -216,7 +216,7 @@ foreach $a (@V) {
 					if ($a eq $b) {
 						print "<td colspan=\"2\" class=\"corner\">&nbsp;</td>";
 					} else {
-						print "<td colspan=\"2\" class=\"blackhole\">&nbsp;</td>";
+						print "<td colspan=\"2\" class=\"blackhole\">XX</td>";
 					}
 				}
 			}
@@ -370,13 +370,10 @@ sub start_handler {
 	my $name;
 	my $value;
 
-	if ($tag eq "beacon") {
-		if ($atts{"group"} ne "") {
-			$sessiongroup = $atts{"group"};
-		}
-		if ($atts{"ssmgroup"} ne "") {
-			$ssm_sessiongroup = $atts{"ssmgroup"};
-		}
+	if ($tag eq "group") {
+		$sessiongroup = $atts{"addr"};
+		$ssm_sessiongroup = $atts{"ssmgroup"};
+	} elsif ($tag eq "beacon") {
 		if ($atts{"addr"} ne "") {
 			$current_beacon = $atts{"addr"};
 			$current_source = "";
@@ -387,6 +384,10 @@ sub start_handler {
 				$g->set_vertex_attribute($current_beacon, "contact", $atts{"contact"});
 				$g->set_vertex_attribute($current_beacon, "age", $atts{"age"});
 			}
+		}
+	} elsif ($tag eq "asm") {
+		if ($current_source ne "") {
+			parse_stats($current_source, "", %atts);
 		}
 	} elsif ($tag eq "ssm") {
 		if ($current_source ne "") {
@@ -403,8 +404,6 @@ sub start_handler {
 			}
 
 			$g->add_edge($current_source, $current_beacon);
-
-			parse_stats($current_source, "", %atts);
 		}
 	} elsif ($tag eq "website") {
 		if ($atts{"type"} ne "" and $atts{"url"} ne "") {

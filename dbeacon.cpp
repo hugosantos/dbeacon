@@ -28,6 +28,7 @@
 #include <list>
 #include <vector>
 
+// FreeBSD doesn't define IP_RECVTTL. This value is wrong but at least it compiles for IPv6
 #ifndef IP_RECVTTL
 #define IP_RECVTTL 12
 #endif
@@ -201,8 +202,8 @@ typedef map<beaconSourceAddr, beaconSource> Sources;
 
 static Sources sources;
 
-static char sessionName[256] = "";
-static char beaconName[256];
+static char sessionName[256];
+static string beaconName;
 static int mcastInterface = 0;
 static string adminContact;
 static address probeAddr;
@@ -405,7 +406,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	strcpy(beaconName, tmp);
+	beaconName = tmp;
 
 	const char *intf = 0;
 
@@ -416,7 +417,7 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Name is too large.\n");
 				return -1;
 			}
-			strcpy(beaconName, optarg);
+			beaconName = optarg;
 		} else if (res == 'a') {
 			if (!strchr(optarg, '@')) {
 				fprintf(stderr, "Not a valid email address.\n");
@@ -494,7 +495,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (strlen(beaconName) == 0) {
+	if (beaconName.empty()) {
 		fprintf(stderr, "No name supplied.\n");
 		return -1;
 	}
@@ -524,7 +525,7 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "Nothing to do, check `dbeacon -h`.\n");
 			return -1;
 		} else {
-			strcpy(sessionName, beaconName);
+			strcpy(sessionName, beaconName.c_str());
 		}
 	}
 
@@ -576,7 +577,7 @@ int main(int argc, char **argv) {
 
 	send_report(WEBSITE_REPORT_EVENT);
 
-	fprintf(stdout, "Local name is %s\n", beaconName);
+	fprintf(stdout, "Local name is %s\n", beaconName.c_str());
 
 	startTime = lastDumpBwTS = get_timestamp();
 
@@ -1258,7 +1259,7 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 
 	int ptr = 5;
 
-	if (!write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, beaconName))
+	if (!write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, beaconName.c_str()))
 		return -1;
 	if (!write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, adminContact.c_str()))
 		return -1;
@@ -1378,7 +1379,8 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 	return 4 + 4 + 4;
 }
 
-void dumpStats(FILE *fp, const Stats &s, uint64_t now, int sttl, bool diff) {
+void dumpStats(FILE *fp, const char *tag, const Stats &s, uint64_t now, int sttl, bool diff) {
+	fprintf(fp, "\t\t\t\t<%s", tag);
 	if (!diff)
 		fprintf(fp, " ttl=\"%i\"", s.rttl);
 	else if (sttl)
@@ -1389,6 +1391,7 @@ void dumpStats(FILE *fp, const Stats &s, uint64_t now, int sttl, bool diff) {
 	fprintf(fp, " jitter=\"%.3f\"", s.avgjitter);
 	fprintf(fp, " ooo=\"%.3f\"", s.avgooo);
 	fprintf(fp, " dup=\"%.3f\"", s.avgdup);
+	fprintf(fp, " />\n");
 }
 
 static void doLaunchSomething();
@@ -1403,25 +1406,30 @@ void do_dump() {
 
 	char tmp[64];
 
-	fprintf(fp, "<beacons int=\"%.2lf\">\n", beacInt);
+	fprintf(fp, "<beacons>\n");
+
+	fprintf(fp, "<group addr=\"%s\"", sessionName);
+
+	if (ssmMcastSock) {
+		ssmProbeAddr.print(tmp, sizeof(tmp));
+		fprintf(fp, " ssmgroup=\"%s\"", tmp);
+	}
+
+	fprintf(fp, " int=\"%.2lf\">\n", beacInt);
 
 	uint64_t now = get_timestamp();
 
 	if (!probeAddr.is_unspecified()) {
 		beaconUnicastAddr.print(tmp, sizeof(tmp));
 
-		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s\"",
-				beaconName, sessionName, tmp);
+		fprintf(fp, "\t<beacon name=\"%s\" addr=\"%s\"", beaconName.c_str(), tmp);
 		if (!adminContact.empty())
 			fprintf(fp, " contact=\"%s\"", adminContact.c_str());
-		if (ssmMcastSock) {
-			ssmProbeAddr.print(tmp, sizeof(tmp));
-			fprintf(fp, " ssmgroup=\"%s\"", tmp);
-		}
 		fprintf(fp, " age=\"%llu\" lastupdate=\"0\">\n", (now - startTime) / 1000);
 
 		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++) {
-			const char *typnam = j->first == T_WEBSITE_GENERIC ? "generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
+			const char *typnam = j->first == T_WEBSITE_GENERIC ?
+				"generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
 			fprintf(fp, "\t\t<website type=\"%s\" url=\"%s\" />\n", typnam, j->second.c_str());
 		}
 
@@ -1436,33 +1444,27 @@ void do_dump() {
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 			}
 			fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
-			fprintf(fp, " lastupdate=\"%llu\"", (now - i->second.lastevent) / 1000);
+			fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
 
-			if (i->second.ASM.s.valid) {
-				fprintf(fp, "\n\t\t\t\t");
-				dumpStats(fp, i->second.ASM.s, now, i->second.sttl, true);
+			for (WebSites::const_iterator j = i->second.webSites.begin();
+							j != i->second.webSites.end(); j++) {
+				const char *typnam = j->first == T_WEBSITE_GENERIC ?
+					"generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
+				fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n",
+							typnam, j->second.c_str());
 			}
 
-			fprintf(fp, ">\n");
+			if (i->second.ASM.s.valid)
+				dumpStats(fp, "asm", i->second.ASM.s, now, i->second.sttl, true);
 
-			for (WebSites::const_iterator j = i->second.webSites.begin(); j != i->second.webSites.end(); j++) {
-				const char *typnam = j->first == T_WEBSITE_GENERIC ? "generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
-				fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n", typnam, j->second.c_str());
-			}
-
-			if (i->second.SSM.s.valid) {
-				fprintf(fp, "\t\t\t\t<ssm");
-				dumpStats(fp, i->second.SSM.s, now, i->second.sttl, true);
-				fprintf(fp, " />\n");
-			}
+			if (i->second.SSM.s.valid)
+				dumpStats(fp, "ssm", i->second.SSM.s, now, i->second.sttl, true);
 
 			fprintf(fp, "\t\t\t</source>\n");
 		}
 
 		fprintf(fp, "\t\t</sources>\n");
-
 		fprintf(fp, "\t</beacon>\n");
-
 		fprintf(fp, "\n");
 	}
 
@@ -1476,8 +1478,7 @@ void do_dump() {
 		i->first.print(tmp, sizeof(tmp));
 		fprintf(fp, " addr=\"%s\"", tmp);
 		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
-		fprintf(fp, " lastupdate=\"%llu\"", (now - i->second.lastevent) / 1000);
-		fprintf(fp, ">\n");
+		fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (beaconSource::ExternalSources::const_iterator j = i->second.externalSources.begin();
@@ -1489,25 +1490,19 @@ void do_dump() {
 			}
 			j->first.print(tmp, sizeof(tmp));
 			fprintf(fp, " addr=\"%s\"", tmp);
-			fprintf(fp, " age=\"%u\"\n\t\t\t\t", j->second.age);
-			if (j->second.ASM.valid) {
-				dumpStats(fp, j->second.ASM, now, i->second.sttl, false);
-			}
-			if (j->second.SSM.valid) {
-				fprintf(fp, ">\n");
-				fprintf(fp, "\t\t\t\t\t<ssm");
-				dumpStats(fp, j->second.SSM, now, i->second.sttl, false);
-				fprintf(fp, " /></source>\n");
-			} else {
-				fprintf(fp, " />\n");
-			}
+			fprintf(fp, " age=\"%u\">\n", j->second.age);
+			if (j->second.ASM.valid)
+				dumpStats(fp, "asm", j->second.ASM, now, i->second.sttl, false);
+			if (j->second.SSM.valid)
+				dumpStats(fp, "ssm", j->second.SSM, now, i->second.sttl, false);
+			fprintf(fp, "\t\t\t</source>\n");
 		}
 
 		fprintf(fp, "\t\t</sources>\n");
 		fprintf(fp, "\t</beacon>\n");
 	}
 
-	fprintf(fp, "</beacons>\n");
+	fprintf(fp, "</group>\n</beacons>\n");
 
 	fclose(fp);
 
@@ -1524,10 +1519,15 @@ void doLaunchSomething() {
 	}
 }
 
+static void outputBwStats(uint32_t diff, uint64_t txbytes, double txrate, uint64_t rxbytes, double rxrate) {
+	fprintf(stdout, "BW Usage for %u secs: RX %llu bytes (%.2lf Kb/s) TX %llu bytes (%.2lf Kb/s)\n",
+			diff, txbytes, txrate, rxbytes, rxrate);
+}
+
 void do_bw_dump(bool big) {
 	if (big) {
-		fprintf(stdout, "BW Usage for 600 secs: Received %llu bytes (%.2lf Kb/s) Sent %llu bytes (%.2lf Kb/s)\n",
-				bigBytesReceived, bigBytesReceived * 8 / (1000. * 600), bigBytesSent, bigBytesSent * 8 / (1000. * 600));
+		outputBwStats(600, bigBytesReceived, bigBytesReceived * 8 / (1000. * 600),
+					bigBytesSent, bigBytesSent * 8 / (1000. * 600));
 		bigBytesReceived = 0;
 		bigBytesSent = 0;
 		lastDumpBwTS = get_timestamp();
@@ -1555,8 +1555,8 @@ void do_bw_dump(bool big) {
 
 void dumpBigBwStats(int) {
 	uint64_t diff = (get_timestamp() - lastDumpBwTS) / 1000;
-	fprintf(stdout, "BW Usage for %llu secs: Received %llu bytes (%.2lf Kb/s) Sent %llu bytes (%.2lf Kb/s)\n", diff,
-			bigBytesReceived, bigBytesReceived * 8 / (1000. * diff), bigBytesSent, bigBytesSent * 8 / (1000. * diff));
+	outputBwStats((uint32_t)diff, bigBytesReceived, bigBytesReceived * 8 / (1000. * diff),
+					bigBytesSent, bigBytesSent * 8 / (1000. * diff));
 }
 
 void sendLeaveReport(int) {
