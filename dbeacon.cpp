@@ -74,11 +74,16 @@ enum {
 	DUMP_BW_EVENT,
 
 	SENDING_EVENT,
-	WILLSEND_EVENT
+	WILLSEND_EVENT,
+	MAPREPORT_EVENT
 };
 
 #define PACKETS_PERIOD 40
 #define PACKETS_VERY_OLD 150
+
+typedef pair<in6_addr, uint16_t> beaconSourceAddr;
+
+struct beaconExternalStats;
 
 struct beaconSource {
 	beaconSource();
@@ -110,24 +115,37 @@ struct beaconSource {
 	void setName(const string &);
 	void refresh(uint32_t, uint64_t);
 	void update(uint32_t, uint64_t, uint64_t);
+
+	typedef map<beaconSourceAddr, beaconExternalStats> Sources;
+	Sources externalSources;
+
+	beaconExternalStats &getExternal(const in6_addr &, uint16_t, uint64_t);
 };
 
-typedef pair<in6_addr, uint16_t> beaconSourceAddr;
 typedef map<beaconSourceAddr, beaconSource> Sources;
 
 static Sources sources;
 
 struct beaconExternalStats {
+	beaconExternalStats() : identified(false) {}
+
 	uint64_t timestamp;
 	uint64_t lastlocalupdate;
 	uint32_t age, ttl;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
+
+	bool identified;
+	string name, contact;
 };
 
 struct externalBeacon {
 	in6_addr addr;
 	uint64_t lastupdate;
-	map<string, beaconExternalStats> sources;
+
+	typedef map<beaconSourceAddr, beaconExternalStats> Sources;
+	Sources sources;
+
+	map<string, beaconExternalStats> jsources;
 };
 
 typedef map<string, externalBeacon> ExternalBeacons;
@@ -145,7 +163,7 @@ static void handle_event();
 static void handle_gc();
 static int send_jprobe();
 static int send_nprobe();
-static int send_report();
+static int send_report(bool);
 static int build_jprobe(uint8_t *, int, uint32_t, uint64_t);
 static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 
@@ -346,6 +364,7 @@ int main(int argc, char **argv) {
 
 			insert_event(SENDING_EVENT, 100);
 			insert_event(REPORT_EVENT, 10000);
+			insert_event(MAPREPORT_EVENT, 30000);
 
 			redist.push_back(probeAddr);
 		}
@@ -378,7 +397,7 @@ int main(int argc, char **argv) {
 		insert_event(DUMP_BW_EVENT, 10000);
 
 	if (newProtocol)
-		send_report();
+		send_report(false);
 
 	while (1) {
 		fd_set readset;
@@ -477,7 +496,8 @@ void handle_event() {
 		send_count ++;
 		break;
 	case REPORT_EVENT:
-		send_report();
+	case MAPREPORT_EVENT:
+		send_report(t.type == MAPREPORT_EVENT);
 		break;
 	case GARBAGE_COLLECT_EVENT:
 		handle_gc();
@@ -532,9 +552,9 @@ void handle_gc() {
 			k++;
 			externalBeacons.erase(j);
 		} else {
-			for (map<string, beaconExternalStats>::iterator m = k->second.sources.begin(); m != k->second.sources.end();) {
+			for (externalBeacon::Sources::iterator m = k->second.sources.begin(); m != k->second.sources.end();) {
 				if ((now - m->second.lastlocalupdate) > 120000) {
-					map<string, beaconExternalStats>::iterator n = m;
+					externalBeacon::Sources::iterator n = m;
 					m++;
 					k->second.sources.erase(n);
 				} else {
@@ -696,20 +716,16 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 
 		uint32_t tmp;
 
-		externalBeacon beac;
-
 		while (plen < len) {
-			int namelen = ptr[0];
 			int elen = 4 + 4 + 1 + 4 * 2 + 3;
-			if ((plen + 1 + namelen + elen) > len)
+			if ((plen + 18 + elen) > len)
 				break;
 
-			string name((char *)ptr + 1, namelen);
-			ptr += 1 + namelen;
+			in6_addr addr;
+			memcpy(&addr, ptr, sizeof(in6_addr));
+			beaconExternalStats &stats = src.getExternal(addr, ntohs(*((uint16_t *)(ptr + 16))), recvdts);
 
-			beaconExternalStats stats;
-
-			stats.lastlocalupdate = recvdts;
+			ptr += 18;
 
 			stats.timestamp = ntohl(*(uint32_t *)ptr);
 			stats.age = ntohl(*((((uint32_t *)ptr)+1)));
@@ -725,22 +741,33 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 
 			ptr += 20;
 
-			plen += 1 + namelen + elen;
-
-			beac.sources[name] = stats;
+			plen += 18 + elen;
 		}
+	} else if (buff[3] == 2) {
+		int plen = 4;
+		beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts);
+		uint8_t *ptr = buff + 4;
+		while (plen < len) {
+			if ((plen + 18 + 2) > len)
+				break;
+			int namelen = ptr[18];
+			if ((plen + 18 + 2 + namelen) > len)
+				break;
+			int contactlen = ptr[19 + namelen];
+			if ((plen + 18 + 2 + namelen + contactlen) > len)
+				break;
 
-		ExternalBeacons::iterator i = externalBeacons.find(beacName);
-		if (i == externalBeacons.end()) {
-			externalBeacons.insert(make_pair(beacName, beac));
-			i = externalBeacons.find(beacName);
-		} else {
-			for (map<string, beaconExternalStats>::const_iterator j = beac.sources.begin(); j != beac.sources.end(); j++)
-				i->second.sources[j->first] = j->second;
+			in6_addr addr;
+			memcpy(&addr, ptr, sizeof(in6_addr));
+			beaconExternalStats &stats = src.getExternal(addr, ntohs(*((uint16_t *)(ptr + 16))), recvdts);
+
+			stats.name = string((char *)ptr + 19, namelen);
+			stats.contact = string((char *)ptr + 20 + namelen, contactlen);
+			stats.identified = true;
+
+			plen += 20 + namelen + contactlen;
+			ptr = buff + 4 + plen;
 		}
-
-		i->second.lastupdate = recvdts;
-		i->second.addr = from->sin6_addr;
 	}
 }
 
@@ -767,8 +794,8 @@ void handle_jreport(int sock) {
 		externalBeacons.insert(make_pair(name, beac));
 		i = externalBeacons.find(name);
 	} else {
-		for (map<string, beaconExternalStats>::const_iterator j = beac.sources.begin(); j != beac.sources.end(); j++)
-			i->second.sources[j->first] = j->second;
+		for (map<string, beaconExternalStats>::const_iterator j = beac.jsources.begin(); j != beac.jsources.end(); j++)
+			i->second.jsources[j->first] = j->second;
 	}
 
 	i->second.lastupdate = get_timestamp();
@@ -811,7 +838,7 @@ int parse_jreport(uint8_t *buffer, int len, uint64_t recvdts, string &session, s
 		stats.age = 0;
 		stats.ttl = 0;
 
-		rpt.sources[name] = stats;
+		rpt.jsources[name] = stats;
 	}
 
 	return 0;
@@ -847,6 +874,22 @@ beaconSource::beaconSource()
 void beaconSource::setName(const string &n) {
 	name = n;
 	identified = true;
+}
+
+beaconExternalStats &beaconSource::getExternal(const in6_addr &addr, uint16_t port, uint64_t ts) {
+	beaconSourceAddr baddr(addr, port);
+
+	Sources::iterator k = externalSources.find(baddr);
+	if (k == externalSources.end()) {
+		externalSources.insert(make_pair(baddr, beaconExternalStats()));
+		k = externalSources.find(baddr);
+	}
+
+	beaconExternalStats &stats = k->second;
+
+	stats.lastlocalupdate = ts;
+
+	return stats;
 }
 
 void beaconSource::refresh(uint32_t seq, uint64_t now) {
@@ -1017,15 +1060,14 @@ int build_nreport(uint8_t *buff, int maxlen) {
 		if (!i->second.hasstats || !i->second.identified)
 			continue;
 
-		int namelen = i->second.name.size();
 		int plen = 4 + 4 + 1 + 4 * 2 + 3;
-		if ((len + namelen + 1 + plen) > maxlen)
+		if ((len + 18 + plen) > maxlen)
 			return -1;
 
-		ptr[0] = namelen;
-		memcpy(ptr + 1, i->second.name.c_str(), namelen);
+		memcpy(ptr, &i->first.first, sizeof(in6_addr));
+		*((uint16_t *)(ptr + 16)) = htons(i->first.second);
 
-		ptr += 1 + namelen;
+		ptr += 18;
 
 		*((uint32_t *)ptr) = htonl((uint32_t)i->second.lasttimestamp);
 		*((uint32_t *)(ptr + 4)) = htonl((uint32_t)((now - i->second.creation) / 1000));
@@ -1040,7 +1082,47 @@ int build_nreport(uint8_t *buff, int maxlen) {
 		ptr[19] = (uint8_t)(i->second.avgooo * 0xff);
 
 		ptr += plen;
-		len += plen + 1 + namelen;
+		len += 18 + plen;
+	}
+
+	return len;
+}
+
+int build_nmapreport(uint8_t *buff, int maxlen) {
+	if (maxlen < 4)
+		return -1;
+
+	// 0-2 magic
+	*((uint16_t *)buff) = htons(0xbeac);
+
+	// 3 version
+	buff[2] = NEW_BEAC_VER;
+
+	// 4 packet type
+	buff[3] = 2; // Map Report
+
+	uint8_t *ptr = buff + 4;
+	int len = 4;
+
+	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
+		if (!i->second.identified)
+			continue;
+
+		int plen = 18 + 2 + i->second.name.size() + i->second.adminContact.size();
+
+		if ((len + plen) > maxlen)
+			return -1;
+
+		memcpy(ptr, &i->first.first, sizeof(in6_addr));
+		*((uint16_t *)(ptr + 16)) = htons(i->first.second);
+
+		ptr[18] = i->second.name.size();
+		memcpy(ptr + 19, i->second.name.c_str(), ptr[18]);
+		ptr[19 + ptr[18]] = i->second.adminContact.size();
+		memcpy(ptr + 20 + ptr[18], i->second.adminContact.c_str(), ptr[19 + ptr[18]]);
+
+		ptr += plen;
+		len += plen;
 	}
 
 	return len;
@@ -1092,13 +1174,17 @@ int build_jreport(uint8_t *buffer, int maxlen) {
 	return buf.pointer;
 }
 
-int send_report() {
+int send_report(bool map) {
 	int len;
 
-	if (newProtocol)
-		len = build_nreport(buffer, sizeof(buffer));
-	else
+	if (newProtocol) {
+		if (map)
+			len = build_nmapreport(buffer, sizeof(buffer));
+		else
+			len = build_nreport(buffer, sizeof(buffer));
+	} else {
 		len = build_jreport(buffer, sizeof(buffer));
+	}
 	if (len < 0)
 		return len;
 
@@ -1181,10 +1267,10 @@ void do_dump() {
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
-					fprintf(fp, " admin=\"%s\"", i->second.adminContact.c_str());
+					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 				fprintf(fp, " address=\"%s\"", tmp);
 				fprintf(fp, " ttl=\"%i\"", i->second.lastttl);
-				fprintf(fp, " localage=\"%llu\"", (now - i->second.creation) / 1000);
+				fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 				fprintf(fp, " loss=\"%.1f\"", i->second.avgloss);
 				fprintf(fp, " delay=\"%.3f\"", i->second.avgdelay);
 				fprintf(fp, " jitter=\"%.3f\"", i->second.avgjitter);
@@ -1201,27 +1287,62 @@ void do_dump() {
 		fprintf(fp, "\n");
 	}
 
-	for (map<string, externalBeacon>::const_iterator i = externalBeacons.begin(); i != externalBeacons.end(); i++) {
-		inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
-		fprintf(fp, "\t<beacon name=\"%s\" addr=\"%s\">\n", i->first.c_str(), tmp);
+	if (newProtocol) {
+		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
+			fprintf(fp, "\t<beacon");
+			if (i->second.identified) {
+				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
+				if (!i->second.adminContact.empty())
+					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
+			}
+			inet_ntop(AF_INET6, &i->first.first, tmp, sizeof(tmp));
+			fprintf(fp, " addr=\"%s\"", tmp);
+			fprintf(fp, ">\n");
+			fprintf(fp, "\t\t<sources>\n");
 
-		for (map<string, beaconExternalStats>::const_iterator j = i->second.sources.begin();
-						j != i->second.sources.end(); j++) {
-			fprintf(fp, "\t\t\t<source");
-			fprintf(fp, " name=\"%s\"", j->first.c_str());
-			if (newProtocol) {
+			for (beaconSource::Sources::const_iterator j = i->second.externalSources.begin();
+					j != i->second.externalSources.end(); j++) {
+				fprintf(fp, "\t\t\t<source");
+				if (j->second.identified) {
+					fprintf(fp, " name=\"%s\"", j->second.name.c_str());
+					fprintf(fp, " contact=\"%s\"", j->second.contact.c_str());
+				}
+				inet_ntop(AF_INET6, &j->first.first, tmp, sizeof(tmp));
+				fprintf(fp, " addr=\"%s\"", tmp);
 				fprintf(fp, " ttl=\"%u\"", j->second.ttl);
 				fprintf(fp, " age=\"%u\"", j->second.age);
+				fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
+				fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
+				fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
+				fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
+				fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
+				fprintf(fp, " />\n");
 			}
-			fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
-			fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
-			fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
-			fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
-			fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
-			fprintf(fp, " />\n");
-		}
 
-		fprintf(fp, "\t</beacon>\n");
+			fprintf(fp, "\t\t</sources>\n");
+			fprintf(fp, "\t</beacon>\n");
+		}
+	} else {
+		for (map<string, externalBeacon>::const_iterator i = externalBeacons.begin(); i != externalBeacons.end(); i++) {
+			inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
+			fprintf(fp, "\t<beacon name=\"%s\" addr=\"%s\">\n", i->first.c_str(), tmp);
+			fprintf(fp, "\t\t<sources>\n");
+
+			for (map<string, beaconExternalStats>::const_iterator j = i->second.jsources.begin();
+					j != i->second.jsources.end(); j++) {
+				fprintf(fp, "\t\t\t<source");
+				fprintf(fp, " name=\"%s\"", j->first.c_str());
+				fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
+				fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
+				fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
+				fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
+				fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
+				fprintf(fp, " />\n");
+			}
+
+			fprintf(fp, "\t\t</sources>\n");
+			fprintf(fp, "\t</beacon>\n");
+		}
 	}
 
 	fprintf(fp, "</beacons>\n");
