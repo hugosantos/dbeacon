@@ -65,7 +65,8 @@ using namespace std;
 #define NEW_BEAC_PCOUNT	10
 #define NEW_BEAC_VER	1
 
-static const char *defaultSSMChannel = "ff3e::beac";
+static const char *defaultIPv6SSMChannel = "ff3e::beac";
+static const char *defaultIPv4SSMChannel = "232.2.3.2";
 static const char *defaultPort = "10000";
 static const TTLType defaultTTL = 127;
 
@@ -225,6 +226,7 @@ static string adminContact;
 static address probeAddr;
 static const char *probeAddrLiteral = 0;
 static address beaconUnicastAddr;
+static const char *probeSSMAddrLiteral = 0;
 static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
 static int largestSock = 0;
@@ -426,7 +428,7 @@ void usage() {
 	fprintf(stderr, "  -i INTFNAME            Use INTFNAME instead of the default interface for multicast\n");
 	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
-	fprintf(stderr, "  -S GROUP_ADDR/PORT     Enables SSM reception/sending on GROUP_ADDR\n");
+	fprintf(stderr, "  -S [GROUP_ADDR/PORT]   Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
 	fprintf(stderr, "  -s ADDR                Bind to local address\n");
 	fprintf(stderr, "  -d                     Dump reports to xml each 5 secs\n");
 	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
@@ -481,6 +483,17 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "Specified interface doesn't exist.\n");
 			return -1;
 		}
+	}
+
+	if (probeSSMAddrLiteral) {
+		if (!ssmProbeAddr.parse(probeSSMAddrLiteral, true)) {
+			fprintf(stderr, "Bad address format for SSM channel.\n");
+			return -1;
+		}
+	} else if (forceVersion == 6 || forceVersion == 0) {
+		ssmProbeAddr.parse(defaultIPv6SSMChannel, true);
+	} else if (forceVersion == 4) {
+		ssmProbeAddr.parse(defaultIPv4SSMChannel, true);
 	}
 
 	if (probeAddrLiteral) {
@@ -653,7 +666,8 @@ int parse_arguments(int argc, char **argv) {
 			}
 			redist.push_back(addr);
 		} else if (res == 'S') {
-			if (!ssmProbeAddr.parse(optarg ? optarg : defaultSSMChannel, true)) {
+			probeSSMAddrLiteral = optarg;
+			if (!ssmProbeAddr.parse(optarg ? optarg : defaultIPv6SSMChannel, true)) {
 				fprintf(stderr, "Bad address format for SSM channel.\n");
 				return -1;
 			}
