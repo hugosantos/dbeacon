@@ -669,7 +669,7 @@ void beaconSource::update(const in6_addr *from, uint32_t seqnum, uint64_t timest
 		packetcountreal = 0;
 		pointer = 0;
 
-		if (verbose) {
+		if (verbose && avgloss < 1) {
 			cout << "Updating " << name << ": " << avgdelay << ", " << avgloss << ", " << avgooo << ", " << avgdup << endl;
 		}
 	}
