@@ -1487,9 +1487,13 @@ void do_dump() {
 					dumpStats(fp, j->second.ASM, i->second.sttl, false);
 				}
 				if (j->second.SSM.valid) {
+					fprintf(fp, ">\n");
+					fprintf(fp, "\t\t\t\t\t<ssm");
 					dumpStats(fp, j->second.SSM, i->second.sttl, false);
+					fprintf(fp, " /></source>\n");
+				} else {
+					fprintf(fp, " />\n");
 				}
-				fprintf(fp, " />\n");
 			}
 
 			fprintf(fp, "\t\t</sources>\n");
