@@ -1620,7 +1620,7 @@ int SetupSocket(address *addr, bool needTSHL, bool ssm) {
 		}
 	}
 
-	on = 0;
+	on = 1;
 
 	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_LOOP : IP_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
 		perror("setting multicast loop setsockopt()");
