@@ -29,9 +29,21 @@ my $url = $page->script_name();
 my $dst = $page->param('dst');
 my $src = $page->param('src');
 my $type = $page->param('type');
-my $age = '-1d';
-if (defined($page->param('age'))) {
-	$age = $page->param('age');
+my $age = $page->param('age');
+
+my %ages = (
+	"-1h" => "Hour",
+	"-6h" => "6 Hours",
+	"-12h" => "12 Hours",
+	"-1d" => "Day",
+	"-1w" => "Week",
+	"-1m" => "Month",
+	"-1y" => "Year");
+
+my @propersortedages = ("-1m", "-1w", "-1d", "-12h", "-6h", "-1h");
+
+if (not defined($ages{$age})) {
+	$age = '-1d';
 }
 
 sub full_url0 {
@@ -87,18 +99,16 @@ sub listgraph {
 	if (defined($dst)) {
 		print "To ";
 
-		my @beacs = (["-- Initial Page --", "", "$url"], get_dstbeacons());
-
-		do_list_beacs("dstc", $dst, @beacs);
+		do_list_beacs("dstc", $dst, (["-- Initial Page --", "", "$url"], get_dstbeacons()));
 
 		if (defined($src)) {
 			print "From ";
-			do_list_beacs("srcc", $src, get_srcbeacons($dst));
+			do_list_beacs("srcc", $src, (["-- Source List --", "", "$url?dst=$dst"], get_srcbeacons($dst)));
 
-			if (defined($type)) {
+			if ($type ne "") {
 				print "Type ";
 
-				my @types = (["TTL", "ttl", ""], ["Loss", "loss", ""], ["Delay", "delay", ""], ["Jitter", "jitter", ""]);
+				my @types = (["-- All --", "", ""], ["TTL", "ttl", ""], ["Loss", "loss", ""], ["Delay", "delay", ""], ["Jitter", "jitter", ""]);
 
 				foreach my $type (@types) {
 					$type->[2] = full_url0() . '&type=' . $type->[1];
@@ -108,7 +118,7 @@ sub listgraph {
 			}
 		}
 
-		print "<br /><br />";
+		print "<br />";
 	}
 
 	if (!defined($dst)) {
@@ -127,7 +137,7 @@ sub listgraph {
 		print "</ul>\n";
 
 	} elsif (!defined($src)) {
-		print 'Select a source:';
+		print '<br />Select a source:';
 
 		# List visible src for this beacon
 
@@ -171,9 +181,11 @@ sub listgraph {
 		}
 		print "</ul>\n";
 
-	} elsif (!defined($type)) {
-		print "Click on a graphic for more detail<br /><br />\n";
-		print "<table>";
+	} elsif ($type eq "") {
+		print "<div style=\"margin-left: 2em\">\n";
+		print "<h2 style=\"margin-bottom: 0\">History for the last " . $ages{$age} . "</h2>\n";
+		print "<small>Click on a graphic for more detail</small><br />\n";
+		print "<table style=\"margin-top: 0.6em\">";
 
 		my $count = 0;
 
@@ -190,12 +202,24 @@ sub listgraph {
 			$count++;
 		}
 
-		print "</table>";
+		print "</table>\n";
+
+		print "<p>Last: ";
+
+		foreach my $agen (@propersortedages) {
+			print " <a href=\"" . full_url0() . "&age=" . $agen . "\">" . $ages{$agen} . "</a>";
+		}
+
+		print "</p>\n";
+		print "</div>\n";
 	} else {
+		print "<br />";
+		print "<div style=\"margin-left: 2em\">\n";
 		# Dst, src and type selected => Displaying all time range graphs
 		foreach my $age ('-1d','-1w','-1m','-1y') {
-			print "<img src=\"" . full_url() . "&age=$age&img=true\" /><br />";
+			print "<img style=\"margin-bottom: 0.5em\" src=\"" . full_url() . "&age=$age&img=true\" /><br />";
 		}
+		print "</div>";
 	}
 
 	end_document();
@@ -221,7 +245,7 @@ sub do_list_beacs {
 sub graphthumb {
 	my ($type) = shift @_;
 	print "<a href=\"" . full_url0() . "&type=$type\">";
-	print "<img border=\"0\" src=\"" . full_url0() . "&type=$type&img=true&thumb=true&age=$age\" /></a><br />";
+	print "<img style=\"margin-right: 0.5em; margin-bottom: 0.5em\" border=\"0\" src=\"" . full_url0() . "&type=$type&img=true&thumb=true&age=$age\" /></a><br />";
 }
 
 sub graphgen {
@@ -301,6 +325,7 @@ sub start_document {
 
 	print "<html>
 <head>
+<title>IPv6 Multicast Beacon History</title>
 
 <meta http-equiv=\"refresh\" content=\"60\" />
 
