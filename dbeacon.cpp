@@ -222,6 +222,8 @@ struct beaconSource {
 
 	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
 
+	bool rxlocal(uint64_t now) const { return lastlocalevent > (now - 30000); }
+
 	WebSites webSites;
 	string CC;
 };
@@ -1686,7 +1688,7 @@ void do_dump() {
 		i->first.print(tmp, sizeof(tmp));
 		fprintf(fp, " addr=\"%s\"", tmp);
 		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
-		fprintf(fp, " rxlocal=\"%s\"", i->second.lastlocalevent > (now - 30000) ? "true" : "false");
+		fprintf(fp, " rxlocal=\"%s\"", i->second.rxlocal(now) ? "true" : "false");
 		fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
 		fprintf(fp, "\t\t<sources>\n");
 
