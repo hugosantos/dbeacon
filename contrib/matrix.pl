@@ -128,20 +128,17 @@ sub build_vertex_from_rrd {
 
 			$adj{$srcaddr}[NAME] = $srcname if defined $srcname;
 
+			my $index = $asmorssm eq 'ssm' ? 2 : 1;
+
 			for (my $i = 0; $i < $#$names+1; $i++) {
-				if (defined($$data[0][$i])) {
+				if (defined $$data[0][$i]) {
 					if ($$names[$i] =~ /^(delay|jitter)$/) {
 						$$data[0][$i] *= 1000;
 					}
 
-					if (not defined($adj{$dstaddr}[NEIGH]{$srcaddr})) {
+					if (not defined $adj{$dstaddr}[NEIGH]{$srcaddr}) {
 						$adj{$dstaddr}[IN_EDGE] ++;
 						$adj{$srcaddr}[OUT_EDGE] ++;
-					}
-
-					my $index = 1;
-					if ($asmorssm eq 'ssm') {
-						$index = 2;
 					}
 
 					$adj{$dstaddr}[NEIGH]{$srcaddr}[0] ++;
