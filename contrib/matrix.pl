@@ -209,7 +209,12 @@ foreach $a (@V) {
 	my $addr = $g->get_vertex_attribute($a, "addr");
 	my $contact = $g->get_vertex_attribute($a, "contact");
 	my $age = $g->get_vertex_attribute($a, "age");
-	print "<tr><td class=\"name\">$name</td><td class=\"addr\">$addr</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age secs</td></tr>\n";
+	if (not $age) {
+		$age = "-";
+	} else {
+		$age = "$age secs";
+	}
+	print "<tr><td class=\"name\">$name</td><td class=\"addr\">$addr</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age</td></tr>\n";
 }
 
 print "</table>";
