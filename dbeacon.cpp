@@ -15,6 +15,7 @@
 #include <string>
 #include <iostream>
 #include <list>
+#include <vector>
 
 using namespace std;
 
@@ -24,9 +25,19 @@ static char beaconName[256];
 static char probeName[256] = "";
 static struct sockaddr_in6 probeAddr;
 static int mcastSock;
+static int largestSock = 0;
+static fd_set readSet;
 static bool verbose = false;
 
-static list<sockaddr_in6> redist;
+enum content_type {
+	JREPORT,
+	JPROBE
+};
+
+static vector<pair<sockaddr_in6, content_type> > mcastListen;
+static vector<pair<int, content_type> > mcastSocks;
+
+static vector<sockaddr_in6> redist;
 
 enum {
 	REPORT_EVENT,
@@ -64,6 +75,7 @@ struct beaconSource {
 static map<string, beaconSource> sources;
 
 struct beaconExternalStats {
+	uint64_t timestamp;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 };
 
@@ -75,7 +87,9 @@ map<string, externalBeacon> externalBeacons;
 
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
-static void handle_probe();
+static void handle_jprobe(int);
+static void handle_jreport(int);
+static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
 static int send_probe();
@@ -88,6 +102,7 @@ static uint64_t get_timestamp();
 
 static void updateStats(const char *, const in6_addr *, uint32_t, uint64_t, uint64_t);
 
+static int SetupSocket(sockaddr_in6 *, bool);
 static int IPv6MulticastListen(int, struct in6_addr *);
 
 static uint8_t buffer[2048];
@@ -99,8 +114,9 @@ void usage() {
 	fprintf(stderr, "  -n NAME                Specifies the beacon name\n");
 	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
+	fprintf(stderr, "  -M REDIST_ADDR/PORT    Redistribute and listen for reports in multicast addr\n");
 	fprintf(stderr, "  -d                     Dump reports to dump.xml each 5 secs\n");
-	fprintf(stderr, "  -l                     Listen for reports from other probes\n");
+	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
 	fprintf(stderr, "  -L REPORT_ADDR/PORT    Listen to reports from other probs in multicast group REPORT_ADDR\n");
 	fprintf(stderr, "\n");
 }
@@ -137,10 +153,9 @@ int main(int argc, char **argv) {
 	probeAddr.sin6_family = AF_INET6;
 
 	bool dump = false;
-	bool listen = false;
 
 	while (1) {
-		res = getopt(argc, argv, "n:b:r:dlhv");
+		res = getopt(argc, argv, "n:b:r:M:l:L:dhv");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -168,17 +183,33 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Beacon group address is not a multicast address.\n");
 				return -1;
 			}
-		} else if (res == 'r') {
+		} else if (res == 'r' || res == 'M') {
 			struct sockaddr_in6 addr;
 			if (!parse_addr_port(optarg, &addr)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
+			if (res == 'M') {
+				if (!IN6_IS_ADDR_MULTICAST(&addr.sin6_addr)) {
+					fprintf(stderr, "Specified address is not a multicast group.\n");
+					return -1;
+				}
+				mcastListen.push_back(make_pair(addr, JREPORT));
+			}
 			redist.push_back(addr);
 		} else if (res == 'd') {
 			dump = true;
-		} else if (res == 'l') {
-			listen = true;
+		} else if (res == 'l' || res == 'L') {
+			struct sockaddr_in6 addr;
+			if (!parse_addr_port(optarg, &addr)) {
+				fprintf(stderr, "Bad address format.\n");
+				return -1;
+			}
+			if (res == 'L' && !IN6_IS_ADDR_MULTICAST(&addr.sin6_addr)) {
+				fprintf(stderr, "Specified address is not a multicast group.\n");
+				return -1;
+			}
+			mcastListen.push_back(make_pair(addr, JREPORT));
 		} else if (res == 'h') {
 			usage();
 			return -1;
@@ -199,49 +230,20 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+	mcastListen.push_back(make_pair(probeAddr, JPROBE));
+
 	inet_ntop(AF_INET6, &probeAddr.sin6_addr, sessionName, sizeof(sessionName));
 	sprintf(sessionName + strlen(sessionName), ":%u", 10000);
 
-	mcastSock = socket(AF_INET6, SOCK_DGRAM, 0);
-	if (mcastSock < 0) {
-		perror("Failed to create multicast socket");
-		return -1;
-	}
+	FD_ZERO(&readSet);
 
-	if (bind(mcastSock, (struct sockaddr *)&probeAddr, sizeof(probeAddr)) != 0) {
-		perror("Failed to bind multicast socket");
-		return -1;
-	}
-
-	int on = 1;
-
-	if (setsockopt(mcastSock, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0) {
-		perror("setsockopt");
-		return -1;
-	}
-
-	if (setsockopt(mcastSock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
-		perror("setsockopt");
-		return -1;
-	}
-
-	on = 0;
-
-	if (setsockopt(mcastSock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
-		perror("setsockopt");
-		return -1;
-	}
-
-	int ttl = 255;
-
-	if (setsockopt(mcastSock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
-		perror("setsockopt");
-		return -1;
-	}
-
-	if (IPv6MulticastListen(mcastSock, &probeAddr.sin6_addr) != 0) {
-		perror("Failed to join multicast beacon group");
-		return -1;
+	for (vector<pair<sockaddr_in6, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
+		int sock = SetupSocket(&i->first, i->second == JPROBE);
+		if (sock < 0)
+			return -1;
+		mcastSocks.push_back(make_pair(sock, i->second));
+		if (i->second == JPROBE)
+			mcastSock = sock;
 	}
 
 	fprintf(stdout, "Local name is %s\n", probeName);
@@ -257,19 +259,20 @@ int main(int argc, char **argv) {
 		fd_set readset;
 		struct timeval eventm;
 
-		FD_ZERO(&readset);
-		FD_SET(mcastSock, &readset);
+		memcpy(&readset, &readSet, sizeof(fd_set));
 
 		next_event(&eventm);
 
-		res = select(mcastSock + 1, &readset, 0, 0, &eventm);
+		res = select(largestSock + 1, &readset, 0, 0, &eventm);
 		if (res < 0) {
 			perror("Select failed");
 			return -1;
 		} else if (res == 0) {
 			handle_event();
 		} else {
-			handle_probe();
+			for (vector<pair<int, content_type> >::const_iterator i = mcastSocks.begin(); i != mcastSocks.end(); i++)
+				if (FD_ISSET(i->first, &readset))
+					handle_mcast(i->first, i->second);
 		}
 	}
 
@@ -308,7 +311,6 @@ void next_event(struct timeval *eventm) {
 }
 
 void insert_sorted_event(timer &t) {
-
 	gettimeofday(&t.target, 0);
 	t.target.tv_usec += t.interval * 1000;
 	while (t.target.tv_usec > 1000000) {
@@ -369,7 +371,7 @@ void handle_gc() {
 	}
 }
 
-void handle_probe() {
+void handle_jprobe(int sock) {
 	int len, pointer;
 	struct sockaddr_in6 from;
 	char name[256], tmp[64], *end;
@@ -391,7 +393,7 @@ void handle_probe() {
 	iov.iov_base = (char *)buffer;
 	iov.iov_len = sizeof(buffer);
 
-	len = recvmsg(mcastSock, &msg, 0);
+	len = recvmsg(sock, &msg, 0);
 	if (len < 0)
 		return;
 
@@ -445,6 +447,96 @@ void handle_probe() {
 		return;
 
 	updateStats(name, &from.sin6_addr, seqnum, timestamp, recvdts);
+}
+
+static int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, externalBeacon &rpt);
+
+void handle_jreport(int sock) {
+	sockaddr_in6 from;
+	socklen_t fromlen = sizeof(from);
+	int len;
+
+	len = recvfrom(sock, buffer, sizeof(buffer), 0, (sockaddr *)&from, &fromlen);
+
+	if (len < 0)
+		return;
+
+	string session, name;
+	externalBeacon beac;
+
+	if (parse_jreport(buffer, len, session, name, beac) < 0)
+		return;
+
+	externalBeacons[name] = beac;
+}
+
+struct jbuffer {
+	jbuffer(uint8_t *, int);
+
+	uint8_t *buff;
+	int len, pointer;
+
+	bool eob() { return pointer >= len; }
+	uint8_t top() const { return buff[pointer]; }
+
+	bool skip_string();
+	bool read_string(string &);
+	bool read_long(uint32_t &);
+	bool read_longlong(uint64_t &);
+	bool read_float(float &);
+
+	bool write(const void *, int);
+	bool write_string(const string &);
+	bool write_long(uint32_t);
+	bool write_longlong(uint64_t);
+	bool write_float(float);
+	bool write_char(char);
+};
+
+int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, externalBeacon &rpt) {
+	jbuffer buf(buffer, len);
+
+	if (!buf.read_string(session))
+		return -1;
+	if (!buf.read_string(probe))
+		return -1;
+
+	for (int i = 0; i < 6; i++) {
+		if (!buf.skip_string())
+			return -1;
+	}
+
+	while (!buf.eob() && buf.top() != '#') {
+		string name;
+		beaconExternalStats stats;
+
+		if (!buf.read_string(name))
+			return -1;
+		if (!buf.read_longlong(stats.timestamp))
+			return -1;
+		if (!buf.read_float(stats.avgdelay))
+			return -1;
+		if (!buf.read_float(stats.avgjitter))
+			return -1;
+		if (!buf.read_float(stats.avgloss))
+			return -1;
+		if (!buf.read_float(stats.avgooo))
+			return -1;
+		if (!buf.read_float(stats.avgdup))
+			return -1;
+
+		rpt.sources[name] = stats;
+	}
+
+	return 0;
+}
+
+void handle_mcast(int sock, content_type cnt) {
+	if (cnt == JPROBE) {
+		handle_jprobe(sock);
+	} else if (cnt == JREPORT) {
+		handle_jreport(sock);
+	}
 }
 
 uint64_t get_timestamp() {
@@ -589,94 +681,50 @@ int send_probe() {
 	return sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
 }
 
-static inline bool write_string(uint8_t *buffer, int *pointer, int maxlen, const char *str) {
-	if ((*pointer + (int)strlen(str) + 1) > maxlen)
-		return false;
-
-	buffer[*pointer] = strlen(str);
-	memcpy(buffer + *pointer + 1, str, strlen(str));
-
-	(*pointer) += 1 + strlen(str);
-
-	return true;
-}
-
-static inline bool write_long(uint8_t *buffer, int *pointer, int maxlen, int d) {
-	char tmp[32];
-
-	snprintf(tmp, sizeof(tmp), "%i", d);
-
-	return write_string(buffer, pointer, maxlen, tmp);
-}
-
-static inline bool write_float(uint8_t *buffer, int *pointer, int maxlen, float f, int d) {
-	char tmp[32];
-
-	snprintf(tmp, sizeof(tmp), "%f", f);
-
-	return write_string(buffer, pointer, maxlen, tmp);
-}
-
-static inline bool write_longlong(uint8_t *buffer, int *pointer, int maxlen, uint64_t d) {
-	char tmp[64];
-
-	snprintf(tmp, sizeof(tmp), "%llu", d);
-
-	return write_string(buffer, pointer, maxlen, tmp);
-}
-
-static inline bool write_char(uint8_t *buffer, int *pointer, int maxlen, char c) {
-	if ((*pointer + 1) > maxlen)
-		return false;
-	buffer[*pointer] = c;
-	(*pointer) ++;
-	return true;
-}
-
 int build_report(uint8_t *buffer, int maxlen) {
-	int pointer = 0;
+	jbuffer buf(buffer, maxlen);
 
-	if (!write_string(buffer, &pointer, maxlen, sessionName))
+	if (!buf.write_string(sessionName))
 		return -1;
-	if (!write_string(buffer, &pointer, maxlen, probeName))
+	if (!buf.write_string(probeName))
 		return -1;
 
-	if (!write_string(buffer, &pointer, maxlen, "")) // host ip
+	if (!buf.write_string("")) // host ip
 		return -1;
-	if (!write_string(buffer, &pointer, maxlen, "")) // host ip 2nd part
+	if (!buf.write_string("")) // host ip 2nd part
 		return -1;
-	if (!write_string(buffer, &pointer, maxlen, "")) // OS name
+	if (!buf.write_string("")) // OS name
 		return -1;
-	if (!write_string(buffer, &pointer, maxlen, "")) // OS version
+	if (!buf.write_string("")) // OS version
 		return -1;
-	if (!write_string(buffer, &pointer, maxlen, "")) // machine arch
+	if (!buf.write_string("")) // machine arch
 		return -1;
-	if (!write_string(buffer, &pointer, maxlen, "")) // java vm shitness
+	if (!buf.write_string("")) // java vm shitness
 		return -1;
 
 	for (map<string, beaconSource>::const_iterator i = sources.begin(); i != sources.end(); i++) {
 		if (!i->second.hasstats)
 			continue;
-		if (!write_string(buffer, &pointer, maxlen, i->first.c_str()))
+		if (!buf.write_string(i->first))
 			return -1;
-		if (!write_longlong(buffer, &pointer, maxlen, i->second.lasttimestamp))
+		if (!buf.write_longlong(i->second.lasttimestamp))
 			return -1;
-		if (!write_float(buffer, &pointer, maxlen, i->second.avgdelay, 0))
+		if (!buf.write_float(i->second.avgdelay)) // 0
 			return -1;
-		if (!write_float(buffer, &pointer, maxlen, i->second.avgjitter, 1))
+		if (!buf.write_float(i->second.avgjitter)) // 1
 			return -1;
-		if (!write_float(buffer, &pointer, maxlen, i->second.avgloss, 2))
+		if (!buf.write_float(i->second.avgloss)) // 2
 			return -1;
-		if (!write_float(buffer, &pointer, maxlen, i->second.avgooo, 3))
+		if (!buf.write_float(i->second.avgooo)) // 3
 			return -1;
-		if (!write_float(buffer, &pointer, maxlen, i->second.avgdup, 3))
+		if (!buf.write_float(i->second.avgdup)) // 3
 			return -1;
 	}
 
-	if (!write_char(buffer, &pointer, maxlen, '#'))
+	if (!buf.write_char('#'))
 		return -1;
 
-	return pointer;
+	return buf.pointer;
 }
 
 int send_report() {
@@ -684,7 +732,7 @@ int send_report() {
 	if (len < 0)
 		return len;
 
-	for (list<sockaddr_in6>::const_iterator i = redist.begin(); i != redist.end(); i++) {
+	for (vector<sockaddr_in6>::const_iterator i = redist.begin(); i != redist.end(); i++) {
 		const sockaddr_in6 *to = &(*i);
 
 		char tmp[64];
@@ -703,21 +751,21 @@ int send_report() {
 }
 
 int build_probe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
-	int len = 0;
+	jbuffer buf(buff, maxlen);
 
-	memcpy(buff, magicString, strlen(magicString));
-	len += strlen(magicString);
-
-	if (!write_string(buff, &len, maxlen, probeName))
+	if (!buf.write(magicString, strlen(magicString)))
 		return -1;
 
-	if (!write_long(buff, &len, maxlen, sn))
+	if (!buf.write_string(probeName))
 		return -1;
 
-	if (!write_longlong(buff, &len, maxlen, ts))
+	if (!buf.write_long(sn))
 		return -1;
 
-	return len;
+	if (!buf.write_longlong(ts))
+		return -1;
+
+	return buf.pointer;
 }
 
 int build_new_probe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
@@ -773,8 +821,8 @@ void do_dump() {
 
 		for (map<string, beaconExternalStats>::const_iterator j = i->second.sources.begin();
 						j != i->second.sources.end(); j++) {
-			fprintf(fp, "\t\t\t<source name=\"%s\" loss=\"%.1f\" delay=\"%.3f\" jitter=\"%.3f\" ooo=\"%.3f\" dup=\"%.3f\" />\n",
-				j->first.c_str(), j->second.avgloss, j->second.avgdelay, j->second.avgjitter, j->second.avgooo, j->second.avgdup);
+			fprintf(fp, "\t\t\t<source name=\"%s\" timestamp=\"%llu\" loss=\"%.1f\" delay=\"%.3f\" jitter=\"%.3f\" ooo=\"%.3f\" dup=\"%.3f\" />\n",
+				j->first.c_str(), j->second.timestamp, j->second.avgloss, j->second.avgdelay, j->second.avgjitter, j->second.avgooo, j->second.avgdup);
 		}
 
 		fprintf(fp, "\t</beacon>\n");
@@ -793,6 +841,161 @@ int IPv6MulticastListen(int sock, struct in6_addr *grpaddr) {
 	memcpy(&mreq.ipv6mr_multiaddr, grpaddr, sizeof(struct in6_addr));
 
 	return setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
+}
+
+int SetupSocket(sockaddr_in6 *addr, bool needTimeStamp) {
+	int sock = socket(AF_INET6, SOCK_DGRAM, 0);
+	if (sock < 0) {
+		perror("Failed to create multicast socket");
+		return -1;
+	}
+
+	if (bind(sock, (struct sockaddr *)addr, sizeof(*addr)) != 0) {
+		perror("Failed to bind multicast socket");
+		return -1;
+	}
+
+	int on = 1;
+
+	if (needTimeStamp) {
+		if (setsockopt(sock, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0) {
+			perror("setsockopt");
+			return -1;
+		}
+	}
+
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
+		perror("setsockopt");
+		return -1;
+	}
+
+	if (IN6_IS_ADDR_MULTICAST(&addr->sin6_addr)) {
+		on = 0;
+
+		if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
+			perror("setsockopt");
+			return -1;
+		}
+
+		int ttl = 255;
+
+		if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
+			perror("setsockopt");
+			return -1;
+		}
+
+		if (IPv6MulticastListen(sock, &addr->sin6_addr) != 0) {
+			perror("Failed to join multicast group");
+			return -1;
+		}
+	}
+
+	if (sock > largestSock)
+		largestSock = sock;
+
+	FD_SET(sock, &readSet);
+
+	return sock;
+}
+
+jbuffer::jbuffer(uint8_t *buffer, int maxlen)
+	: buff(buffer), len(maxlen), pointer(0) {}
+
+bool jbuffer::skip_string() {
+	string foo;
+	return read_string(foo);
+}
+
+bool jbuffer::read_string(string &str) {
+	if ((pointer + 1) >= len)
+		return false;
+	if ((pointer + 1 + buff[pointer]) > len)
+		return false;
+	str = string((char *)buff + pointer + 1, (int)buff[pointer]);
+	pointer += 1 + buffer[pointer];
+	return true;
+}
+
+bool jbuffer::read_long(uint32_t &l) {
+	string str;
+	if (!read_string(str))
+		return false;
+	char *end;
+	l = strtoul(str.c_str(), &end, 10);
+	if (*end)
+		return false;
+	return true;
+}
+
+bool jbuffer::read_longlong(uint64_t &ll) {
+	string str;
+	if (!read_string(str))
+		return false;
+	if (sscanf(str.c_str(), "%llu", &ll) != 1)
+		return false;
+	return true;
+}
+
+bool jbuffer::read_float(float &f) {
+	string str;
+	if (!read_string(str))
+		return false;
+	char *end;
+	f = strtof(str.c_str(), &end);
+	if (*end)
+		return false;
+	return true;
+}
+
+bool jbuffer::write(const void *ptr, int ptrlen) {
+	if ((pointer + ptrlen) > len)
+		return false;
+	memcpy(buff + pointer, ptr, ptrlen);
+	pointer += ptrlen;
+	return true;
+}
+
+bool jbuffer::write_string(const string &str) {
+	if (str.size() > 255 || (pointer + (int)str.size() + 1) > len)
+		return false;
+
+	buffer[pointer] = str.size();
+	memcpy(buff + pointer + 1, str.c_str(), str.size());
+
+	pointer += 1 + str.size();
+
+	return true;
+}
+
+bool jbuffer::write_long(uint32_t d) {
+	char tmp[32];
+
+	snprintf(tmp, sizeof(tmp), "%u", d);
+
+	return write_string(tmp);
+}
+
+bool jbuffer::write_float(float f) {
+	char tmp[32];
+
+	snprintf(tmp, sizeof(tmp), "%f", f);
+
+	return write_string(tmp);
+}
+
+bool jbuffer::write_longlong(uint64_t d) {
+	char tmp[64];
+
+	snprintf(tmp, sizeof(tmp), "%llu", d);
+
+	return write_string(tmp);
+}
+
+bool jbuffer::write_char(char c) {
+	if ((pointer + 1) >= len)
+		return false;
+	buff[pointer++] = c;
+	return true;
 }
 
 
