@@ -637,8 +637,8 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 	if (buff[3] == 0) {
 		if (len == 12) {
 			uint32_t seq = ntohl(*((uint32_t *)(buff + 4)));
-			uint32_t ts = ntohl(*((uint32_t *)(buff + 4)));
-			getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts).update(seq, ts, recvdts);
+			uint32_t ts = ntohl(*((uint32_t *)(buff + 8)));
+			getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts).update(seq, ts, (uint32_t)recvdts);
 		}
 	} else if (buff[3] == 1) {
 		if (len < 7 || (7 + buff[5]) > len || (7 + buff[5] + buff[6 + buff[5]]) > len)
@@ -648,10 +648,10 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 
 		src.lastttl = buff[4] - ttl;
 
-		string beacName((char *)buff + 5, buff[5]);
+		string beacName((char *)buff + 6, buff[5]);
 
 		src.setName(beacName);
-		src.adminContact = string((char *)buff + 6 + buff[5], buff[6 + buff[5]]);
+		src.adminContact = string((char *)buff + 7 + buff[5], buff[6 + buff[5]]);
 
 		int hlen = 7 + buff[5] + buff[6 + buff[5]];
 		uint8_t *ptr = buff + hlen;
@@ -834,6 +834,9 @@ void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
 		refresh(seqnum - 1, now);
 	}
+
+	if (verbose > 2)
+		fprintf(stderr, "beacon(%s) update %u, %llu, %llu\n", name.c_str(), seqnum, timestamp, now);
 
 	if (seqnum < lastseq && (lastseq - seqnum) >= packetcount)
 		return;
@@ -1126,7 +1129,7 @@ void do_dump() {
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
 			if (i->second.hasstats && i->second.identified) {
-				inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
+				inet_ntop(AF_INET6, &i->first.first, tmp, sizeof(tmp));
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
