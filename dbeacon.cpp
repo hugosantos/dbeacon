@@ -1314,8 +1314,8 @@ void do_dump() {
 
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
 		inet_ntop(AF_INET6, &beaconUnicastAddr.sin6_addr, tmp, sizeof(tmp));
-		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s\" age=\"%llu\">\n", (newProtocol ? beaconName : probeName),
-						sessionName, tmp, (now - startTime) / 1000);
+		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s/%d\" age=\"%llu\">\n", (newProtocol ? beaconName : probeName),
+						sessionName, tmp, ntohs(beaconUnicastAddr.sin6_port), (now - startTime) / 1000);
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
@@ -1325,7 +1325,7 @@ void do_dump() {
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
-				fprintf(fp, " addr=\"%s\"", tmp);
+				fprintf(fp, " addr=\"%s/%d\"", tmp,i->first.second);
 				fprintf(fp, " ttl=\"%i\"\n", i->second.lastttl);
 				fprintf(fp, "\t\t\t\tage=\"%llu\"", (now - i->second.creation) / 1000);
 				fprintf(fp, " loss=\"%.1f\"", i->second.avgloss);
@@ -1353,7 +1353,7 @@ void do_dump() {
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 			}
 			inet_ntop(AF_INET6, &i->first.first, tmp, sizeof(tmp));
-			fprintf(fp, " addr=\"%s\"", tmp);
+			fprintf(fp, " addr=\"%s/%d\"", tmp, i->first.second);
 			fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 			fprintf(fp, ">\n");
 			fprintf(fp, "\t\t<sources>\n");
@@ -1366,7 +1366,7 @@ void do_dump() {
 					fprintf(fp, " contact=\"%s\"", j->second.contact.c_str());
 				}
 				inet_ntop(AF_INET6, &j->first.first, tmp, sizeof(tmp));
-				fprintf(fp, " addr=\"%s\"", tmp);
+				fprintf(fp, " addr=\"%s/%d\"", tmp, j->first.second);
 				if (j->second.hasstats) {
 					fprintf(fp, " ttl=\"%u\"\n", j->second.ttl);
 					fprintf(fp, "\t\t\t\tage=\"%u\"", j->second.age);
