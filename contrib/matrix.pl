@@ -38,7 +38,7 @@ my $g;
 
 $g = new Graph::Directed;
 # initialize parser and read the file
-$parser = new XML::Parser( Style => 'Tree' );
+$parser = new XML::Parser(Style => 'Tree');
 $parser->setHandlers(Start => \&start_handler);
 my $tree = $parser->parsefile($dump_file);
 
@@ -367,120 +367,68 @@ sub start_handler {
 	my $value;
 
 	if ($tag eq "beacon") {
-		my $fname;
-		my $fadmin;
-		my $faddr;
-		my $fage;
-		while (($name, $value) = each %atts) {
-			if ($name eq "name") {
-				$fname = $value;
-			} elsif ($name eq "contact") {
-				$fadmin = $value;
-			} elsif ($name eq "addr") {
-				$faddr = $value;
-			} elsif ($name eq "age") {
-				$fage = $value;
-			} elsif ($name eq "group") {
-				$sessiongroup = $value;
-			} elsif ($name eq "ssmgroup") {
-				$ssm_sessiongroup = $value;
-			}
+		if ($atts{"group"} ne "") {
+			$sessiongroup = $atts{"group"};
 		}
+		if ($atts{"ssmgroup"} ne "") {
+			$ssm_sessiongroup = $atts{"ssmgroup"};
+		}
+		if ($atts{"addr"} ne "") {
+			$current_beacon = $atts{"addr"};
+			$current_source = "";
 
-		$current_beacon = $faddr;
-
-		if (($fname ne "") and ($fage > 0)) {
-			$g->add_vertex($faddr);
-			$g->set_vertex_attribute($faddr, "name", $fname);
-			$g->set_vertex_attribute($faddr, "contact", $fadmin);
-			$g->set_vertex_attribute($faddr, "age", $fage);
+			if (($atts{"name"} ne "") and ($atts{"age"} > 0)) {
+				$g->add_vertex($current_beacon);
+				$g->set_vertex_attribute($current_beacon, "name", $atts{"name"});
+				$g->set_vertex_attribute($current_beacon, "contact", $atts{"contact"});
+				$g->set_vertex_attribute($current_beacon, "age", $atts{"age"});
+			}
 		}
 	} elsif ($tag eq "ssm") {
-		my $fttl = -1;
-		my $floss = -1;
-		my $fdelay = -1;
-		my $fjitter = -1;
-		while (($name, $value) = each %atts) {
-			if ($name eq "ttl") {
-				$fttl = $value;
-			} elsif ($name eq "loss") {
-				$floss = $value;
-			} elsif ($name eq "delay") {
-				$fdelay = $value;
-			} elsif ($name eq "jitter") {
-				$fjitter = $value;
-			}
-		}
-
 		if ($current_source ne "") {
-			if ($fttl ge 0) {
-				$g->set_edge_attribute($current_source, $current_beacon, "ssm_ttl", $fttl);
-				my $val = $g->get_vertex_attribute($current_source, "goodedge");
-				$g->set_vertex_attribute($current_source, "goodedge", $val + 1);
-			}
-			if ($floss ge 0) {
-				$g->set_edge_attribute($current_source, $current_beacon, "ssm_loss", $floss);
-			}
-			if ($fdelay ge 0) {
-				$g->set_edge_attribute($current_source, $current_beacon, "ssm_delay", $fdelay);
-			}
-			if ($fjitter ge 0) {
-				$g->set_edge_attribute($current_source, $current_beacon, "ssm_jitter", $fjitter);
-			}
+			parse_stats($current_source, %atts, "ssm_");
 		}
 	} elsif ($tag eq "source") {
-		my $fname;
-		my $fadmin;
-		my $faddr;
-		my $fttl = -1;
-		my $floss = -1;
-		my $fdelay = -1;
-		my $fjitter = -1;
-		while (($name, $value) = each %atts) {
-			if ($name eq "name") {
-				$fname = $value;
-			} elsif ($name eq "contact") {
-				$fadmin = $value;
-			} elsif ($name eq "addr") {
-				$faddr = $value;
-			} elsif ($name eq "ttl") {
-				$fttl = $value;
-			} elsif ($name eq "loss") {
-				$floss = $value;
-			} elsif ($name eq "delay") {
-				$fdelay = $value;
-			} elsif ($name eq "jitter") {
-				$fjitter = $value;
-			}
-		}
+		if (($atts{"name"} ne "") and ($atts{"addr"} ne "")) {
+			my $addr = $atts{"addr"};
+			$current_source = $addr;
+			if (not $g->has_vertex($addr)) {
+				$g->add_vertex($addr);
 
-		if ($fname ne "") {
-			$current_source = $faddr;
-			if (not $g->has_vertex($faddr)) {
-				$g->add_vertex($faddr);
-				$g->set_vertex_attribute($faddr, "name", $fname);
-				$g->set_vertex_attribute($faddr, "contact", $fadmin);
+				$g->set_vertex_attribute($addr, "name", $atts{"name"});
+				$g->set_vertex_attribute($addr, "contact", $atts{"contact"});
 			}
 
-			$g->add_edge($faddr, $current_beacon);
-			if ($fttl ge 0) {
-				$g->set_edge_attribute($faddr, $current_beacon, "ttl", $fttl);
-				my $val = $g->get_vertex_attribute($faddr, "goodedge");
-				$g->set_vertex_attribute($faddr, "goodedge", $val + 1);
-			}
-			if ($floss ge 0) {
-				$g->set_edge_attribute($faddr, $current_beacon, "loss", $floss);
-			}
-			if ($fdelay ge 0) {
-				$g->set_edge_attribute($faddr, $current_beacon, "delay", $fdelay);
-			}
-			if ($fjitter ge 0) {
-				$g->set_edge_attribute($faddr, $current_beacon, "jitter", $fjitter);
-			}
+			$g->add_edge($addr, $current_beacon);
+
+			parse_stats($addr, %atts, "");
 		}
 	} elsif ($tag eq "website") {
 		if ($atts{"type"} ne "" and $atts{"url"} ne "") {
-			$g->set_vertex_attribute($current_beacon, "url_" . $atts{"type"}, $atts{"url"});
+			if ($current_source ne "") {
+				$g->set_vertex_attribute($current_source, "url_" . $atts{"type"}, $atts{"url"});
+			} else {
+				$g->set_vertex_attribute($current_beacon, "url_" . $atts{"type"}, $atts{"url"});
+			}
+		}
+	}
+}
+
+sub parse_stats {
+	my ($addr, %atts, $prefix) = @_;
+
+	if ($atts{"ttl"} ge 0) {
+		$g->set_edge_attribute($addr, $current_beacon, $prefix . "ttl", $atts{"ttl"});
+		my $val = $g->get_vertex_attribute($addr, "goodedge");
+		$g->set_vertex_attribute($addr, "goodedge", $val + 1);
+	}
+
+	my @statsAtts = ("loss", "delay", "jitter");
+	my $len = scalar(@statsAtts);
+
+	for (my $j = 0; $j < $len; $j++) {
+		if ($atts{$statsAtts[$j]} ge 0) {
+			$g->set_edge_attribute($addr, $current_beacon, $prefix . $statsAtts[$j], $atts{$statsAtts[$j]});
 		}
 	}
 }
