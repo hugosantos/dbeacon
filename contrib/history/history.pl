@@ -6,23 +6,20 @@
 # ScriptAlias /matrix/history/ /home/seb/dbeacon/contrib/history/history.pl
 #
 # Originally by Sebastien Chaumontet
+
 use strict;
 use RRDs;
 use CGI;
 use Switch;
 use POSIX qw(strftime);
 
-
 our $historydir;
 
-# Load perl config script
-do("history.conf");
-
 # Assign default values
-if (!$historydir)
-{
-        $historydir = 'data';
-}
+$historydir = 'data';
+
+# Load perl config script which should overide default parameter
+do("history.conf");
 
 $|=1; # Do not bufferize STDOUT
 

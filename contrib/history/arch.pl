@@ -22,19 +22,12 @@ our $historydir;
 # to use with dbeacon -L
 #$dumpfile = shift @ARGV;
 
-# Load perl config script
-do("history.conf");
-
 # Assign default values
-if (!$dumpfile)
-{
-	$dumpfile = '../../dump.xml';
-}
-if (!$historydir)
-{
-	$historydir = 'data';
-}
+$dumpfile = '../../dump.xml';
+$historydir = 'data';
 
+# Load perl config script which should overide default values
+do("history.conf");
 
 my $verbose = 1;
 
