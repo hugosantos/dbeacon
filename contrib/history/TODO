@@ -1,6 +1,4 @@
 - script to clean old rrd
-- do not update rrd every call (dbacon dumps performed every 5s and rrd resolution is 60)
-- create links from mattrix.pl cells
 - improve src and dst list look
 - add some links to facilitate navigation ie: invers src and dst, ...
 
