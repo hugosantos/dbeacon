@@ -43,8 +43,11 @@
 #include <math.h>
 #include <errno.h>
 #include <signal.h>
-#include <getopt.h>
 #include <libgen.h>
+
+#ifndef __sun__
+#include <getopt.h>
+#endif
 
 #include <map>
 #include <string>
@@ -96,6 +99,13 @@ enum {
 	WEBSITE_REPORT_EVENT
 };
 
+static const char *Flags[] = {
+	"SSM",
+	"SSMPing"
+};
+
+static const uint32_t KnownFlags = 2;
+
 static uint32_t timeFact(int val, bool random = false);
 
 string beaconName, adminContact, twoLetterCC;
@@ -103,6 +113,7 @@ Sources sources;
 WebSites webSites;
 address beaconUnicastAddr;
 int verbose = 0;
+uint32_t flags = 0;
 
 int mcastInterface = 0;
 
@@ -193,6 +204,7 @@ void usage() {
 	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
 	fprintf(stderr, "  -C CC                  Specify your two letter Country Code\n");
 	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename\n");
+	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announce. Available flags are: ssmping\n");
 	fprintf(stderr, "  -4                     Force IPv4 usage\n");
 	fprintf(stderr, "  -6                     Force IPv6 usage\n");
 	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
@@ -366,6 +378,8 @@ int main(int argc, char **argv) {
 	}
 
 	if (ssmMcastSock) {
+		flags |= SSM_CAPABLE;
+
 		uint64_t now = get_timestamp();
 		for (vector<address>::const_iterator i = ssmBootstrap.begin(); i != ssmBootstrap.end(); i++) {
 			getSource(*i, 0, now, false);
@@ -449,7 +463,7 @@ void show_version() {
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::OB:s:d::I:l:L:W:C:vUhf46V");
+		res = getopt(argc, argv, "n:a:i:b:r:S::OB:s:d::I:l:L:W:C:F:vUhf46V");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -525,6 +539,12 @@ int parse_arguments(int argc, char **argv) {
 				return -1;
 			}
 			twoLetterCC = optarg;
+		} else if (res == 'F') {
+			if (!strcmp(optarg, "ssmping")) {
+				flags |= SSMPING_CAPABLE;
+			} else {
+				fprintf(stderr, "Unknown flag \"%s\"\n", optarg);
+			}
 		} else if (res == 'i') {
 			multicastInterface = optarg;
 		} else if (res == 'h') {
@@ -808,6 +828,7 @@ beaconSource::beaconSource()
 	: identified(false) {
 	sttl = 0;
 	lastlocalevent = 0;
+	Flags = 0;
 }
 
 void beaconSource::setName(const string &n) {
@@ -1105,6 +1126,12 @@ void do_dump() {
 					"generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
 				fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n",
 							typnam, j->second.c_str());
+			}
+
+			for (uint32_t k = 0; k < KnownFlags; k++) {
+				if (i->second.Flags & (1 << k)) {
+					fprintf(fp, "\t\t\t\t<flag name=\"%s\" value=\"true\" />\n", Flags[k]);
+				}
 			}
 
 			if (i->second.ASM.s.valid)

@@ -50,6 +50,8 @@ extern int mcastInterface;
 
 struct beaconExternalStats;
 
+extern uint32_t flags;
+
 struct Stats {
 	Stats();
 
@@ -120,6 +122,8 @@ struct beaconSource {
 	std::string name;
 	std::string adminContact;
 	std::string CC;
+
+	uint32_t Flags;
 
 	typedef std::map<address, beaconExternalStats> ExternalSources;
 	ExternalSources externalSources;

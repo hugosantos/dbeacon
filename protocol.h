@@ -37,6 +37,8 @@ enum {
 	T_ASM_STATS = 'A',
 	T_SSM_STATS = 'S',
 
+	T_SOURCE_FLAGS = 'F',
+
 	T_WEBSITE_GENERIC = 'G',
 	T_WEBSITE_MATRIX = 'M',
 	T_WEBSITE_LG = 'L',
@@ -52,6 +54,12 @@ enum {
 	MAP_REPORT,
 	WEBSITE_REPORT,
 	LEAVE_REPORT
+};
+
+// Known Flags
+enum {
+	SSM_CAPABLE = 1,
+	SSMPING_CAPABLE = 2
 };
 
 int build_probe(uint8_t *, int, uint32_t, uint64_t);

@@ -29,6 +29,14 @@ static bool write_tlv_start(uint8_t *buff, int maxlen, int &ptr, uint8_t type, i
 	return true;
 }
 
+static bool write_tlv_uint(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t val) {
+	if (!write_tlv_start(buff, maxlen, ptr, type, 4))
+		return false;
+	uint32_t v = htonl(val);
+	memcpy(buff + 2, &v, 4);
+	return true;
+}
+
 static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t age, int sttl, const beaconMcastState &st) {
 	if (!write_tlv_start(buff, maxlen, ptr, type, 20))
 		return false;
@@ -96,6 +104,8 @@ int build_report(uint8_t *buff, int maxlen, int type, bool publishsources) {
 			if (!write_tlv_string(buff, maxlen, ptr, T_CC, twoLetterCC.c_str()))
 				return -1;
 		}
+		if (!write_tlv_uint(buff, maxlen, ptr, T_SOURCE_FLAGS, flags))
+			return -1;
 		return ptr;
 	} else if (type == LEAVE_REPORT) {
 		if (!write_tlv_start(buff, maxlen, ptr, T_LEAVE, 0))
@@ -335,6 +345,12 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 			} else if (hd[0] == T_CC) {
 				if (hd[1] == 2) {
 					src.CC = string((char *)hd + 2, 2);
+				}
+			} else if (hd[0] == T_SOURCE_FLAGS) {
+				if (hd[1] == 4) {
+					uint32_t v;
+					memcpy(&v, hd + 2, 4);
+					src.Flags = ntohl(v);
 				}
 			} else if (hd[0] == T_LEAVE) {
 				removeSource(from, false);
