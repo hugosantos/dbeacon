@@ -161,7 +161,7 @@ int SetupSocket(const address &addr, bool shouldbind, bool ssm) {
 	}
 #endif
 
-	int type = IPPROTO_IPV6 ? IPV6_HOPLIMIT :
+	int type = level == IPPROTO_IPV6 ? IPV6_HOPLIMIT :
 #ifdef IP_RECVTTL
 				IP_RECVTTL;
 #else
