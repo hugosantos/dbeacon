@@ -90,8 +90,7 @@ Frequently Asked Questions (FAQ)
 
     Check dbeacon's website.
 
-  • I run Debian, what packages do i need to install in order to setup a
-    matrix?
+  • What debian packages do i need to install in order to setup a matrix?
 
     Besides a web server (such as apache) you need perl and libxml-parser-perl.
     If you wish to use the history feature you must also install librrds-perl.
