@@ -18,7 +18,7 @@ use strict;
 # configuration variables, may be changed in matrix.conf
 our $dumpfile = "/home/seb/dbeacon/dump.xml";
 our $historydir = 'data';
-our $verbose = 2;
+our $verbose = 1;
 our $title = "IPv6 Multicast Beacon";
 our $default_hideinfo = 0;	# one of '0', '1'
 our $default_what = "both";	# one of 'both', 'asm'
