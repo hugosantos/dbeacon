@@ -397,7 +397,17 @@ ul#view li {
 	margin: 0;
 }
 
-#view .currentview {
+#view a.viewitem {
+	color: blue;
+	text-decoration: none;
+	border-bottom: 1px solid blue;
+}
+
+#view a.viewitem:visited {
+	color: blue;
+}
+
+#view #currentview {
 	border-bottom: 1px dotted black;
 }
 
@@ -447,9 +457,9 @@ sub build_header {
 		my $attn = $view_name[$i];
 		print "<li>";
 		if ($attname eq $att) {
-			print "<span class=\"currentview\">$attn</span>";
+			print "<span class=\"viewitem\" id=\"currentview\">$attn</span>";
 		} else {
-			print "<a href=\"$url?$hideatt" . "att=$att\">$attn</a>";
+			print "<a class=\"viewitem\" href=\"$url?$hideatt" . "att=$att\">$attn</a>";
 		}
 		print " <small>(" . $view_type[$i] . ")</small></li>\n";
 	}
