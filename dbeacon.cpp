@@ -114,6 +114,7 @@ static Sources sources;
 
 struct beaconExternalStats {
 	uint64_t timestamp;
+	uint64_t lastlocalupdate;
 	uint32_t age, ttl;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 };
@@ -133,7 +134,7 @@ static void handle_probe(int, content_type);
 static void handle_jprobe(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len);
 static void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len);
 static void handle_jreport(int);
-static int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, externalBeacon &rpt);
+static int parse_jreport(uint8_t *buffer, int len, uint64_t, string &session, string &probe, externalBeacon &rpt);
 static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
@@ -493,6 +494,16 @@ void handle_gc() {
 			k++;
 			externalBeacons.erase(j);
 		} else {
+			for (map<string, beaconExternalStats>::iterator m = k->second.sources.begin(); m != k->second.sources.end();) {
+				if ((now - m->second.lastlocalupdate) > 120000) {
+					map<string, beaconExternalStats>::iterator n = m;
+					m++;
+					k->second.sources.erase(n);
+				} else {
+					m++;
+				}
+			}
+
 			k++;
 		}
 	}
@@ -647,9 +658,6 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 
 		externalBeacon beac;
 
-		beac.lastupdate = recvdts;
-		beac.addr = from->sin6_addr;
-
 		while (plen < len) {
 			int namelen = ptr[0];
 			int elen = 4 + 4 + 1 + 4 * 2 + 3;
@@ -660,6 +668,8 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 			ptr += 1 + namelen;
 
 			beaconExternalStats stats;
+
+			stats.lastlocalupdate = recvdts;
 
 			stats.timestamp = ntohl(*(uint32_t *)ptr);
 			stats.age = ntohl(*(uint32_t *)(ptr + 4));
@@ -680,7 +690,17 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 			beac.sources[name] = stats;
 		}
 
-		externalBeacons[beacName] = beac;
+		ExternalBeacons::iterator i = externalBeacons.find(beacName);
+		if (i == externalBeacons.end()) {
+			externalBeacons.insert(make_pair(beacName, beac));
+			i = externalBeacons.find(beacName);
+		} else {
+			for (map<string, beaconExternalStats>::const_iterator j = beac.sources.begin(); j != beac.sources.end(); j++)
+				i->second.sources[j->first] = j->second;
+		}
+
+		i->second.lastupdate = recvdts;
+		i->second.addr = from->sin6_addr;
 	}
 }
 
@@ -697,16 +717,23 @@ void handle_jreport(int sock) {
 	string session, name;
 	externalBeacon beac;
 
-	if (parse_jreport(buffer, len, session, name, beac) < 0)
+	if (parse_jreport(buffer, len, get_timestamp(), session, name, beac) < 0)
 		return;
 
-	beac.lastupdate = get_timestamp();
-	beac.addr = from.sin6_addr;
+	ExternalBeacons::iterator i = externalBeacons.find(name);
+	if (i == externalBeacons.end()) {
+		externalBeacons.insert(make_pair(name, beac));
+		i = externalBeacons.find(name);
+	} else {
+		for (map<string, beaconExternalStats>::const_iterator j = beac.sources.begin(); j != beac.sources.end(); j++)
+			i->second.sources[j->first] = j->second;
+	}
 
-	externalBeacons[name] = beac;
+	i->second.lastupdate = get_timestamp();
+	i->second.addr = from.sin6_addr;
 }
 
-int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, externalBeacon &rpt) {
+int parse_jreport(uint8_t *buffer, int len, uint64_t recvdts, string &session, string &probe, externalBeacon &rpt) {
 	jbuffer buf(buffer, len);
 
 	if (!buf.read_string(session))
@@ -722,6 +749,8 @@ int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, exte
 	while (!buf.eob() && buf.top() != '#') {
 		string name;
 		beaconExternalStats stats;
+
+		stats.lastlocalupdate = recvdts;
 
 		if (!buf.read_string(name))
 			return -1;
