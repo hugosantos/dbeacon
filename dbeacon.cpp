@@ -38,6 +38,11 @@
 // change this to uint8_t on solaris, etc
 #define TTLType		int
 
+// TIMESTAMP doesn't work in OSX
+#if defined(__MACH__) && defined(__APPLE__)
+#undef SO_TIMESTAMP
+#endif
+
 #if __linux__ || (__FreeBSD_version > 500042)
 
 #if !defined(MCAST_JOIN_GROUP)
@@ -961,6 +966,9 @@ void handle_probe(int sock, content_type type) {
 
 	if (!recvdts) {
 #ifdef SO_TIMESTAMP
+		if (verbose > 4) {
+			fprintf(stderr, "Dropping message, no timestamp.\n");
+		}
 		return;
 #else
 		recvdts = get_timestamp();
