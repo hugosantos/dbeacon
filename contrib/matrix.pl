@@ -407,7 +407,12 @@ print "<span style=\"float: left\"><b>View</b>&nbsp;<small>(";
 
 	if ($attwhat eq "asm") {
 		print ", <a href=\"$url?$hideatt&what=both&att=$attname&at=$at\">ASM and SSM</a>";
+		print ", <a href=\"$url?$hideatt&what=ssmorasm&att=$attname&at=$at\">SSM or ASM</a>";
+	} elsif ($attwhat eq "ssmorasm") {
+		print ", <a href=\"$url?$hideatt&what=both&att=$attname&at=$at\">ASM and SSM</a>";
+		print ", <a href=\"$url?$hideatt&what=asm&att=$attname&at=$at\">ASM only</a>";
 	} else {
+		print ", <a href=\"$url?$hideatt&what=ssmorasm&att=$attname&at=$at\">SSM or ASM</a>";
 		print ", <a href=\"$url?$hideatt&what=asm&att=$attname&at=$at\">ASM only</a>";
 	}
 
@@ -465,7 +470,7 @@ sub render_matrix {
 
 	my $what_td = "colspan=\"2\"";
 
-	if ($attwhat eq "asm") {
+	if ($attwhat eq "asm" or $attwhat eq "ssmorasm") {
 		$what_td = "";
 	}
 
@@ -516,12 +521,21 @@ sub render_matrix {
 							$txt = sprintf("%.1f", $txt);
 						}
 
-						if ($attwhat eq "asm") {
+						if ($attwhat eq "asm" or $attwhat eq "ssmorasm") {
+							my $whattype = "asm";
+							if ($attwhat eq "ssmorasm") {
+								my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
+								if (defined($txtssm)) {
+									$txt = $txtssm;
+									$whattype = "ssm";
+								}
+							}
+
 							if (not defined($txt)) {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
 								print "<td class=\"fulladjacent\">";
-								make_history_link($b, $a, "asm", $txt, "historyurl");
+								make_history_link($b, $a, $whattype, $txt, "historyurl");
 								print "</td>";
 							}
 						} else {
