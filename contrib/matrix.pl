@@ -15,7 +15,7 @@ my $default_hideinfo = 0;	# one of '0', '1'
 my $default_what = "both";	# one of 'both', 'asm'
 
 # change this filename to your dump file
-my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
+my $dump_file = "/home/seb/dbeacon/dump.xml";
 
 my $dbeacon = "<a href=\"http://artemis.av.it.pt/~hsantos/software/dbeacon.html\">dbeacon</a>";
 
@@ -23,8 +23,8 @@ my $page = new CGI;
 my $url = $page->script_name();
 
 # if matrix.pl is being served as matrix/, history will be matrix/history/
-# my $history = $url . "history/";
-my $history = undef;
+my $history = $url . "history/";
+#my $history = undef;
 
 print $page->header;
 
@@ -115,7 +115,7 @@ sub make_history_url {
 	$dstbeacon =~ s/\/\d+$//;
         $srcbeacon =~ s/\/\d+$//;
 
-	return "$history?src=" . $dst->[1] . ".$dstbeacon.$type&dst=" . $src->[1] . ".$srcbeacon";
+	return "$history?src=" . $dst->[1] . "-$dstbeacon.$type&dst=" . $src->[1] . "-$srcbeacon";
 }
 
 sub build_name {

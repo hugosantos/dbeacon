@@ -12,6 +12,7 @@ use RRDs;
 use CGI;
 use Switch;
 use POSIX qw(strftime);
+use history;
 
 our $historydir;
 
@@ -54,56 +55,17 @@ sub full_url {
 	return "$url?dst=$dst&src=$src&type=$type";
 }
 
-sub get_beacons {
-	my ($target, $isf, $start) = @_;
-
-	opendir (DIR, $target) or die "Failed to open directory $target\n";
-	my @res = ();
-
-	foreach my $dircontent (readdir(DIR)) {
-		if ($dircontent ne "." and $dircontent ne ".." and
-			(($isf and -f "$target/$dircontent") or (not $isf and -d "$target/$dircontent"))) {
-			my $dst = $dircontent;
-			my $final = "$target/$dircontent";
-			if ($isf) {
-				$dst =~ s/\.rrd$//;
-				my $simname = $dst;
-				$simname =~ s/^(.+)\..+\.(.+)$/$1/;
-				my $name = $dst;
-				$name =~ s/^(.+)\..+\.(.+)$/$1 ($2)/;
-				push (@res, [$name, $dst, "$start$dst", $final, $simname, $2 eq "ssm"]);
-			} else {
-				$dst =~ s/^(.+)\..+$/$1/;
-				push (@res, [$dst, $dircontent, "$start$dircontent", $final]);
-			}
-		}
-	}
-
-	close (DIR);
-
-	return @res;
-}
-
-sub get_dstbeacons {
-	return get_beacons($historydir, 0, "$url?dst=");
-}
-
-sub get_srcbeacons {
-	my ($dst) = @_;
-	return get_beacons("$historydir/$dst", 1, "$url?dst=$dst&src=");
-}
-
 sub listgraph {
 	start_document();
 
 	if (defined($dst)) {
 		print "To ";
 
-		do_list_beacs("dstc", $dst, (["-- Initial Page --", "", "$url"], get_dstbeacons()));
+		do_list_beacs("dstc", $dst, (["-- Initial Page --", "", "$url"], get_dstbeacons($historydir, $url)));
 
 		if (defined($src)) {
 			print "From ";
-			do_list_beacs("srcc", $src, (["-- Source List --", "", "$url?dst=$dst"], get_srcbeacons($dst)));
+			do_list_beacs("srcc", $src, (["-- Source List --", "", "$url?dst=$dst"], get_srcbeacons($historydir, $url, $dst)));
 
 			if ($type ne "") {
 				print "Type ";
@@ -126,7 +88,7 @@ sub listgraph {
 
 		print 'Select a receiver:';
 
-		my @beacs = get_dstbeacons();
+		my @beacs = get_dstbeacons($historydir, $url);
 
 		print "<ul>\n";
 
@@ -141,7 +103,7 @@ sub listgraph {
 
 		# List visible src for this beacon
 
-		my @beacs = get_srcbeacons($dst);
+		my @beacs = get_srcbeacons($historydir, $url, $dst);
 
 		my %pairs;
 
@@ -261,18 +223,15 @@ sub graphgen {
 	}
 
 	# Display only the name
-	my $msrc = $src;
-	my $mdst = $dst;
+	my ($msrc,$asmorssm) = get_name_from_host($src);
+	my ($mdst) = get_name_from_host($dst);
 
-	$msrc =~ s/^(.+)\..+\.(.+)$/$1/;
-	my $asmorssm = $2;
-	$asmorssm =~ s/([a-z])/\u$1/g; # Convert to uppercase
-
-	$mdst =~ s/^(.+)\..+$/$1/;
+	my $rrdfile = build_rrd_file_path($historydir, $dst, $src, $asmorssm);
 
 	# Escape ':' chars
-	my $rrdfile = "$historydir/$dst/$src.rrd";
 	$rrdfile =~ s/:/\\:/g;
+
+	$asmorssm =~ s/([a-z])/\u$1/g; # Convert to uppercase
 
 	print $page->header(-type => 'image/png', -expires => '+3s');
 

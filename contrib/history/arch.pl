@@ -15,6 +15,7 @@
 use strict;
 use XML::Parser;
 use RRDs;
+use history;
 
 our $dumpfile;
 our $historydir;
@@ -48,7 +49,7 @@ sub start_handler
 	{
 		if ($atts{"name"} and $atts{"addr"})
 		{
-			$dstbeacon = $atts{"name"}.'.'.$atts{"addr"};
+			$dstbeacon =  build_host($atts{"name"},$atts{"addr"});
 		}
 		else
 		{
@@ -60,7 +61,7 @@ sub start_handler
 
 		if ($atts{"name"} and $atts{"addr"})
 		{
-			$srcbeacon = $atts{"name"}.'.'.$atts{"addr"};
+			$srcbeacon = build_host($atts{"name"},$atts{"addr"});
 		}
 		else
 		{
@@ -77,32 +78,11 @@ sub start_handler
 	}
 }
 
-sub rrd_file_path {
-	my ($dstbeacon, $srcbeacon, $asmorssm) = @_;
-
-	return "$historydir/$dstbeacon/$srcbeacon.$asmorssm.rrd";
-}
-
-sub make_rrd_file_path {
-	my ($dstbeacon, $srcbeacon, $asmorssm) = @_;
-
-	if (! -d "$historydir/$dstbeacon") {
-		if (! -d $historydir) {
-			if (!mkdir $historydir) {
-				return 0;
-			}
-		}
-
-		return mkdir "$historydir/$dstbeacon";
-	}
-
-	return 1;
-}
 
 sub check_rrd {
-	my ($dstbeacon, $srcbeacon, $asmorssm) = @_;
+	my ($historydir, $dstbeacon, $srcbeacon, $asmorssm) = @_;
 
-	my $rrdfile = rrd_file_path(@_);
+	my $rrdfile = build_rrd_file_path(@_);
 
 	if (! -f $rrdfile) {
 		if ($verbose) {
@@ -141,15 +121,7 @@ sub check_rrd {
 sub storedata {
 	my ($dstbeacon,$srcbeacon,$asmorssm,%values) = @_;
 
-	# Removing port number as it change between two beacon restarts
-        $dstbeacon =~ s/\/\d+$//;
-        $srcbeacon =~ s/\/\d+$//;
-
-	# Removing bad chars in name
-        $dstbeacon =~ s/[^A-z0-9\:\.\-_\s]//g;
-        $srcbeacon =~ s/[^A-z0-9\:\.\-_\s]//g;
-
-	check_rrd($dstbeacon, $srcbeacon, $asmorssm);
+	check_rrd($historydir, $dstbeacon, $srcbeacon, $asmorssm);
 
 	# Update rrd with new values
 
@@ -162,7 +134,7 @@ sub storedata {
 		$updatestring.=':'.$values{$valuetype};
 	}
 
-	if (!RRDs::update(rrd_file_path($dstbeacon, $srcbeacon, $asmorssm), $updatestring)) {
+	if (!RRDs::update(build_rrd_file_path($historydir, $dstbeacon, $srcbeacon, $asmorssm), $updatestring)) {
 		return 0;
 	}
 
