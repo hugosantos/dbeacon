@@ -579,11 +579,18 @@ sub store_data_one {
 
 	my %values;
 
+	my $good = 0;
+
 	foreach my $type ('ttl', 'loss', 'delay', 'jitter') {
 		$values{$type} = $g->get_edge_attribute($dst, $src, $prefix . $type);
+		if (defined($values{$type})) {
+			$good++;
+		}
 	}
 
-	storedata($dst_h, $src_h, $tag, %values);
+	if ($good > 0) {
+		storedata($dst_h, $src_h, $tag, %values);
+	}
 }
 
 sub build_host {
