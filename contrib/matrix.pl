@@ -25,6 +25,8 @@ if ($attname eq "") {
 	$attname = "ttl";
 }
 
+my $sessiongroup;
+
 my $current_beacon;
 my %adjacency_matrix;
 my $parser;
@@ -101,6 +103,8 @@ print "<h1>IPv6 Multicast Beacon</h1>\n";
 my $now = localtime();
 
 print "<h4>Current Server time is $now</h4>\n";
+
+print "<h4>Current stats for $sessiongroup</h4>\n";
 
 my $url = $page->script_name();
 
@@ -183,6 +187,11 @@ foreach $a (@V) {
 
 print "</table>";
 
+print "<br /><br />";
+
+print "<p>If you wish to add a beacon to your site, you may use dbeacon with the following parameters:</p>\n";
+print "<p><code>./dbeacon -P -n NAME -b $sessiongroup -a CONTACT</code></p>\n";
+
 print "</body>";
 print "</html>";
 
@@ -205,6 +214,8 @@ sub start_handler {
 				$faddr = $value;
 			} elsif ($name eq "age") {
 				$fage = $value;
+			} elsif ($name = "group") {
+				$sessiongroup = $value;
 			}
 		}
 

@@ -393,11 +393,15 @@ int main(int argc, char **argv) {
 	}
 
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
+		inet_ntop(AF_INET6, &probeAddr.sin6_addr, sessionName, sizeof(sessionName));
+
 		if (!newProtocol) {
 			mcastListen.push_back(make_pair(probeAddr, JPROBE));
 
 			insert_event(SEND_EVENT, 100);
 			insert_event(REPORT_EVENT, 4000);
+
+			sprintf(sessionName + strlen(sessionName), ":%u", 10000);
 		} else {
 			if (!force && adminContact.empty()) {
 				fprintf(stderr, "No administration contact supplied.\n");
@@ -412,13 +416,12 @@ int main(int argc, char **argv) {
 
 			redist.push_back(probeAddr);
 
+			sprintf(sessionName + strlen(sessionName), "/%u", 10000);
+
 			if (!IN6_IS_ADDR_UNSPECIFIED(&ssmProbeAddr.sin6_addr)) {
 				mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
 			}
 		}
-
-		inet_ntop(AF_INET6, &probeAddr.sin6_addr, sessionName, sizeof(sessionName));
-		sprintf(sessionName + strlen(sessionName), ":%u", 10000);
 	} else {
 		strcpy(sessionName, probeName);
 	}
@@ -837,7 +840,7 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 
 			stats.timestamp = ntohl(*(uint32_t *)ptr);
 			stats.age = ntohl(*((((uint32_t *)ptr)+1)));
-			stats.s.rttl = ptr[8] + src.sttl;
+			stats.s.rttl = ptr[8];
 			tmp = ntohl(*(uint32_t *)(ptr + 9));
 			stats.s.avgdelay = *(float *)&tmp;
 			tmp = ntohl(*(uint32_t *)(ptr + 13));
@@ -1368,8 +1371,10 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 	return 4 + 4 + 4;
 }
 
-void dumpStats(FILE *fp, const Stats &s, int sttl) {
-	if (sttl)
+void dumpStats(FILE *fp, const Stats &s, int sttl, bool diff) {
+	if (!diff)
+		fprintf(fp, " ttl=\"%i\"\n", s.rttl);
+	else if (sttl)
 		fprintf(fp, " ttl=\"%i\"\n", sttl - s.rttl);
 	fprintf(fp, " loss=\"%.1f\"", s.avgloss);
 	fprintf(fp, " delay=\"%.3f\"", s.avgdelay);
@@ -1404,12 +1409,12 @@ void do_dump() {
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 				fprintf(fp, " addr=\"%s/%d\"", tmp, i->first.second);
 				fprintf(fp, "\t\t\t\tage=\"%llu\"", (now - i->second.creation) / 1000);
-				dumpStats(fp, i->second.s, i->second.sttl);
+				dumpStats(fp, i->second.s, i->second.sttl, true);
 				if (i->second.s_ssm.valid) {
 					fprintf(fp, ">\n");
-					
+
 					fprintf(fp, "<ssm");
-					dumpStats(fp, i->second.s_ssm, i->second.sttl);
+					dumpStats(fp, i->second.s_ssm, i->second.sttl, true);
 					fprintf(fp, " /></source>\n");
 				} else {
 					fprintf(fp, " />\n");
@@ -1449,7 +1454,7 @@ void do_dump() {
 				fprintf(fp, " addr=\"%s/%d\"", tmp, j->first.second);
 				if (j->second.s.valid) {
 					fprintf(fp, "\t\t\t\tage=\"%u\"", j->second.age);
-					dumpStats(fp, j->second.s, i->second.sttl);
+					dumpStats(fp, j->second.s, i->second.sttl, false);
 				}
 				fprintf(fp, " />\n");
 			}
@@ -1467,7 +1472,7 @@ void do_dump() {
 					j != i->second.jsources.end(); j++) {
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", j->first.c_str());
-				dumpStats(fp, j->second.s, 0);
+				dumpStats(fp, j->second.s, 0, true);
 				fprintf(fp, " />\n");
 			}
 
