@@ -376,6 +376,7 @@ sub start_document {
 	print "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
 
 	print "<head>
+	\t<title>IPv6 Multicast Beacon</title>
 \t<meta http-equiv=\"refresh\" content=\"60\" />
 \t<style type=\"text/css\">
 body {
