@@ -894,10 +894,10 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 				int plen = hd[1] - 18;
 				for (uint8_t *pd = tlv_begin(hd + 2 + 18, plen); pd; pd = tlv_next(pd, plen)) {
 					if (pd[0] == T_BEAC_NAME) {
-						stats.name = string((char *)hd + 2, hd[1]);
+						stats.name = string((char *)pd + 2, pd[1]);
 						stats.identified = !stats.name.empty();
 					} else if (pd[0] == T_ADMIN_CONTACT) {
-						stats.contact = string((char *)hd + 2, hd[1]);
+						stats.contact = string((char *)pd + 2, pd[1]);
 					} else if (pd[0] == T_ASM_STATS || pd[0] == T_SSM_STATS) {
 						Stats *st = (pd[0] == T_ASM_STATS ? &stats.ASM : &stats.SSM);
 
