@@ -65,6 +65,8 @@ using namespace std;
 #define NEW_BEAC_PCOUNT	10
 #define NEW_BEAC_VER	1
 
+static const char *versionInfo = "0.2 ($Rev$ $Date$)";
+
 static const char *defaultIPv6SSMChannel = "ff3e::beac";
 static const char *defaultIPv4SSMChannel = "232.2.3.2";
 static const char *defaultPort = "10000";
@@ -1602,7 +1604,7 @@ void do_dump() {
 	dumpBytesReceived = 0;
 	dumpBytesSent = 0;
 
-	fprintf(fp, "<beacons rxrate=\"%.2lf\" txrate=\"%.2lf\">\n", rxRate, txRate);
+	fprintf(fp, "<beacons rxrate=\"%.2lf\" txrate=\"%.2lf\" versioninfo=\"%s\">\n", rxRate, txRate, versionInfo);
 
 	fprintf(fp, "<group addr=\"%s\"", sessionName);
 
@@ -1872,15 +1874,6 @@ int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
 			return -1;
 		}
 	}
-
-#if 0
-	on = 1;
-
-	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_LOOP : IP_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
-		perror("setting multicast loop setsockopt()");
-		return -1;
-	}
-#endif
 
 	TTLType ttl = defaultTTL;
 
