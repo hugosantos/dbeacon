@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl -w -Icontrib/history
 
 # arch.pl - read dbeacon dump file and fill related rrds
 # use history.pl to see data

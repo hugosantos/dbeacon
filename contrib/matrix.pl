@@ -11,20 +11,18 @@ use XML::Parser;
 use integer;
 use strict;
 
+our $dumpfile = "/home/seb/dbeacon/dump.xml";
+our $history = undef;
+
+my $page = new CGI;
+our $url = $page->script_name();
+
 my $default_hideinfo = 0;	# one of '0', '1'
 my $default_what = "both";	# one of 'both', 'asm'
 
-# change this filename to your dump file
-my $dump_file = "/home/seb/dbeacon/dump.xml";
+do("history.conf");
 
 my $dbeacon = "<a href=\"http://artemis.av.it.pt/~hsantos/software/dbeacon.html\">dbeacon</a>";
-
-my $page = new CGI;
-my $url = $page->script_name();
-
-# if matrix.pl is being served as matrix/, history will be matrix/history/
-my $history = $url . "history/";
-#my $history = undef;
 
 print $page->header;
 
@@ -56,7 +54,7 @@ $g = new Graph::Directed;
 # initialize parser and read the file
 $parser = new XML::Parser(Style => 'Tree');
 $parser->setHandlers(Start => \&start_handler);
-my $tree = $parser->parsefile($dump_file);
+my $tree = $parser->parsefile($dumpfile);
 
 sub beacon_name {
 	my ($d) = @_;
