@@ -40,6 +40,7 @@ my $sessiongroup;
 my $ssm_sessiongroup;
 
 my $load_start = [gettimeofday];
+my $ended_parsing_dump;
 
 if (scalar(@ARGV) > 0) {
 	exit(store_data($ARGV[0]));
@@ -156,6 +157,8 @@ sub parse_dump_file {
 	my $parser = new XML::Parser(Style => 'Tree');
 	$parser->setHandlers(Start => \&start_handler);
 	my $tree = $parser->parsefile($dump);
+
+	$ended_parsing_dump = [gettimeofday];
 }
 
 sub check_outdated_dump {
@@ -461,7 +464,12 @@ sub end_document {
 		my $render_end = [gettimeofday];
 		my $diff = tv_interval $load_start, $render_end;
 
-		print "<p style=\"margin: 0\"><small>Took $diff seconds from load to end of render.</small></p>\n";
+		print "<p style=\"margin: 0\"><small>Took $diff seconds from load to end of render";
+		if (defined($ended_parsing_dump)) {
+			my $dumpdiff = tv_interval $load_start, $ended_parsing_dump;
+			print " ($dumpdiff in parsing dump file)";
+		}
+		print ".</small></p>\n";
 	}
 
 	print "<p style=\"margin: 0\"><small>matrix.pl - a tool for dynamic viewing of $dbeacon information and history. by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>\n";
