@@ -13,6 +13,7 @@ use Graph::Directed;
 use XML::Parser;
 use RRDs;
 use POSIX qw(strftime);
+use Time::HiRes qw(gettimeofday tv_interval);
 use strict;
 
 # configuration variables, may be changed in matrix.conf
@@ -28,6 +29,7 @@ our $css_file;
 our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
 our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
 our $default_ssm_group = "ff3e::beac/10000";
+our $debug = 0;
 
 do("matrix.conf");
 
@@ -36,6 +38,8 @@ my $dbeacon = "<a href=\"http://artemis.av.it.pt/~hsantos/software/dbeacon.html\
 my $g;
 my $sessiongroup;
 my $ssm_sessiongroup;
+
+my $load_start = [gettimeofday];
 
 if (scalar(@ARGV) > 0) {
 	exit(store_data($ARGV[0]));
@@ -733,6 +737,13 @@ sub render_matrix {
 			}
 		}
 		print " -a CONTACT</code></p>\n";
+	}
+
+	my $render_end = [gettimeofday];
+	my $diff = tv_interval $load_start, $render_end;
+
+	if ($debug) {
+		print "<p>Took $diff seconds from load to end of render.</p>\n";
 	}
 
 	end_document();
