@@ -157,7 +157,7 @@ struct beaconExternalStats;
 #define PACKETS_VERY_OLD 150
 
 struct Stats {
-	Stats() : valid(false) {}
+	Stats();
 
 	bool valid;
 	uint64_t timestamp, lastupdate;
@@ -180,6 +180,8 @@ struct beaconExternalStats {
 };
 
 struct beaconMcastState {
+	beaconMcastState();
+
 	uint32_t lastseq;
 
 	uint32_t packetcount, packetcountreal;
@@ -874,6 +876,13 @@ void handle_event() {
 	}
 }
 
+Stats::Stats() {
+	valid = false;
+	timestamp = lastupdate = 0;
+	avgdelay = avgjitter = avgloss = avgdup = avgooo = 0;
+	rttl = 0;
+}
+
 void Stats::check_validity(uint64_t now) {
 	if ((now - lastupdate) > 30000)
 		valid = false;
@@ -1251,6 +1260,10 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 	beaconMcastState *st = ssm ? &SSM : &ASM;
 
 	st->update(ttl, seqnum, timestamp, now);
+}
+
+beaconMcastState::beaconMcastState() {
+	refresh(0, 0);
 }
 
 void beaconMcastState::refresh(uint32_t seq, uint64_t now) {
