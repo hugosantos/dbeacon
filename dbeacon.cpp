@@ -133,6 +133,7 @@ enum {
 	WILLSEND_SSM_EVENT,
 
 	REPORT_EVENT = 'R',
+	SSM_REPORT_EVENT,
 	MAP_REPORT_EVENT,
 	WEBSITE_REPORT_EVENT
 };
@@ -141,6 +142,7 @@ enum {
 enum {
 	// This must match the above value
 	STATS_REPORT = 'R',
+	SSM_REPORT,
 	MAP_REPORT,
 	WEBSITE_REPORT,
 	LEAVE_REPORT
@@ -521,6 +523,7 @@ int main(int argc, char **argv) {
 
 		insert_event(SENDING_EVENT, 100);
 		insert_event(REPORT_EVENT, 10000);
+		insert_event(SSM_REPORT_EVENT, 15000);
 		insert_event(MAP_REPORT_EVENT, 30000);
 		insert_event(WEBSITE_REPORT_EVENT, 120000);
 
@@ -826,6 +829,7 @@ void handle_event() {
 		send_ssm_count++;
 		break;
 	case REPORT_EVENT:
+	case SSM_REPORT_EVENT:
 	case MAP_REPORT_EVENT:
 	case WEBSITE_REPORT_EVENT:
 		send_report(t.type);
@@ -854,6 +858,8 @@ void handle_event() {
 		insert_event(WILLSEND_SSM_EVENT, (uint32_t)ceil(Exprnd(beacInt) * 1000));
 	} else if (t.type == REPORT_EVENT) {
 		insert_event(REPORT_EVENT, (uint32_t)ceil(2 * beacInt * 1000));
+	} else if (t.type == SSM_REPORT_EVENT) {
+		insert_event(SSM_REPORT_EVENT, (uint32_t)ceil(3 * beacInt * 1000));
 	} else if (t.type == MAP_REPORT_EVENT) {
 		insert_event(MAP_REPORT_EVENT, (uint32_t)ceil(6 * beacInt * 1000));
 	} else if (t.type == WEBSITE_REPORT_EVENT) {
@@ -1085,13 +1091,7 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 			getSource(*from, 0, recvdts).update(ttl, seq, ts, recvdts, ssm);
 		}
 		return;
-	}
-
-	// We only accept probes via SSM
-	if (ssm)
-		return;
-
-	if (buff[3] == 1) {
+	} else if (buff[3] == 1) {
 		if (len < 5)
 			return;
 
@@ -1396,7 +1396,7 @@ bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t
 
 	*((uint32_t *)(b + 0)) = htonl((uint32_t)st.s.timestamp);
 	*((uint32_t *)(b + 4)) = htonl(age);
-	b[8] = sttl - st.s.rttl;
+	b[8] = (sttl ? sttl : defaultTTL) - st.s.rttl;
 
 	uint32_t *stats = (uint32_t *)(b + 9);
 	stats[0] = htonl(*((uint32_t *)&st.s.avgdelay));
@@ -1411,7 +1411,7 @@ bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t
 	return true;
 }
 
-int build_nreport(uint8_t *buff, int maxlen, int type) {
+int build_nreport(uint8_t *buff, int maxlen, int type, bool publishsources) {
 	if (maxlen < 4)
 		return -1;
 
@@ -1448,57 +1448,59 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 		return ptr;
 	}
 
-	uint64_t now = get_timestamp();
+	if (publishsources) {
+		uint64_t now = get_timestamp();
 
-	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-		if (!i->second.identified)
-			continue;
+		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
+			if (!i->second.identified)
+				continue;
 
-		if (!i->second.ASM.s.valid && !i->second.SSM.s.valid)
-			continue;
+			if (!i->second.ASM.s.valid && !i->second.SSM.s.valid)
+				continue;
 
-		int len = 18;
+			int len = 18;
 
-		if (i->first.ss_family == AF_INET)
-			len = 6;
+			if (i->first.ss_family == AF_INET)
+				len = 6;
 
-		if (type == MAP_REPORT) {
-			int namelen = i->second.name.size();
-			int contactlen = i->second.adminContact.size();
-			len += 2 + namelen + 2 + contactlen;
-		} else {
-			len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
-		}
+			if (type == MAP_REPORT) {
+				int namelen = i->second.name.size();
+				int contactlen = i->second.adminContact.size();
+				len += 2 + namelen + 2 + contactlen;
+			} else {
+				len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
+			}
 
-		if (!write_tlv_start(buff, maxlen, ptr, i->first.ss_family == AF_INET6 ? T_SOURCE_INFO : T_SOURCE_INFO_IPv4, len))
-			break;
+			if (!write_tlv_start(buff, maxlen, ptr, i->first.ss_family == AF_INET6 ? T_SOURCE_INFO : T_SOURCE_INFO_IPv4, len))
+				break;
 
-		if (i->first.ss_family == AF_INET6) {
-			const sockaddr_in6 *addr = i->first.v6();
+			if (i->first.ss_family == AF_INET6) {
+				const sockaddr_in6 *addr = i->first.v6();
 
-			memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
-			*((uint16_t *)(buff + ptr + 16)) = addr->sin6_port;
+				memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
+				*((uint16_t *)(buff + ptr + 16)) = addr->sin6_port;
 
-			ptr += 18;
-		} else {
-			const sockaddr_in *addr = i->first.v4();
+				ptr += 18;
+			} else {
+				const sockaddr_in *addr = i->first.v4();
 
-			memcpy(buff + ptr, &addr->sin_addr, sizeof(in_addr));
-			*((uint16_t *)(buff + ptr + 4)) = addr->sin_port;
+				memcpy(buff + ptr, &addr->sin_addr, sizeof(in_addr));
+				*((uint16_t *)(buff + ptr + 4)) = addr->sin_port;
 
-			ptr += 6;
-		}
+				ptr += 6;
+			}
 
-		if (type == MAP_REPORT) {
-			write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
-			write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
-		} else {
-			uint32_t age = (now - i->second.creation) / 1000;
+			if (type == MAP_REPORT) {
+				write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
+				write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
+			} else {
+				uint32_t age = (now - i->second.creation) / 1000;
 
-			if (i->second.ASM.s.valid)
-				write_tlv_stats(buff, maxlen, ptr, T_ASM_STATS, age, i->second.sttl, i->second.ASM);
-			if (i->second.SSM.s.valid)
-				write_tlv_stats(buff, maxlen, ptr, T_SSM_STATS, age, i->second.sttl, i->second.SSM);
+				if (i->second.ASM.s.valid)
+					write_tlv_stats(buff, maxlen, ptr, T_ASM_STATS, age, i->second.sttl, i->second.ASM);
+				if (i->second.SSM.s.valid)
+					write_tlv_stats(buff, maxlen, ptr, T_SSM_STATS, age, i->second.sttl, i->second.SSM);
+			}
 		}
 	}
 
@@ -1508,25 +1510,34 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 int send_report(int type) {
 	int len;
 
-	len = build_nreport(buffer, sizeof(buffer), type);
+	len = build_nreport(buffer, sizeof(buffer), type == SSM_REPORT ? STATS_REPORT : type, type != SSM_REPORT);
 	if (len < 0)
 		return len;
 
-	for (vector<address>::const_iterator i = redist.begin(); i != redist.end(); i++) {
-		const address *to = &(*i);
+	int res;
 
-		char tmp[64];
-		to->print(tmp, sizeof(tmp));
-
-		if (verbose) {
-			cerr << "Sending Report to " << tmp << endl;
-		}
-
-		int res;
-		if ((res = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, to->sockaddr_len())) < 0) {
-			cerr << "Failed to send report to " << tmp << ": " << strerror(errno) << endl;
+	if (type == SSM_REPORT) {
+		if ((res = sendto(mcastSock, buffer, len, 0, (sockaddr *)&ssmProbeAddr, ssmProbeAddr.sockaddr_len())) < 0) {
+			cerr << "Failed to send SSM report: " << strerror(errno) << endl;
 		} else {
 			bytesSent += res;
+		}
+	} else {
+		for (vector<address>::const_iterator i = redist.begin(); i != redist.end(); i++) {
+			const address *to = &(*i);
+
+			char tmp[64];
+			to->print(tmp, sizeof(tmp));
+
+			if (verbose) {
+				cerr << "Sending Report to " << tmp << endl;
+			}
+
+			if ((res = sendto(mcastSock, buffer, len, 0, (sockaddr *)to, to->sockaddr_len())) < 0) {
+				cerr << "Failed to send report to " << tmp << ": " << strerror(errno) << endl;
+			} else {
+				bytesSent += res;
+			}
 		}
 	}
 
