@@ -34,6 +34,7 @@ static bool write_tlv_uint(uint8_t *buff, int maxlen, int &ptr, uint8_t type, ui
 		return false;
 	uint32_t v = htonl(val);
 	memcpy(buff + 2, &v, 4);
+	ptr += 4;
 	return true;
 }
 

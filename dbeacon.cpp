@@ -1120,20 +1120,6 @@ void do_dump() {
 			fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 			fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
 
-			for (WebSites::const_iterator j = i->second.webSites.begin();
-							j != i->second.webSites.end(); j++) {
-				const char *typnam = j->first == T_WEBSITE_GENERIC ?
-					"generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
-				fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n",
-							typnam, j->second.c_str());
-			}
-
-			for (uint32_t k = 0; k < KnownFlags; k++) {
-				if (i->second.Flags & (1 << k)) {
-					fprintf(fp, "\t\t\t\t<flag name=\"%s\" value=\"true\" />\n", Flags[k]);
-				}
-			}
-
 			if (i->second.ASM.s.valid)
 				dumpStats(fp, "asm", i->second.ASM.s, now, i->second.sttl, true);
 
@@ -1160,6 +1146,21 @@ void do_dump() {
 		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 		fprintf(fp, " rxlocal=\"%s\"", i->second.rxlocal(now) ? "true" : "false");
 		fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
+
+		for (uint32_t k = 0; k < KnownFlags; k++) {
+			if (i->second.Flags & (1 << k)) {
+				fprintf(fp, "\t\t<flag name=\"%s\" value=\"true\" />\n", Flags[k]);
+			}
+		}
+
+		for (WebSites::const_iterator j = i->second.webSites.begin();
+						j != i->second.webSites.end(); j++) {
+			const char *typnam = j->first == T_WEBSITE_GENERIC ?
+				"generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
+			fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n",
+						typnam, j->second.c_str());
+		}
+
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (beaconSource::ExternalSources::const_iterator j = i->second.externalSources.begin();
