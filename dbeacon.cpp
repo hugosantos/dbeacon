@@ -900,7 +900,7 @@ int SetupSocket(sockaddr_in6 *addr, bool isProbe) {
 			return -1;
 		}
 
-		int ttl = 255;
+		int ttl = 127;
 
 		if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
 			perror("setsockopt(IPV6_MULTICAST_HOPS)");
