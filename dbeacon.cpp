@@ -35,7 +35,7 @@
 #define IP_RECVTTL 12
 #endif
 
-#if __sun__
+#ifdef __sun__
 #define TTLType		uint8_t
 #else
 #define TTLType		int
@@ -162,9 +162,9 @@ struct beaconExternalStats;
 struct Stats {
 	Stats();
 
-	bool valid;
 	uint64_t timestamp, lastupdate;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
+	bool valid;
 	uint8_t rttl;
 
 	void check_validity(uint64_t);
@@ -205,9 +205,6 @@ typedef std::map<int, string> WebSites;
 struct beaconSource {
 	beaconSource();
 
-	bool identified;
-	string name;
-	string adminContact;
 	address addr;
 
 	uint64_t creation;
@@ -222,15 +219,20 @@ struct beaconSource {
 	void setName(const string &);
 	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
 
-	typedef std::map<beaconSourceAddr, beaconExternalStats> ExternalSources;
-	ExternalSources externalSources;
-
 	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
 
 	bool rxlocal(uint64_t now) const { return lastlocalevent > (now - 30000); }
 
-	WebSites webSites;
+	string name;
+	string adminContact;
 	string CC;
+
+	typedef std::map<beaconSourceAddr, beaconExternalStats> ExternalSources;
+	ExternalSources externalSources;
+
+	WebSites webSites;
+
+	bool identified;
 };
 
 typedef std::map<beaconSourceAddr, beaconSource> Sources;
@@ -436,8 +438,8 @@ static inline bool operator < (const address &a1, const address &a2) {
 	return memcmp(&a1, &a2, sizeof(address)) < 0;
 }
 
-static uint8_t *buffer = 0;
 static const int bufferLen = 2048;
+static uint8_t buffer[bufferLen];
 
 extern char *optarg;
 
@@ -476,11 +478,6 @@ static int parse_arguments(int, char **);
 
 int main(int argc, char **argv) {
 	int res;
-
-	if ((buffer = new uint8_t[bufferLen]) == 0) {
-		fprintf(stderr, "Failed to allocate buffer memory.\n");
-		return -1;
-	}
 
 	srand(time(NULL));
 
@@ -1076,13 +1073,28 @@ static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 	if (tlv[1] != 20)
 		return false;
 
-	st.timestamp = ntohl(*(uint32_t *)(tlv + 2));
-	extb.age = ntohl(*(uint32_t *)(tlv + 6));
+	uint32_t tmp;
+
+	memcpy(&tmp, tlv + 2, sizeof(tmp));
+	st.timestamp = ntohl(tmp);
+	memcpy(&tmp, tlv + 6, sizeof(tmp));
+	extb.age = tmp;
+
+	// st.timestamp = ntohl(*(uint32_t *)(tlv + 2));
+	// extb.age = ntohl(*(uint32_t *)(tlv + 6));
+
 	st.rttl = tlv[10];
 
-	uint32_t tmp = ntohl(*(uint32_t *)(tlv + 11));
+	memcpy(&tmp, tlv + 11, sizeof(tmp));
+	tmp = ntohl(tmp);
+
+	// tmp = ntohl(*(uint32_t *)(tlv + 11));
 	st.avgdelay = *(float *)&tmp;
-	tmp = ntohl(*(uint32_t *)(tlv + 15));
+
+	memcpy(&tmp, tlv + 15, sizeof(tmp));
+	tmp = ntohl(tmp);
+
+	// tmp = ntohl(*(uint32_t *)(tlv + 15));
 	st.avgjitter = *(float *)&tmp;
 
 	st.avgloss = tlv[19] / 255.;
@@ -1157,14 +1169,14 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 					a6->sin6_family = AF_INET6;
 
 					memcpy(&a6->sin6_addr, hd + 2, sizeof(in6_addr));
-					a6->sin6_port = *(uint16_t *)(hd + 18);
+					memcpy(&a6->sin6_port, hd + 18, sizeof(uint16_t));
 				} else {
 					sockaddr_in *a4 = (sockaddr_in *)&addr;
 
 					a4->sin_family = AF_INET;
 
 					memcpy(&a4->sin_addr, hd + 2, sizeof(in_addr));
-					a4->sin_port = *(uint16_t *)(hd + 6);
+					memcpy(&a4->sin_port, hd + 6, sizeof(uint16_t));
 				}
 
 				beaconExternalStats &stats = src.getExternal(addr, recvdts);
@@ -1428,13 +1440,27 @@ bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t
 
 	uint8_t *b = buff + ptr;
 
-	*((uint32_t *)(b + 0)) = htonl((uint32_t)st.s.timestamp);
-	*((uint32_t *)(b + 4)) = htonl(age);
+	uint32_t val;
+
+	val = htonl((uint32_t)st.s.timestamp);
+	memcpy(b + 0, &val, sizeof(val));
+	val = htonl(age);
+	memcpy(b + 4, &val, sizeof(val));
+
+	// *((uint32_t *)(b + 0)) = htonl((uint32_t)st.s.timestamp);
+	// *((uint32_t *)(b + 4)) = htonl(age);
+
 	b[8] = (sttl ? sttl : defaultTTL) - st.s.rttl;
 
 	uint32_t *stats = (uint32_t *)(b + 9);
-	stats[0] = htonl(*((uint32_t *)&st.s.avgdelay));
-	stats[1] = htonl(*((uint32_t *)&st.s.avgjitter));
+
+	val = htonl(*((uint32_t *)&st.s.avgdelay));
+	memcpy(stats + 0, &val, sizeof(val));
+	val = htonl(*((uint32_t *)&st.s.avgjitter));
+	memcpy(stats + 1, &val, sizeof(val));
+
+	// stats[0] = htonl(*((uint32_t *)&st.s.avgdelay));
+	// stats[1] = htonl(*((uint32_t *)&st.s.avgjitter));
 
 	b[17] = (uint8_t)(st.s.avgloss * 0xff);
 	b[18] = (uint8_t)(st.s.avgdup * 0xff);
@@ -1512,14 +1538,14 @@ int build_nreport(uint8_t *buff, int maxlen, int type, bool publishsources) {
 				const sockaddr_in6 *addr = i->first.v6();
 
 				memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
-				*((uint16_t *)(buff + ptr + 16)) = addr->sin6_port;
+				memcpy(buff + ptr + 16, &addr->sin6_port, sizeof(uint16_t));
 
 				ptr += 18;
 			} else {
 				const sockaddr_in *addr = i->first.v4();
 
 				memcpy(buff + ptr, &addr->sin_addr, sizeof(in_addr));
-				*((uint16_t *)(buff + ptr + 4)) = addr->sin_port;
+				memcpy(buff + ptr + 4, &addr->sin_port, sizeof(uint16_t));
 
 				ptr += 6;
 			}
