@@ -196,12 +196,15 @@ void usage() {
 	fprintf(stderr, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR[/PORT]  Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
+	fprintf(stderr, "  -O                     Disables the joining of SSM groups but still sends via SSM.\n");
+	fprintf(stderr, "                         Use this option if your operating system has problems with SSM\n");
 	fprintf(stderr, "  -B ADDR                Bootstraps by joining the specified address\n");
 	fprintf(stderr, "  -s ADDR                Bind to local address\n");
 	fprintf(stderr, "  -d [FILE]              Dump periodic reports to dump.xml or specified file\n");
 	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
 	fprintf(stderr, "  -l LOCAL_ADDR[/PORT]   Listen for reports from other probes\n");
-	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
+	fprintf(stderr, "  -W URL / type$URL      Specify a website to announce. If type$ (one of lg or matrix) is used\n");
+	fprintf(stderr, "                         will announce an URL for that type instead\n");
 	fprintf(stderr, "  -C CC                  Specify your two letter Country Code\n");
 	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename\n");
 	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announce. Available flags are: ssmping\n");
