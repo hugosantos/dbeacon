@@ -1273,7 +1273,7 @@ void do_dump() {
 			print_inaddr(&ssmProbeAddr, tmp, sizeof(tmp), true);
 			fprintf(fp, " ssmgroup=\"%s\"", tmp);
 		}
-		fprintf(fp, " age=\"%llu\">\n", (now - startTime) / 1000);
+		fprintf(fp, " age=\"%llu\" lastupdate=\"0\">\n", (now - startTime) / 1000);
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
@@ -1316,6 +1316,7 @@ void do_dump() {
 		print_inaddr(&i->first, tmp, sizeof(tmp), true);
 		fprintf(fp, " addr=\"%s\"", tmp);
 		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
+		fprintf(fp, " lastupdate=\"%llu\"", (now - i->second.lastevent) / 1000);
 		fprintf(fp, ">\n");
 		fprintf(fp, "\t\t<sources>\n");
 
