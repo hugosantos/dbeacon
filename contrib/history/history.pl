@@ -6,12 +6,12 @@
 # ScriptAlias /matrix/history/ /home/seb/dbeacon/contrib/history/history.pl
 #
 # Originally by Sebastien Chaumontet
-
 use strict;
 use RRDs;
 use CGI;
 use Switch;
 use POSIX qw(strftime);
+
 
 our $historydir;
 
@@ -23,6 +23,8 @@ if (!$historydir)
 {
         $historydir = 'data';
 }
+
+$|=1; # Do not bufferize STDOUT
 
 my $page = new CGI;
 my $url = $page->script_name();
