@@ -15,6 +15,7 @@ use CGI;
 use Graph::Directed;
 use XML::Parser;
 use Switch;
+use integer;
 use strict;
 
 my $page = new CGI;
@@ -54,47 +55,52 @@ body {
 	font-size: 100%;
 }
 
-table#adj {
+table.adjr {
 	text-align: center;
-	border-spacing: 1px;
 }
-table#adj td.beacname {
+table.adjr td.beacname {
 	text-align: right;
 }
-table#adj td {
-	padding: 2px;
+table.adjr td {
+	padding: 3px;
+	border-bottom: 0.1em solid white;
 }
-table#adj td.adjacent {
+table#adj td.adjacent, table#adj td.ssmadjacent {
 	background-color: #96ef96;
-	width: 16pt;
+	width: 20px;
 }
+
 table#adj td.blackhole {
 	background-color: #000000;
 }
 table#adj td.noinfo {
 	background-color: #ff0000;
 }
-table#adj td.nossminfo {
+table#adj td.noasminfo, table#adj td.nossminfo {
 	background-color: #b6ffb6;
-	width: 16pt;
+	width: 20px;
 }
 table#adj td.corner {
 	background-color: #dddddd;
 }
 
-table#beacs td {
-	padding: 5px;
+table#adj td.adjacent {
+	border-right: 0.075em solid white;
 }
 
-table#beacs td.name {
-	border-left: 2px solid black;
+table#adj td.blackhole, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
+	border-right: 0.2em solid white;
 }
 
-table#beacs td.name, table#beacs td.addr, table#beacs td.admincontact, table#beacs td.age {
-	border-right: 2px solid black;
+table#adjname td.addr, table#adjname td.admincontact, table#adjname td.age {
+	background-color: #eeeeee;
+	border-right: 0.2em solid white;
+}
+table#adjname td.age {
+	font-size: 80%;
 }
 
-table#beacs td.addr, table#beacs td.admincontact {
+.addr, .admincontact {
 	font-family: Monospace;
 }
 
@@ -132,9 +138,9 @@ my $url = $page->script_name();
 
 print "<p><b>Parameters:</b> [<a href=\"$url?att=ttl\">TTL</a>] [<a href=\"$url?att=loss\">Loss</a>] [<a href=\"$url?att=delay\">Delay</a>] [<a href=\"$url?att=jitter\">Jitter</a>]</p>\n";
 
-print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" id=\"adj\">\n";
+print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adj\">\n";
 
-print "<tr>\n";
+print "<tr>";
 print "<td></td>";
 my $c;
 my $i = 1;
@@ -152,9 +158,7 @@ foreach $c (@V) {
 	} elsif (not $goodedge) {
 		push (@problematic, $c);
 	} else {
-		print "<td colspan=\"2\">\n";
-		print "<b>S$i</b>";
-		print "</td>\n";
+		print "<td colspan=\"2\"><b>S$i</b></td>";
 
 		$g->set_vertex_attribute($c, "id", $i);
 
@@ -178,7 +182,7 @@ foreach $a (@V) {
 					my $txt;
 					my $txtssm;
 					my $tdclass = "adjacent";
-					my $tdclasssm = "adjacent";
+					my $tdclasssm = "ssmadjacent";
 					$txt = $g->get_edge_attribute($b, $a, $attname);
 					$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
 					if (($txt eq "") and ($txtssm eq "")) {
@@ -186,23 +190,48 @@ foreach $a (@V) {
 					} else {
 						if ($txt eq "") {
 							$txt = "-";
-							$tdclass = "nossminfo";
+							$tdclass = "noasminfo";
 						} elsif ($txtssm eq "") {
 							$txtssm = "-";
 							$tdclasssm = "nossminfo";
 						}
-						print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\" edge>$txtssm</td>";
+						print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\">$txtssm</td>";
 					}
 				} else {
 					if ($a eq $b) {
-						print "<td colspan=\"2\" class=\"corner\"></td>";
+						print "<td colspan=\"2\" class=\"corner\">&nbsp;</td>";
 					} else {
-						print "<td colspan=\"2\" class=\"blackhole\"></td>";
+						print "<td colspan=\"2\" class=\"blackhole\">&nbsp;</td>";
 					}
 				}
 			}
 		}
-		print "<tr>\n";
+		print "</tr>\n";
+	}
+}
+print "</table>\n";
+
+print "<br />\n";
+
+print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
+
+print "<tr><td></td><td><b>Age</b></td><td><b>Source Address/Port</b></td><td><b>Admin Contact</b></td></tr>";
+foreach $a (@V) {
+	my $id = $g->get_vertex_attribute($a, "id");
+	if ($id >= 1) {
+		print "<tr>";
+		print "<td class=\"beacname\">";
+		my $name = $g->get_vertex_attribute($a, "name");
+		my $contact = $g->get_vertex_attribute($a, "contact");
+		my $age = $g->get_vertex_attribute($a, "age");
+		if (not $age) {
+			$age = "-";
+		} else {
+			$age = format_date($age);
+		}
+		print "$name <b>R$id</b>";
+		print "</td>";
+		print "<td class=\"age\">$age</td><td class=\"addr\">$a</td><td class=\"admincontact\">$contact</td></tr>\n";
 	}
 }
 print "</table>\n";
@@ -224,26 +253,6 @@ if (scalar(@warmingup) > 0) {
 	print "</ul>\n";
 	print "<br />\n";
 }
-
-print "<table cellspacing=\"0\" cellpadding=\"0\" id=\"beacs\">";
-print "<tr><th>Beacon Name</th><th>Source Address/Port</th><th>Admin Contact</th><th>Age</th></tr>\n";
-
-foreach $a (@V) {
-	my $id = $g->get_vertex_attribute($a, "id");
-	if ($id >= 1) {
-		my $name = $g->get_vertex_attribute($a, "name");
-		my $contact = $g->get_vertex_attribute($a, "contact");
-		my $age = $g->get_vertex_attribute($a, "age");
-		if (not $age) {
-			$age = "-";
-		} else {
-			$age = "$age secs";
-		}
-		print "<tr><td class=\"name\">$name</td><td class=\"addr\">$a</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age</td></tr>\n";
-	}
-}
-
-print "</table>";
 
 if (scalar(@problematic) ne 0) {
 	print "<h3>Beacons with no connectivity</h3>\n";
@@ -301,6 +310,39 @@ print "<small>matrix.pl - a tool for dynamic viewing of dbeacon information. by 
 
 print "</body>";
 print "</html>";
+
+sub format_date {
+	my $tm = shift;
+	my $res;
+
+	if ($tm > 86400) {
+		my $days = $tm / 86400;
+		$res .= " $days";
+		$res .= "d";
+		$tm = $tm % 86400;
+	}
+
+	if ($tm > 3600) {
+		my $hours = $tm / 3600;
+		$res .= " $hours";
+		$res .= "h";
+		$tm = $tm % 3600;
+	}
+
+	if ($tm > 60) {
+		my $mins = $tm / 60;
+		$res .= " $mins";
+		$res .= "m";
+		$tm = $tm % 60;
+	}
+
+	if ($tm > 0) {
+		$res .= " $tm";
+		$res .= "s";
+	}
+
+	return $res;
+}
 
 sub start_handler {
 	my ($p, $tag, %atts) = @_;
