@@ -10,6 +10,7 @@
 #include <sys/uio.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <net/if.h>
 
 #include <map>
 #include <string>
@@ -41,6 +42,7 @@ static const int magicLen = 10;
 static char sessionName[256] = "";
 static char beaconName[256];
 static char probeName[256] = "";
+static int mcastInterface = 0;
 static string adminContact;
 static struct sockaddr_in6 probeAddr;
 static int mcastSock;
@@ -180,6 +182,7 @@ void usage() {
 	fprintf(stderr, "Usage: dbeacon [OPTIONS...]\n\n");
 	fprintf(stderr, "  -n NAME                Specifies the beacon name\n");
 	fprintf(stderr, "  -a MAIL                Supply administration contact (new protocol only)\n");
+	fprintf(stderr, "  -i INTFNAME            Use INTFNAME instead of the default interface for multicast\n");
 	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -M REDIST_ADDR/PORT    Redistribute and listen for reports in multicast addr\n");
@@ -230,8 +233,10 @@ int main(int argc, char **argv) {
 	bool force = false;
 	bool dump_bw = false;
 
+	const char *intf = 0;
+
 	while (1) {
-		res = getopt(argc, argv, "n:a:b:r:M:l:L:dD:hvPfU");
+		res = getopt(argc, argv, "n:a:b:r:M:l:L:dD:i:hvPfU");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -294,6 +299,8 @@ int main(int argc, char **argv) {
 				return -1;
 			}
 			mcastListen.push_back(make_pair(addr, JREPORT));
+		} else if (res == 'i') {
+			intf = optarg;
 		} else if (res == 'h') {
 			usage();
 			return -1;
@@ -310,6 +317,14 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	if (intf) {
+		mcastInterface = if_nametoindex(intf);
+		if (mcastInterface <= 0) {
+			fprintf(stderr, "Specified interface doesn't exist.\n");
+			return -1;
+		}
+	}
+
 	if (strlen(probeName) == 0) {
 		fprintf(stderr, "No name supplied.\n");
 		return -1;
@@ -318,7 +333,7 @@ int main(int argc, char **argv) {
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
 		if (!newProtocol) {
 			mcastListen.push_back(make_pair(probeAddr, JPROBE));
-	
+
 			insert_event(SEND_EVENT, 100);
 			insert_event(REPORT_EVENT, 4000);
 		} else {
@@ -938,7 +953,7 @@ void updateStats(const char *name, const sockaddr_in6 *from, int ttl, uint32_t s
 
 	src.addr = from->sin6_addr;
 	src.lastttl = 127 - ttl; // we assume jbeacons use TTL 127, which is usually true
-	
+
 	src.update(seqnum, timestamp, now);
 }
 
@@ -1027,7 +1042,7 @@ int build_nreport(uint8_t *buff, int maxlen) {
 		ptr += plen;
 		len += plen + 1 + namelen;
 	}
-	
+
 	return len;
 }
 
@@ -1138,7 +1153,7 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 
 	// 4 packet type
 	buff[3] = 0; // Probe
-	
+
 	*((uint32_t *)(buff + 4)) = htonl(sn);
 	*((uint32_t *)(buff + 8)) = htonl((uint32_t)ts);
 
@@ -1225,7 +1240,7 @@ int IPv6MulticastListen(int sock, struct in6_addr *grpaddr) {
 	struct ipv6_mreq mreq;
 	memset(&mreq, 0, sizeof(mreq));
 
-	mreq.ipv6mr_interface = 0;
+	mreq.ipv6mr_interface = mcastInterface;
 	memcpy(&mreq.ipv6mr_multiaddr, grpaddr, sizeof(struct in6_addr));
 
 	return setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
@@ -1237,7 +1252,7 @@ int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
 		perror("Failed to create multicast socket");
 		return -1;
 	}
-	
+
 	int on = 1;
 
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
