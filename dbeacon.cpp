@@ -504,7 +504,7 @@ int main(int argc, char **argv) {
 
 	fprintf(stdout, "Local name is %s\n", probeName);
 
-	insert_event(GARBAGE_COLLECT_EVENT, 120000);
+	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
 	if (dump)
 		insert_event(DUMP_EVENT, 5000);
@@ -658,7 +658,7 @@ void handle_gc() {
 
 	while (i != sources.end()) {
 		bool remove = false;
-		if ((now - i->second.lastevent) > 60000) {
+		if ((now - i->second.lastevent) > 30000) {
 			if (i->second.ASM.s.valid) {
 				i->second.ASM.s.valid = false;
 				i->second.lastevent = now;
