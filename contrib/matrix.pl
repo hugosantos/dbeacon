@@ -485,6 +485,9 @@ sub render_matrix {
 	}
 
 	my $attat = $page->param('at');
+	if (not defined($attat)) {
+		$attat = 0;
+	}
 	my $addinfo;
 	if ($attat > 0) {
 		$addinfo = " (<a href=\"$url?what=$attwhat&att=$attname\">Live stats</a>)";
