@@ -53,6 +53,7 @@ use constant URL => 7;
 use constant LG => 8;
 use constant MATRIX => 9;
 use constant RX_LOCAL => 10;
+use constant SSM_PING => 11;
 
 my %adj;
 
@@ -328,6 +329,10 @@ sub start_handler {
 			} elsif ($atts{'type'} eq 'matrix') {
 				$adj{$current_source or $current_beacon}[MATRIX] = $atts{'url'};
 			}
+		}
+	} elsif ($tag eq 'flag') {
+		if ($atts{'name'} eq 'SSMPing' and $atts{'value'} eq 'true') {
+			$adj{$current_beacon}[SSM_PING] = 1;
 		}
 	}
 }
@@ -753,7 +758,8 @@ sub render_matrix {
 		print '<p></p>', "\n";
 		print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
 
-		print '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>', "\n";
+		print '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td>';
+		print '<td><b>Admin Contact</b></td><td><b>L/M</b></td><td><b>S</b></td></tr>', "\n";
 		foreach $a (@sortedkeys) {
 			if ($ids{$a} > 0) {
 				print '<tr>', '<td align="right" class="beacname">';
@@ -782,6 +788,15 @@ sub render_matrix {
 				$urls .= " <a href=\"" . $adj{$a}[MATRIX] . "\">M</a>" if $adj{$a}[MATRIX];
 
 				print '<td class="urls">', ($urls or '-'), '</td>';
+
+				print '<td class="infocol">';
+				if ($adj{$a}[SSM_PING]) {
+					print '#';
+				} else {
+					print '-';
+				}
+				print '</td>';
+
 				print '</tr>', "\n";
 			}
 		}
@@ -1269,7 +1284,7 @@ table#adj td.noreport, td.blackhole, table#adj td.fulladjacent, table#adj td.nos
 	border-right: 0.2em solid white;
 }
 
-table#adjname td.addr, table#adjname td.admincontact, table#adjname td.age, table#adjname td.urls {
+table#adjname td.addr, table#adjname td.admincontact, table#adjname td.age, table#adjname td.urls, td.infocol {
 	background-color: #eeeeee;
 	border-right: 0.2em solid white;
 }
