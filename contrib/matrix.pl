@@ -610,61 +610,6 @@ sub render_matrix {
 		print "</ul>\n";
 	}
 
-	if (not $atthideinfo) {
-		print "<p></p>\n";
-		print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
-
-		print "<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
-		foreach $a (@V) {
-			my $id = $g->get_vertex_attribute($a, "id");
-			if ($id >= 1) {
-				print "<tr>";
-				print "<td align=\"right\" class=\"beacname\">";
-				if ($g->has_vertex_attribute($a, "url_generic")) {
-					print "<a class=\"beacon_url\" href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">";
-				}
-				print $g->get_vertex_attribute($a, "name");
-				if ($g->has_vertex_attribute($a, "url_generic")) {
-					print "</a>";
-				}
-				print " <b>R$id</b>";
-				print "</td>";
-
-				print "<td>";
-				if ($flag_url_format ne "" and $g->has_vertex_attribute($a, "country")) {
-					my $country = lc $g->get_vertex_attribute($a, "country");
-					print "<img src=\"";
-					printf $flag_url_format, $country;
-					print "\" alt=\"$country\" style=\"vertical-align: middle; border: 1px solid black\" />";
-				}
-				print "</td>";
-
-				print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
-				# Removing port number from id and link toward RIPE whois db
-			        my $ip = $a;
-			        $ip =~ s/\/\d+$//;
-			        print "<td class=\"addr\"><a href=\"" . make_ripe_search_url($ip) . "\">$ip</a></td>";
-				if (defined($g->get_vertex_attribute($a, "contact"))) {
-					print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";
-				} else {
-					print "<td class=\"admincontact\"></td>";
-				}
-
-				my $urls;
-				if ($g->has_vertex_attribute($a, "url_lg")) {
-					$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_lg") . "\">L</a>";
-				}
-				if ($g->has_vertex_attribute($a, "url_matrix")) {
-					$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_matrix") . "\">M</a>";
-				}
-
-				print "<td class=\"urls\">" . ($urls or "-") . "</td>";
-				print "</tr>\n";
-			}
-		}
-		print "</table>\n";
-	}
-
 	if (scalar(@warmingup) > 0) {
 		print "<h3>Beacons warming up (age < 30 secs)</h3>\n";
 		print "<ul>\n";
@@ -718,6 +663,61 @@ sub render_matrix {
 			print "</ul></ul></li>\n";
 		}
 		print "</ul>\n";
+	}
+
+	if (not $atthideinfo) {
+		print "<p></p>\n";
+		print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
+
+		print "<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
+		foreach $a (@V) {
+			my $id = $g->get_vertex_attribute($a, "id");
+			if ($id >= 1) {
+				print "<tr>";
+				print "<td align=\"right\" class=\"beacname\">";
+				if ($g->has_vertex_attribute($a, "url_generic")) {
+					print "<a class=\"beacon_url\" href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">";
+				}
+				print $g->get_vertex_attribute($a, "name");
+				if ($g->has_vertex_attribute($a, "url_generic")) {
+					print "</a>";
+				}
+				print " <b>R$id</b>";
+				print "</td>";
+
+				print "<td>";
+				if ($flag_url_format ne "" and $g->has_vertex_attribute($a, "country")) {
+					my $country = lc $g->get_vertex_attribute($a, "country");
+					print "<img src=\"";
+					printf $flag_url_format, $country;
+					print "\" alt=\"$country\" style=\"vertical-align: middle; border: 1px solid black\" />";
+				}
+				print "</td>";
+
+				print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
+				# Removing port number from id and link toward RIPE whois db
+			        my $ip = $a;
+			        $ip =~ s/\/\d+$//;
+			        print "<td class=\"addr\"><a href=\"" . make_ripe_search_url($ip) . "\">$ip</a></td>";
+				if (defined($g->get_vertex_attribute($a, "contact"))) {
+					print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";
+				} else {
+					print "<td class=\"admincontact\"></td>";
+				}
+
+				my $urls;
+				if ($g->has_vertex_attribute($a, "url_lg")) {
+					$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_lg") . "\">L</a>";
+				}
+				if ($g->has_vertex_attribute($a, "url_matrix")) {
+					$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_matrix") . "\">M</a>";
+				}
+
+				print "<td class=\"urls\">" . ($urls or "-") . "</td>";
+				print "</tr>\n";
+			}
+		}
+		print "</table>\n";
 	}
 
 	print "<p><br />If you wish to add a beacon to your site, you may use $dbeacon";
