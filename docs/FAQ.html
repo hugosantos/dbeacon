@@ -69,7 +69,16 @@ code.block {
 
 <li class="qst">
 	<span class="question">Why doesn't dbeacon use RTP/RTCP?</span>
-	<p><i>TODO</i></p>
+	<p>
+	Historically, dbeacon was designed to be compatible with the DAST/NLANR java
+	beacon version which was not relying on RTP/RTCP at all. After dropping down
+	the compatibility we thought to use RTCP to gather various multicast figures
+	because it would have been possible to plug dbeacon on any RTP/RTCP application.
+	It has been finally decided to design a specific protocol mainly because
+	dbeacon is a specific application and do not require a general protocol like
+	RTP/RTCP. Moreover, RTCP do no support SSM natively, so a new protocol has
+	been designed so support it.
+	</p>
 </li>
 
 <li class="qst">
@@ -92,13 +101,23 @@ code.block {
 <li class="qst">
 	<span class="question">Can i deploy several dbeacons in the same host?</span>
 	<p>
-	Yes, you may run as many dbeacons as your OS has resources for.
+    	Yes, you may run as many dbeacons as your OS has resources for. A dbeacon
+   	 is identified by a tuple (source address/source port), and multiple dbeacon
+    	running on the same machine are differenciated by their source port. Be
+    	carefull to set MULTICAST_LOOP to 1 if you want to test multicast
+    	connectivity between processs on the same host.
 	</p>
 </li>
 
 <li class="qst">
 	<span class="question">Where should i deploy dbeacon in my network?</span>
-	<p><i>TODO</i></p>
+	<p>
+	The rule is simple : where you want to check your multicast connectivity. If
+	you got 5 IP subnetwork and that they are all multicast enabled, it make
+	senses to deploy a beacon on each subnetwork. Also, be carefull of IGMP/MLD
+	snooping issues : you may encounter multicast problems with IGMP/MLD
+	snooping and thus deploy a beacon on each swichted LAN of your network.
+	</p>
 </li>
 
 <li class="qst">
@@ -123,12 +142,22 @@ code.block {
 
 <li class="qst">
 	<span class="question">How do i setup the history feature?</span>
-	<p><i>TODO</i></p>
+	<p>
+	History feature depends on rrd (Round Robin Database) feature implemented as
+	a perl module. So before enabling it in the matrix.conf file, be sure to
+	have it installed. (perl -MCPAN -e 'install RRD')
+	</p>
 </li>
 
 <li class="qst">
 	<span class="question">How much disk space is required for the history feature?</span>
-	<p><i>TODO</i></p>
+	<p>
+	The History feature may take a lots of disk space, depending of the number
+	of source you are backlogging. The current implementation takes
+	approximatively 30Mb per tuple (source,destination), so beware that for 10
+	source you would have 300Mb to store. The good news is that the disk space
+	used don't vary with time as it is a round robin database.
+	</p>
 </li>
 
 <li class="qst">
