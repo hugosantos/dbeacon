@@ -12,7 +12,6 @@
 
 use CGI;
 use XML::Parser;
-use RRDs;
 use POSIX qw(strftime);
 use Time::HiRes qw(gettimeofday tv_interval);
 use strict;
@@ -35,6 +34,10 @@ our $matrix_link_title = 0;
 our $default_full_matrix = 0;
 
 do 'matrix.conf';
+
+if ($history_enabled) {
+	use RRDs;
+}
 
 my $dbeacon = '<a href="http://artemis.av.it.pt/~hsantos/software/dbeacon.html">dbeacon</a>';
 
@@ -490,7 +493,7 @@ sub render_matrix {
 	my $addinfo;
 	if ($attat > 0) {
 		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname\">Live stats</a>)";
-	} else {
+	} elsif ($history_enabled) {
 		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=" . (time - 60) ."\">Past stats</a>)"
 	}
 
