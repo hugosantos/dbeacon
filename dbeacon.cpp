@@ -905,6 +905,9 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 							break;
 					}
 				}
+
+				// trigger local SSM join
+				getSource(addr, port, stats.identified ? stats.name.c_str() : 0, recvdts);
 			}
 		}
 	}
