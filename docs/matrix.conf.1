@@ -1,0 +1,67 @@
+.TH matrix.conf "1" "User Manuals"
+.SH NAME
+matrix.conf \- matrix.pl configuration file
+.SH DESCRIPTION
+\fBmatrix.conf\fR is the setup configuration file for matrix.pl if you want to
+add an html frontend to \fBdbeacon\fR's dumped xml file. Configuration variable
+are perl variables, used to modify dynamically the behaviour of matrix.pl
+.SH CONFIGURATION VARIABLES
+.TP
+\fB$dumpfile\fR \fIstring\fR
+This is where the xml file dumped by dbeacon reside. This variable is required
+.TP
+\fB$historydir\fR \fIstring\fR
+This is where the history round robin database (rrd) will be stored. Be sure to
+have enough place to store it (about 30Mb per tuple (source/destination)
+.TP
+\fB$verbose\fR \fInumber\fR
+Set it to 1 if you want a verbose output of the xml file parsing.
+.TP
+\fB$title\fR \fIstring\fR
+The title of the generated html page. It can be anything as long as it respect
+the html syntax.
+.TP
+\fB$page_title\fR \fIstring\fR
+The page title of the generated html page, that is the title which appear at the
+top of you navigator.
+.TP
+\fB$default_hideinfo\fR \fInumber\fR
+Wether you want or not to display the IPv4/IPv6 source info on the web page.
+This may be a concern for security issues.
+.TP
+\fB$default_what\fR \fIstring\fR
+The default matrix view on the html page, different view are 'asmorssm', 'both', 'asm'
+.TP
+\fB$history_enabled\fR \fInumber\fR
+Wether you want or not enable rrd history logging. This require that you have
+installed the RRD perl module.
+.TP
+\fB$css_file\fR \fIstring\fR
+Your prefered style file if you don't like the default.
+.TP
+\fB$dump_update_delay\fR \fInumber\fR
+The delay between each xml dump from dbeacon. This is used to detect out of date
+data.
+.TP
+\fB$flag_url_format\fR \fIstring\fR
+Where are your flag images. It may give a location but a generic format of our
+file too.
+.TP
+\fB$default_ssm_group\fR \fIstring\fR
+The default SSM joining channel used by dbeacon.
+.TP
+\fB$debug\fR \fInumber\fR
+Used for debugging.
+.TP
+\fB$matrix_link_title\fR \fInumber\fR
+Display a tip over the matrix cell is the history link are a enabled
+.TP
+\fB$default_full_matrix \fR \fInumber\fR
+Wether you want to have a condensed or a full view of the matrix.
+.TP
+\fB$faq_page\fR \fIstring\fR
+Where is the Frequently Asked Question page stored.
+.SH BUGS
+Please report them to Hugo Santos, the core developper of this project at <hsantos@av.it.pt>
+.SH HISTORY
+\fBmatrix.conf\fR is the configuration file from matrix.pl and is a join work from Hugo Santos, Sebastien Chaumontet and Mickael Hoerdt. It has been done in the early days of the m6bone, when nobodies know if it was ASM or SSM at the interdomain level ;).
