@@ -839,22 +839,29 @@ void handle_probe(int sock, content_type type) {
 	int ttl = 0;
 
 	for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
-		if (hdr->cmsg_level == SOL_SOCKET && hdr->cmsg_type == SO_TIMESTAMP) {
-			timeval *tv = (timeval *)CMSG_DATA(hdr);
-			recvdts = tv->tv_sec;
-			recvdts *= 1000;
-			recvdts += tv->tv_usec / 1000;
-		} else if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
+		if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
 			ttl = *(int *)CMSG_DATA(hdr);
 		} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
 			ttl = *(uint8_t *)CMSG_DATA(hdr);
 		} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_TTL) {
 			ttl = *(int *)CMSG_DATA(hdr);
+#ifdef SO_TIMESTAMP
+		} else if (hdr->cmsg_level == SOL_SOCKET && hdr->cmsg_type == SO_TIMESTAMP) {
+			timeval *tv = (timeval *)CMSG_DATA(hdr);
+			recvdts = tv->tv_sec;
+			recvdts *= 1000;
+			recvdts += tv->tv_usec / 1000;
+#endif
 		}
 	}
 
-	if (!recvdts)
+	if (!recvdts) {
+#ifdef SO_TIMESTAMP
 		return;
+#else
+		recvdts = get_timestamp();
+#endif
+	}
 
 	if (type != NPROBE && type != NSSMPROBE)
 		return;
@@ -1715,10 +1722,12 @@ int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
 	}
 
 	if (needTSHL) {
+#ifdef SO_TIMESTAMP
 		if (setsockopt(sock, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0) {
 			perror("setsockopt(SO_TIMESTAMP)");
 			return -1;
 		}
+#endif
 
 		if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_HOPLIMIT : IP_RECVTTL, &on, sizeof(on)) != 0) {
 			perror("receiving hop limit/ttl setsockopt()");
