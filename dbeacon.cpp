@@ -129,14 +129,14 @@ typedef map<beaconSourceAddr, beaconSource> Sources;
 static Sources sources;
 
 struct beaconExternalStats {
-	beaconExternalStats() : identified(false) {}
+	beaconExternalStats() : identified(false), hasstats(false) {}
 
 	uint64_t timestamp;
 	uint64_t lastlocalupdate;
 	uint32_t age, ttl;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 
-	bool identified;
+	bool identified, hasstats;
 	string name, contact;
 };
 
@@ -766,6 +766,8 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 			stats.avgdup = ptr[18] / 255.;
 			stats.avgooo = ptr[19] / 255.;
 
+			stats.hasstats = true;
+
 			ptr += 20;
 
 			plen += 18 + elen;
@@ -1339,13 +1341,15 @@ void do_dump() {
 				}
 				inet_ntop(AF_INET6, &j->first.first, tmp, sizeof(tmp));
 				fprintf(fp, " addr=\"%s\"", tmp);
-				fprintf(fp, " ttl=\"%u\"\n", j->second.ttl);
-				fprintf(fp, "\t\t\t\tage=\"%u\"", j->second.age);
-				fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
-				fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
-				fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
-				fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
-				fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
+				if (j->second.hasstats) {
+					fprintf(fp, " ttl=\"%u\"\n", j->second.ttl);
+					fprintf(fp, "\t\t\t\tage=\"%u\"", j->second.age);
+					fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
+					fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
+					fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
+					fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
+					fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
+				}
 				fprintf(fp, " />\n");
 			}
 
