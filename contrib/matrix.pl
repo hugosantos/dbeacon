@@ -17,23 +17,23 @@ use Time::HiRes qw(gettimeofday tv_interval);
 use strict;
 
 # configuration variables, may be changed in matrix.conf
-our $dumpfile = "/home/seb/dbeacon/dump.xml";
+our $dumpfile = '/home/seb/dbeacon/dump.xml';
 our $historydir = 'data';
 our $verbose = 1;
-our $title = "IPv6 Multicast Beacon";
+our $title = 'IPv6 Multicast Beacon';
 our $page_title = $title;
 our $default_hideinfo = 0;	# one of '0', '1'
-our $default_what = "ssmorasm";	# one of 'ssmorasm', 'both', 'asm'
+our $default_what = 'ssmorasm';	# one of 'ssmorasm', 'both', 'asm'
 our $history_enabled = 1;
 our $css_file;
 our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
 our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
-our $default_ssm_group = "ff3e::beac/10000";
+our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
 
-do("matrix.conf");
+do('matrix.conf');
 
-my $dbeacon = "<a href=\"http://artemis.av.it.pt/~hsantos/software/dbeacon.html\">dbeacon</a>";
+my $dbeacon = '<a href="http://artemis.av.it.pt/~hsantos/software/dbeacon.html">dbeacon</a>';
 
 my $g;
 
@@ -66,15 +66,15 @@ my $age = $page->param('age');
 my $at = $page->param('at');
 
 my %ages = (
-	"-1h" => "Hour",
-	"-6h" => "6 Hours",
-	"-12h" => "12 Hours",
-	"-1d" => "Day",
-	"-1w" => "Week",
-	"-1m" => "Month",
-	"-1y" => "Year");
+	'-1h' => 'Hour',
+	'-6h' => '6 Hours',
+	'-12h' => '12 Hours',
+	'-1d' => 'Day',
+	'-1w' => 'Week',
+	'-1m' => 'Month',
+	'-1y' => 'Year');
 
-my @propersortedages = ("-1m", "-1w", "-1d", "-12h", "-6h", "-1h");
+my @propersortedages = ('-1m', '-1w', '-1d', '-12h', '-6h', '-1h');
 
 if (not defined($age)) {
 	$age = '-1d';
@@ -350,7 +350,7 @@ sub build_header {
 			$ammount = 60;
 		}
 
-		my @ammounts = ([60, "60 s"], [600, "10m"], [3600, "60m"], [36000, "10h"], [86400, "24h"], [604800, "7d"], [2592000, "30d"]);
+		my @ammounts = ([60, '60 s'], [600, '10m'], [3600, '60m'], [14400, '4h'], [43200, '12h'], [86400, '24h'], [604800, '7d'], [2592000, '30d']);
 		# 7884000 3 months
 
 		foreach my $ammitem (@ammounts) {
@@ -526,7 +526,7 @@ sub render_matrix {
 		$in_edges{$c} = scalar($g->in_edges($c));
 		$out_edges{$c} = scalar($g->out_edges($c));
 
-		if ($beac_ages{$c} < 30) {
+		if (defined($beac_ages{$c}) and $beac_ages{$c} < 30) {
 			push (@warmingup, $c);
 		} elsif (not $in_edges{$c} and not $out_edges{$c}) {
 			push (@problematic, $c);
@@ -610,40 +610,40 @@ sub render_matrix {
 	print "</table>\n";
 
 	if (scalar(@localnoreceive) > 0) {
-		print "<h4 style=\"margin-bottom: 0\">The following beacons are not being received locally via ASM</h4>\n";
-		print "<ul>\n";
+		print '<h4 style="margin-bottom: 0">The following beacons are not being received locally via ASM</h4>', "\n";
+		print '<ul>', "\n";
 		foreach $a (@localnoreceive) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
 			if ($contacts{$a}) {
 				print ' (', $contacts{$a}, ')';
 			}
-			print "</li>\n";
+			print '</li>', "\n";
 		}
-		print "</ul>\n";
+		print '</ul>', "\n";
 	}
 
 	if (scalar(@warmingup) > 0) {
-		print "<h3>Beacons warming up (age < 30 secs)</h3>\n";
-		print "<ul>\n";
+		print '<h3>Beacons warming up (age < 30 secs)</h3>', "\n";
+		print '<ul>', "\n";
 		foreach $a (@warmingup) {
-			print "<li>$a";
+			print '<li>', $a;
 			if ($names{$a}) {
 				print ' (', $names{$a}, ', ', $contacts{$a}, ')';
 			}
-			print "</li>\n";
+			print '</li>', "\n";
 		}
-		print "</ul>\n";
+		print '</ul>', "\n";
 	}
 
 	if (scalar(@problematic) ne 0) {
-		print "<h3>Beacons with no connectivity</h3>\n";
-		print "<ul>\n";
+		print '<h3>Beacons with no connectivity</h3>', "\n";
+		print '<ul>', "\n";
 		my $len = scalar(@problematic);
 		for (my $j = 0; $j < $len; $j++) {
 			my $prob = $problematic[$j];
 			my @neighs = $g->neighbours($prob);
 
-			print "<li>$prob";
+			print '<li>', $prob;
 			if ($names{$prob}) {
 				print ' (', $names{$prob};
 				if ($contacts{$prob}) {
@@ -659,37 +659,35 @@ sub render_matrix {
 			}
 
 			if ($ned) {
-				print "<ul>Received from:<ul>\n";
+				print '<ul>Received from:<ul>', "\n";
 
 				for (my $l = 0; $l < $k; $l++) {
-					print "<li><span class=\"beacon\">" . $neighs[$l];
+					print '<li><span class="beacon">"', $neighs[$l];
 					if ($names{$neighs[$l]}) {
 						print ' (', $names{$neighs[$l]}, ')';
 					}
-					print "</span></li>\n";
+					print '</span></li>', "\n";
 				}
 
 				if ($k < $ned) {
-					print "<li>and others</li>\n";
+					print '<li>and others</li>', "\n";
 				}
 				print '</ul></ul>';
 			}
 
 			print '</li>', "\n";
 		}
-		print "</ul>\n";
+		print '</ul>', "\n";
 	}
 
 	if (not $atthideinfo) {
-		print "<p></p>\n";
-		print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
+		print '<p></p>', "\n";
+		print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
 
-		print "<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
+		print '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>', "\n";
 		foreach $a (@V) {
-			my $id = $ids{$a};
-			if ($id >= 1) {
-				print "<tr>";
-				print "<td align=\"right\" class=\"beacname\">";
+			if ($ids{$a} >= 1) {
+				print '<tr>', '<td align="right" class="beacname">';
 				if ($urls{$a}) {
 					print '<a class="beacon_url" href="', $urls{$a}, '">';
 				}
@@ -697,22 +695,21 @@ sub render_matrix {
 				if ($urls{$a}) {
 					print '</a>';
 				}
-				print " <b>R$id</b>";
-				print "</td>";
+				print ' <b>R', $ids{$a}, '</b>', '</td>';
 
-				print "<td>";
+				print '<td>';
 				if ($flag_url_format ne "" and $countries{$a}) {
 					print '<img src="';
 					printf $flag_url_format, lc $countries{$a};
 					print '" alt="', $countries{$a}, '" style="vertical-align: middle; border: 1px solid black" />';
 				}
-				print "</td>";
+				print '</td>';
 
-				print "<td class=\"age\">" . format_date($beac_ages{$a}) . "</td>";
+				print '<td class="age">', format_date($beac_ages{$a}), '</td>';
 				# Removing port number from id and link toward RIPE whois db
 			        my $ip = $a;
 			        $ip =~ s/\/\d+$//;
-			        print "<td class=\"addr\"><a href=\"" . make_ripe_search_url($ip) . "\">$ip</a></td>";
+			        print '<td class="addr"><a href="', make_ripe_search_url($ip), '">', $ip, '</a></td>';
 				print '<td class="admincontact">', $contacts{$a}, '</td>';
 
 				my $urls;
@@ -723,26 +720,26 @@ sub render_matrix {
 					$urls .= " <a href=\"" . $urls_matrix{$a} . "\">M</a>";
 				}
 
-				print "<td class=\"urls\">" . ($urls or "-") . "</td>";
-				print "</tr>\n";
+				print '<td class="urls">', ($urls or "-"), '</td>';
+				print '</tr>', "\n";
 			}
 		}
-		print "</table>\n";
+		print '</table>', "\n";
 	}
 
-	print "<p><br />If you wish to add a beacon to your site, you may use $dbeacon";
+	print '<p><br />If you wish to add a beacon to your site, you may use ', $dbeacon;
 	if (defined($step)) {
-		print ".</p>\n";
+		print '.</p>', "\n";
 	} else {
-		print " with the following parameters:</p>\n";
-		print "<p><code>./dbeacon -n NAME -b $sessiongroup";
+		print ' with the following parameters:</p>', "\n";
+		print '<p><code>./dbeacon -n NAME -b ', $sessiongroup;
 		if (defined($ssm_sessiongroup)) {
-			print " -S";
+			print ' -S';
 			if ($ssm_sessiongroup ne $default_ssm_group) {
-				print " $ssm_sessiongroup";
+				print ' ', $ssm_sessiongroup;
 			}
 		}
-		print " -a CONTACT</code></p>\n";
+		print ' -a CONTACT</code></p>', "\n";
 	}
 
 	end_document();
