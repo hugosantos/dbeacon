@@ -265,7 +265,9 @@ sub start_handler {
 				$g->set_vertex_attribute($current_beacon, "name", $atts{"name"});
 				$g->set_vertex_attribute($current_beacon, "contact", $atts{"contact"});
 				$g->set_vertex_attribute($current_beacon, "age", $atts{"age"});
-				$g->set_vertex_attribute($current_beacon, "country", $atts{"country"});
+				if (defined($atts{"country"})) {
+					$g->set_vertex_attribute($current_beacon, "country", $atts{"country"});
+				}
 			}
 		}
 	} elsif ($tag eq "asm") {
@@ -285,6 +287,9 @@ sub start_handler {
 
 				$g->set_vertex_attribute($current_source, "name", $atts{"name"});
 				$g->set_vertex_attribute($current_source, "contact", $atts{"contact"});
+			}
+
+			if (not $g->has_vertex_attribute($current_source, "country") and defined($atts{"country"})) {
 				$g->set_vertex_attribute($current_source, "country", $atts{"country"});
 			}
 
