@@ -1758,7 +1758,9 @@ int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
 	TTLType ttl = 127;
 
 	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_HOPS : IP_MULTICAST_TTL, &ttl, sizeof(ttl)) != 0) {
-		perror("setsockopt(IPV6_MULTICAST_HOPS)");
+		perror(level == IPPROTO_IPV6 ?
+			"setsockopt(IPV6_MULTICAST_HOPS)"
+			: "setsockopt(IP_MULTICAST_TTL)");
 		return -1;
 	}
 
