@@ -20,7 +20,7 @@
 #include <math.h>
 #include <errno.h>
 #include <signal.h>
-
+#include <getopt.h>
 #include <libgen.h>
 
 #include <map>
@@ -63,6 +63,9 @@ using namespace std;
 
 #define NEW_BEAC_PCOUNT	10
 #define NEW_BEAC_VER	1
+
+static const char *defaultSSMChannel = "ff3e::beac";
+static const int defaultPort = 10000;
 
 struct address : sockaddr_storage {
 	address();
@@ -249,6 +252,10 @@ static uint64_t dumpBytesReceived = 0;
 static uint64_t dumpBytesSent = 0;
 static uint64_t lastDumpDumpBwTS = 0;
 
+bool dump = false;
+int dumpInterval = 5;
+const char *multicastInterface = 0;
+
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
 static void handle_probe(int, content_type);
@@ -306,19 +313,23 @@ bool address::parse(const char *str, bool reqport) {
 
 	strcpy(tmp, str);
 
-	char *p = strchr(tmp, '/');
-	if (p) {
-		char *end;
-		if (family == AF_INET6) {
-			v6()->sin6_port = htons(strtoul(p + 1, &end, 10));
-		} else if (family == AF_INET) {
-			v4()->sin_port = htons(strtoul(p + 1, &end, 10));
+	if (reqport) {
+		int port = defaultPort;
+
+		char *p = strchr(tmp, '/');
+		if (p) {
+			char *end;
+			port = strtoul(p + 1, &end, 10);
+			if (*end)
+				return false;
+			*p = 0;
 		}
-		if (*end)
-			return false;
-		*p = 0;
-	} else if (reqport) {
-		return false;
+
+		if (family == AF_INET6) {
+			v6()->sin6_port = htons(port);
+		} else if (family == AF_INET) {
+			v4()->sin_port = htons(port);
+		}
 	}
 
 	if (family == AF_INET6) {
@@ -418,14 +429,12 @@ static void waitForMe(int) {
 	wait(&whocares);
 }
 
+static int parse_arguments(int, char **);
+
 int main(int argc, char **argv) {
 	int res;
 
 	srand(time(NULL));
-
-	bool dump = false;
-	bool force = false;
-	int dumpint = 5;
 
 	char tmp[256];
 	if (gethostname(tmp, sizeof(tmp)) != 0) {
@@ -435,114 +444,29 @@ int main(int argc, char **argv) {
 
 	beaconName = tmp;
 
-	const char *intf = 0;
-
-	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S:s:dD:I:l:L:W:vUhf");
-		if (res == 'n') {
-			if (strlen(optarg) > 254) {
-				fprintf(stderr, "Name is too large.\n");
-				return -1;
-			}
-			beaconName = optarg;
-		} else if (res == 'a') {
-			if (!strchr(optarg, '@')) {
-				fprintf(stderr, "Not a valid email address.\n");
-				return -1;
-			}
-			adminContact = optarg;
-		} else if (res == 'b') {
-			if (!probeAddr.parse(optarg)) {
-				fprintf(stderr, "Invalid beacon addr.\n");
-				return -1;
-			}
-
-			if (!probeAddr.is_multicast()) {
-				fprintf(stderr, "Beacon group address is not a multicast address.\n");
-				return -1;
-			}
-		} else if (res == 'r') {
-			address addr;
-			if (!addr.parse(optarg)) {
-				fprintf(stderr, "Bad address format.\n");
-				return -1;
-			}
-			redist.push_back(addr);
-		} else if (res == 'S') {
-			if (!ssmProbeAddr.parse(optarg) || !ssmProbeAddr.is_multicast()) {
-				fprintf(stderr, "Bad address format for SSM channel.\n");
-				return -1;
-			}
-		} else if (res == 's') {
-			if (!beaconUnicastAddr.parse(optarg, false)) {
-				fprintf(stderr, "Bad address format.\n");
-				return -1;
-			}
-		} else if (res == 'd' || res == 'D') {
-			dump = true;
-			if (res == 'D')
-				dumpFile = optarg;
-		} else if (res == 'I') {
-			char *end;
-			dumpint = strtoul(optarg, &end, 10);
-			if (*end || dumpint < 5) {
-				fprintf(stderr, "Bad interval.\n");
-				return -1;
-			}
-		} else if (res == 'l') {
-			address addr;
-			if (!addr.parse(optarg)) {
-				fprintf(stderr, "Bad address format.\n");
-				return -1;
-			}
-			mcastListen.push_back(make_pair(addr, NREPORT));
-		} else if (res == 'L') {
-			launchSomething = optarg;
-		} else if (res == 'W') {
-			int type = T_WEBSITE_GENERIC;
-			if (strncmp(optarg, "lg$", 3) == 0) {
-				type = T_WEBSITE_LG;
-				optarg += 3;
-			} else if (strncmp(optarg, "matrix$", 7) == 0) {
-				type = T_WEBSITE_MATRIX;
-				optarg += 7;
-			}
-			webSites[type] = optarg;
-		} else if (res == 'i') {
-			intf = optarg;
-		} else if (res == 'h') {
-			usage();
-			return -1;
-		} else if (res == 'v') {
-			verbose++;
-		} else if (res == 'f') {
-			force = true;
-		} else if (res == 'U') {
-			dumpBwReport = true;
-		} else if (res == -1) {
-			break;
-		}
-	}
-
-	fixDumpFile();
-
-	if (intf) {
-		mcastInterface = if_nametoindex(intf);
-		if (mcastInterface <= 0) {
-			fprintf(stderr, "Specified interface doesn't exist.\n");
-			return -1;
-		}
-	}
+	res = parse_arguments(argc, argv);
+	if (res < 0)
+		return res;
 
 	if (beaconName.empty()) {
 		fprintf(stderr, "No name supplied.\n");
 		return -1;
 	}
 
+	fixDumpFile();
+
+	if (multicastInterface) {
+		mcastInterface = if_nametoindex(multicastInterface);
+		if (mcastInterface <= 0) {
+			fprintf(stderr, "Specified interface doesn't exist.\n");
+			return -1;
+		}
+	}
+
 	if (!probeAddr.is_unspecified()) {
 		probeAddr.print(sessionName, sizeof(sessionName));
 
-		if (!force && adminContact.empty()) {
+		if (adminContact.empty()) {
 			fprintf(stderr, "No administration contact supplied.\n");
 			return -1;
 		}
@@ -624,7 +548,7 @@ int main(int argc, char **argv) {
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
 	if (dump)
-		insert_event(DUMP_EVENT, dumpint * 1000);
+		insert_event(DUMP_EVENT, dumpInterval * 1000);
 
 	insert_event(DUMP_BW_EVENT, 10000);
 
@@ -662,6 +586,96 @@ int main(int argc, char **argv) {
 			for (vector<pair<int, content_type> >::const_iterator i = mcastSocks.begin(); i != mcastSocks.end(); i++)
 				if (FD_ISSET(i->first, &readset))
 					handle_mcast(i->first, i->second);
+		}
+	}
+
+	return 0;
+}
+
+int parse_arguments(int argc, char **argv) {
+	int res;
+	while (1) {
+		res = getopt(argc, argv, "n:a:i:b:r:S::s:dD:I:l:L:W:vUhf");
+		if (res == 'n') {
+			if (strlen(optarg) > 254) {
+				fprintf(stderr, "Name is too large.\n");
+				return -1;
+			}
+			beaconName = optarg;
+		} else if (res == 'a') {
+			if (!strchr(optarg, '@')) {
+				fprintf(stderr, "Not a valid email address.\n");
+				return -1;
+			}
+			adminContact = optarg;
+		} else if (res == 'b') {
+			if (!probeAddr.parse(optarg)) {
+				fprintf(stderr, "Invalid beacon addr.\n");
+				return -1;
+			}
+
+			if (!probeAddr.is_multicast()) {
+				fprintf(stderr, "Beacon group address is not a multicast address.\n");
+				return -1;
+			}
+		} else if (res == 'r') {
+			address addr;
+			if (!addr.parse(optarg)) {
+				fprintf(stderr, "Bad address format.\n");
+				return -1;
+			}
+			redist.push_back(addr);
+		} else if (res == 'S') {
+			if (!ssmProbeAddr.parse(optarg ? optarg : defaultSSMChannel) || !ssmProbeAddr.is_multicast()) {
+				fprintf(stderr, "Bad address format for SSM channel.\n");
+				return -1;
+			}
+		} else if (res == 's') {
+			if (!beaconUnicastAddr.parse(optarg, false)) {
+				fprintf(stderr, "Bad address format.\n");
+				return -1;
+			}
+		} else if (res == 'd' || res == 'D') {
+			dump = true;
+			if (res == 'D')
+				dumpFile = optarg;
+		} else if (res == 'I') {
+			char *end;
+			dumpInterval = strtoul(optarg, &end, 10);
+			if (*end || dumpInterval < 5) {
+				fprintf(stderr, "Bad interval.\n");
+				return -1;
+			}
+		} else if (res == 'l') {
+			address addr;
+			if (!addr.parse(optarg)) {
+				fprintf(stderr, "Bad address format.\n");
+				return -1;
+			}
+			mcastListen.push_back(make_pair(addr, NREPORT));
+		} else if (res == 'L') {
+			launchSomething = optarg;
+		} else if (res == 'W') {
+			int type = T_WEBSITE_GENERIC;
+			if (strncmp(optarg, "lg$", 3) == 0) {
+				type = T_WEBSITE_LG;
+				optarg += 3;
+			} else if (strncmp(optarg, "matrix$", 7) == 0) {
+				type = T_WEBSITE_MATRIX;
+				optarg += 7;
+			}
+			webSites[type] = optarg;
+		} else if (res == 'i') {
+			multicastInterface = optarg;
+		} else if (res == 'h') {
+			usage();
+			return -1;
+		} else if (res == 'v') {
+			verbose++;
+		} else if (res == 'U') {
+			dumpBwReport = true;
+		} else if (res == -1) {
+			break;
 		}
 	}
 
