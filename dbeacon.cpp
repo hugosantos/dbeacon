@@ -210,6 +210,7 @@ struct beaconSource {
 	int sttl;
 
 	uint64_t lastevent;
+	uint64_t lastlocalevent;
 
 	beaconMcastState ASM, SSM;
 
@@ -293,7 +294,7 @@ static void sendLeaveReport(int);
 
 static uint64_t get_timestamp();
 
-static beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now);
+static beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now, bool);
 static void removeSource(const beaconSourceAddr &baddr, bool);
 
 static int SetupSocket(const address &, bool, bool, bool);
@@ -977,10 +978,12 @@ void handle_probe(int sock, content_type type) {
 	handle_nmsg(&from, recvdts, ttl, buffer, len, type == NSSMPROBE);
 }
 
-beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now) {
+beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now, bool rx_local) {
 	Sources::iterator i = sources.find(baddr);
 	if (i != sources.end()) {
 		i->second.lastevent = now;
+		if (rx_local)
+			i->second.lastlocalevent = now;
 		return i->second;
 	}
 
@@ -1003,6 +1006,8 @@ beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_
 
 	src.creation = now;
 	src.lastevent = now;
+	if (rx_local)
+		src.lastlocalevent = now;
 
 	if (ssmMcastSock) {
 		SSMJoin(ssmMcastSock, &baddr);
@@ -1090,14 +1095,14 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 		if (len == 12) {
 			uint32_t seq = ntohl(*((uint32_t *)(buff + 4)));
 			uint32_t ts = ntohl(*((uint32_t *)(buff + 8)));
-			getSource(*from, 0, recvdts).update(ttl, seq, ts, recvdts, ssm);
+			getSource(*from, 0, recvdts, true).update(ttl, seq, ts, recvdts, ssm);
 		}
 		return;
 	} else if (buff[3] == 1) {
 		if (len < 5)
 			return;
 
-		beaconSource &src = getSource(*from, 0, recvdts);
+		beaconSource &src = getSource(*from, 0, recvdts, true);
 
 		src.sttl = buff[4];
 
@@ -1161,7 +1166,7 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 
 				// trigger local SSM join
 				if (!addr.is_equal(beaconUnicastAddr)) {
-					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts);
+					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts, false);
 					if (t.adminContact.empty())
 						t.adminContact = stats.contact;
 				}
@@ -1205,6 +1210,7 @@ static inline uint64_t get_timestamp() {
 beaconSource::beaconSource()
 	: identified(false) {
 	sttl = 0;
+	lastlocalevent = (uint64_t)-1;
 }
 
 void beaconSource::setName(const string &n) {
@@ -1680,6 +1686,7 @@ void do_dump() {
 		i->first.print(tmp, sizeof(tmp));
 		fprintf(fp, " addr=\"%s\"", tmp);
 		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
+		fprintf(fp, " rxlocal=\"%s\"", i->second.lastlocalevent > (now - 30000) ? "true" : "false");
 		fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
 		fprintf(fp, "\t\t<sources>\n");
 

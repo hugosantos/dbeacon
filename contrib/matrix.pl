@@ -48,6 +48,7 @@ use constant AGE => 6;
 use constant URL => 7;
 use constant LG => 8;
 use constant MATRIX => 9;
+use constant RX_LOCAL => 10;
 
 my %adj;
 
@@ -286,6 +287,7 @@ sub start_handler {
 			$adj{$current_beacon}[CONTACT] = $atts{'contact'};
 			$adj{$current_beacon}[AGE] = $atts{'age'};
 			$adj{$current_beacon}[COUNTRY] = $atts{'country'} if defined $atts{'country'};
+			$adj{$current_beacon}[RX_LOCAL] = $atts{'rxlocal'} if defined $atts{'rxlocal'};
 		}
 	} elsif ($tag eq 'asm' or $tag eq 'ssm') {
 		foreach my $att qw(ttl loss delay jitter) {
@@ -501,6 +503,7 @@ sub render_matrix {
 	my @problematic = ();
 	my @warmingup = ();
 	my @localnoreceive = ();
+	my @repnosources = ();
 	my @lowrx = ();
 	my @rx = ();
 	my @tx = ();
@@ -530,7 +533,11 @@ sub render_matrix {
 
 			if (not $full_matrix) {
 				if (not $adj{$c}[IN_EDGE]) {
-					push (@localnoreceive, $c);
+					if ($adj{$c}[RX_LOCAL] ne 'true') {
+						push (@localnoreceive, $c);
+					} else {
+						push (@repnosources, $c);
+					}
 				} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) < 0.1 and $adj{$c}[IN_EDGE] < 6) {
 					push (@lowrx, $c);
 				} else {
@@ -625,8 +632,19 @@ sub render_matrix {
 		print '</ul>', "\n";
 	}
 
+	if (scalar(@repnosources) > 0) {
+		print '<h4 style="margin-bottom: 0">Beacons that report no received sources</h4>', "\n";
+		print '<ul>', "\n";
+		foreach $a (@repnosources) {
+			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+			print ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
+			print '</li>', "\n";
+		}
+		print '</ul>', "\n";
+	}
+
 	if (scalar(@localnoreceive) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons that receive no sources</h4>', "\n";
+		print '<h4 style="margin-bottom: 0">Beacons not received localy</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@localnoreceive) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
