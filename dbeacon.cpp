@@ -384,13 +384,19 @@ int main(int argc, char **argv) {
 
 	FD_ZERO(&readSet);
 
+	sockaddr_in6 local;
+	memset(&local, 0, sizeof(local));
+	local.sin6_family = AF_INET6;
+
+	mcastSock = SetupSocket(&local, false);
+	if (mcastSock < 0)
+		return -1;
+
 	for (vector<pair<sockaddr_in6, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
 		int sock = SetupSocket(&i->first, i->second == JPROBE || i->second == NPROBE);
 		if (sock < 0)
 			return -1;
 		mcastSocks.push_back(make_pair(sock, i->second));
-		if (i->second == JPROBE || i->second == NPROBE)
-			mcastSock = sock;
 	}
 
 	fprintf(stdout, "Local name is %s\n", probeName);
