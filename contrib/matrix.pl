@@ -161,17 +161,17 @@ foreach $a (@V) {
 			if ($g->has_edge($b, $a)) {
 				$txt = $g->get_edge_attribute($b, $a, $attname);
 				$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
-				if (not $txt) {
+				if ($txt ge 0) {
+					$tdclass = "adjacent";
+				} else {
 					$txt = "N/A";
 					$tdclass = "noinfo";
-				} else {
-					$tdclass = "adjacent";
 				}
-				if (not $txtssm) {
+				if ($txtssm ge 0) {
+					$tdclasssm = "adjacent";
+				} else {
 					$txtssm = "-";
 					$tdclasssm = "nossminfo";
-				} else {
-					$tdclasssm = "adjacent";
 				}
 			} else {
 				if ($a eq $b) {
