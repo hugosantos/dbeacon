@@ -41,8 +41,6 @@ $parser = new XML::Parser( Style => 'Tree' );
 $parser->setHandlers(Start => \&start_handler);
 my $tree = $parser->parsefile($dump_file);
 
-my @V = $g->vertices();
-
 print "<html>\n";
 
 print "
@@ -100,6 +98,10 @@ table#beacs td.addr, table#beacs td.admincontact {
 	font-family: Monospace;
 }
 
+.beacon {
+	font-style: italic;
+}
+
 </style>
 </head>
 ";
@@ -137,94 +139,155 @@ print "<td></td>";
 my $c;
 my $i = 1;
 my @problematic = ();
+my @warmingup = ();
+
+my @V = $g->vertices();
 
 foreach $c (@V) {
-	if (scalar($g->edges($c)) ge 1) {
+	my $goodedge = $g->get_vertex_attribute($c, "goodedge");
+	my $age = $g->get_vertex_attribute($c, "age");
+
+	if (($age ne "") and ($age < 30)) {
+		push (@warmingup, $c);
+	} elsif (not $goodedge) {
+		push (@problematic, $c);
+	} else {
 		print "<td colspan=\"2\">\n";
 		print "<b>S$i</b>";
 		print "</td>\n";
+
+		$g->set_vertex_attribute($c, "id", $i);
+
 		$i++;
-	} else {
-		push(@problematic, $a);
 	}
 }
 print "</tr>\n";
 
-$i = 1;
 foreach $a (@V) {
-	if (scalar($g->edges($c)) ge 1) {
+	my $id = $g->get_vertex_attribute($a, "id");
+	if ($id >= 1) {
 		print "<tr>";
 		print "<td class=\"beacname\">";
 		my $name = $g->get_vertex_attribute($a, "name");
-		print "$name <b>R$i</b>";
+		print "$name <b>R$id</b>";
 		print "</td>";
 		foreach $b (@V) {
-			if ($g->has_edge($b, $a)) {
-				my $txt;
-				my $txtssm;
-				my $tdclass = "adjacent";
-				my $tdclasssm = "adjacent";
-				$txt = $g->get_edge_attribute($b, $a, $attname);
-				$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
-				if (($txt eq "") and ($txtssm eq "")) {
-					print "<td colspan=\"2\" class=\"noinfo\">N/A</td>";
-				} else {
-					if ($txt eq "") {
-						$txt = "-";
-						$tdclass = "nossminfo";
-					} elsif ($txtssm eq "") {
-						$txtssm = "-";
-						$tdclasssm = "nossminfo";
+			$id = $g->get_vertex_attribute($b, "id");
+			if ($id >= 1) {
+				if ($g->has_edge($b, $a)) {
+					my $txt;
+					my $txtssm;
+					my $tdclass = "adjacent";
+					my $tdclasssm = "adjacent";
+					$txt = $g->get_edge_attribute($b, $a, $attname);
+					$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
+					if (($txt eq "") and ($txtssm eq "")) {
+						print "<td colspan=\"2\" class=\"noinfo\">N/A</td>";
+					} else {
+						if ($txt eq "") {
+							$txt = "-";
+							$tdclass = "nossminfo";
+						} elsif ($txtssm eq "") {
+							$txtssm = "-";
+							$tdclasssm = "nossminfo";
+						}
+						print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\" edge>$txtssm</td>";
 					}
-					print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\" edge>$txtssm</td>";
-				}
-			} else {
-				if ($a eq $b) {
-					print "<td colspan=\"2\" class=\"corner\"></td>";
 				} else {
-					print "<td colspan=\"2\" class=\"blackhole\"></td>";
+					if ($a eq $b) {
+						print "<td colspan=\"2\" class=\"corner\"></td>";
+					} else {
+						print "<td colspan=\"2\" class=\"blackhole\"></td>";
+					}
 				}
 			}
 		}
-		print "<tr>";
-		print "\n";
-		$i++;
+		print "<tr>\n";
 	}
 }
+print "</table>\n";
+
+print "<br />\n";
+
+if (scalar(@warmingup) > 0) {
+	print "<h3>Beacons warming up (age < 30 secs)</h3>\n";
+	print "<ul>\n";
+	foreach $a (@warmingup) {
+		my $name = $g->get_vertex_attribute($a, "name");
+		my $contact = $g->get_vertex_attribute($a, "contact");
+		print "<li>$a";
+		if ($name) {
+			print " ($name, $contact)";
+		}
+		print "</li>\n";
+	}
+	print "</ul>\n";
+	print "<br />\n";
+}
+
+print "<table cellspacing=\"0\" cellpadding=\"0\" id=\"beacs\">";
+print "<tr><th>Beacon Name</th><th>Source Address/Port</th><th>Admin Contact</th><th>Age</th></tr>\n";
+
+foreach $a (@V) {
+	my $id = $g->get_vertex_attribute($a, "id");
+	if ($id >= 1) {
+		my $name = $g->get_vertex_attribute($a, "name");
+		my $contact = $g->get_vertex_attribute($a, "contact");
+		my $age = $g->get_vertex_attribute($a, "age");
+		if (not $age) {
+			$age = "-";
+		} else {
+			$age = "$age secs";
+		}
+		print "<tr><td class=\"name\">$name</td><td class=\"addr\">$a</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age</td></tr>\n";
+	}
+}
+
 print "</table>";
 
 if (scalar(@problematic) ne 0) {
-	print "<br /><br />\n";
 	print "<h3>Beacons with no connectivity</h3>\n";
 	print "<ul>\n";
 	my $len = scalar(@problematic);
 	for (my $j = 0; $j < $len; $j++) {
 		my $prob = $problematic[$j];
-		print "<li>$prob</li>\n";
+
+		my $name = $g->get_vertex_attribute($prob, "name");
+		my $admin = $g->get_vertex_attribute($prob, "contact");
+
+		my @neighs = $g->neighbours($prob);
+
+		print "<li>$prob";
+		if ($name) {
+			print " ($name, $admin)";
+		}
+
+		my $ned = scalar(@neighs);
+		my $k = $ned;
+		if ($k > 3) {
+			$k = 3;
+		}
+
+		print "<ul>Received from:<ul>";
+
+		for (my $l = 0; $l < $k; $l++) {
+			my $addr = $neighs[$l];
+			$name = $g->get_vertex_attribute($addr, "name");
+			print "<li><span class=\"beacon\">$addr";
+			if ($name) {
+				print " ($name)";
+			}
+			print "</span></li>";
+		}
+
+		if ($k < $ned) {
+			print "<li>and others</li>";
+		}
+
+		print "</ul></ul></li>\n";
 	}
 	print "</ul>\n";
 }
-
-print "<br /><br />\n";
-print "<table cellspacing=\"0\" cellpadding=\"0\" id=\"beacs\">";
-print "<tr><th>Beacon Name</th><th>Source Address/Port</th><th>Admin Contact</th><th>Age</th></tr>\n";
-
-foreach $a (@V) {
-	my $name = $g->get_vertex_attribute($a, "name");
-	my $addr = $g->get_vertex_attribute($a, "addr");
-	my $contact = $g->get_vertex_attribute($a, "contact");
-	my $age = $g->get_vertex_attribute($a, "age");
-	if (not $age) {
-		$age = "-";
-	} else {
-		$age = "$age secs";
-	}
-	print "<tr><td class=\"name\">$name</td><td class=\"addr\">$addr</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age</td></tr>\n";
-}
-
-print "</table>";
-
-print "<br /><br />";
 
 print "<p>If you wish to add a beacon to your site, you may use dbeacon with the following parameters:</p>\n";
 print "<p><code>./dbeacon -P -n NAME -b $sessiongroup";
@@ -232,6 +295,9 @@ if ($ssm_sessiongroup) {
 	print " -S $ssm_sessiongroup";
 }
 print " -a CONTACT</code></p>\n";
+
+print "<hr />\n";
+print "<small>matrix.pl - a tool for dynamic viewing of dbeacon information. by Hugo Santos and Hoerdt Mickaël</small>\n";
 
 print "</body>";
 print "</html>";
@@ -268,7 +334,6 @@ sub start_handler {
 			$g->add_vertex($faddr);
 			$g->set_vertex_attribute($faddr, "name", $fname);
 			$g->set_vertex_attribute($faddr, "contact", $fadmin);
-			$g->set_vertex_attribute($faddr, "addr", $faddr);
 			$g->set_vertex_attribute($faddr, "age", $fage);
 		}
 	} elsif ($tag eq "ssm") {
@@ -291,6 +356,8 @@ sub start_handler {
 		if ($current_source ne "") {
 			if ($fttl ge 0) {
 				$g->set_edge_attribute($current_source, $current_beacon, "ssm_ttl", $fttl);
+				my $val = $g->get_vertex_attribute($current_source, "goodedge");
+				$g->set_vertex_attribute($current_source, "goodedge", $val + 1);
 			}
 			if ($floss ge 0) {
 				$g->set_edge_attribute($current_source, $current_beacon, "ssm_loss", $floss);
@@ -333,12 +400,13 @@ sub start_handler {
 			if ($g->add_vertex($faddr)) {
 				$g->set_vertex_attribute($faddr, "name", $fname);
 				$g->set_vertex_attribute($faddr, "contact", $fadmin);
-				$g->set_vertex_attribute($faddr, "addr", $faddr);
 			}
 
 			$g->add_edge($faddr, $current_beacon);
 			if ($fttl ge 0) {
 				$g->set_edge_attribute($faddr, $current_beacon, "ttl", $fttl);
+				my $val = $g->get_vertex_attribute($faddr, "goodedge");
+				$g->set_vertex_attribute($faddr, "goodedge", $val + 1);
 			}
 			if ($floss ge 0) {
 				$g->set_edge_attribute($faddr, $current_beacon, "loss", $floss);
