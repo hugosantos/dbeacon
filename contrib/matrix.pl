@@ -39,7 +39,7 @@ if ($history_enabled) {
 	use RRDs;
 }
 
-my $dbeacon = '<a href="http://artemis.av.it.pt/~hsantos/software/dbeacon.html">dbeacon</a>';
+my $dbeacon = '<a href="http://artemis.av.it.pt/~hsantos/dbeacon/">dbeacon</a>';
 
 use constant NEIGH => 0;
 use constant IN_EDGE => 1;
