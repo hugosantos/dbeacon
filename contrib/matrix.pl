@@ -13,13 +13,12 @@ use Graph::Directed;
 use XML::Parser;
 use RRDs;
 use POSIX qw(strftime);
-use integer;
 use strict;
 
 # configuration variables, may be changed in matrix.conf
 our $dumpfile = "/home/seb/dbeacon/dump.xml";
 our $historydir = 'data';
-our $verbose = 1;
+our $verbose = 2;
 our $title = "IPv6 Multicast Beacon";
 our $default_hideinfo = 0;	# one of '0', '1'
 our $default_what = "both";	# one of 'both', 'asm'
@@ -148,24 +147,18 @@ sub format_date {
 	my $dosecs = 1;
 
 	if ($tm > 86400) {
-		my $days = $tm / 86400;
-		$res .= " $days";
-		$res .= "d";
+		$res .= sprintf(" %id", $tm / 86400);
 		$tm = $tm % 86400;
 		$dosecs = 0;
 	}
 
 	if ($tm > 3600) {
-		my $hours = $tm / 3600;
-		$res .= " $hours";
-		$res .= "h";
+		$res .= sprintf(" %ih", $tm / 3600);
 		$tm = $tm % 3600;
 	}
 
 	if ($tm > 60) {
-		my $mins = $tm / 60;
-		$res .= " $mins";
-		$res .= "m";
+		$res .= sprintf(" %im", $tm / 60);
 		$tm = $tm % 60;
 	}
 
@@ -241,12 +234,9 @@ sub parse_stats {
 		$g->set_vertex_attribute($addr, "goodedge", $val + 1);
 	}
 
-	my @statsAtts = ("loss", "delay", "jitter");
-	my $len = scalar(@statsAtts);
-
-	for (my $j = 0; $j < $len; $j++) {
-		if ($atts{$statsAtts[$j]} ge 0) {
-			$g->set_edge_attribute($addr, $current_beacon, $prefix . $statsAtts[$j], $atts{$statsAtts[$j]});
+	foreach my $att ('loss', 'delay', 'jitter') {
+		if (defined($atts{$att})) {
+			$g->set_edge_attribute($addr, $current_beacon, "$prefix$att", $atts{$att});
 		}
 	}
 }
@@ -582,7 +572,7 @@ sub store_data_one {
 	my $good = 0;
 
 	foreach my $type ('ttl', 'loss', 'delay', 'jitter') {
-		$values{$type} = $g->get_edge_attribute($dst, $src, $prefix . $type);
+		$values{$type} = $g->get_edge_attribute($src, $dst, "$prefix$type");
 		if (defined($values{$type})) {
 			$good++;
 		}
@@ -668,19 +658,23 @@ sub check_rrd {
 }
 
 sub storedata {
-	my ($dstbeacon,$srcbeacon,$asmorssm,%values) = @_;
+	my ($dstbeacon, $srcbeacon, $asmorssm, %values) = @_;
 
 	check_rrd($historydir, $dstbeacon, $srcbeacon, $asmorssm);
 
 	# Update rrd with new values
 
 	my $updatestring = 'N';
-	foreach my $valuetype ('ttl','loss','delay','jitter') {
+	foreach my $valuetype ('ttl', 'loss', 'delay', 'jitter') {
 		if ($valuetype eq 'delay' or $valuetype eq 'jitter') {
 			# Store it in s and not ms
-			$values{$valuetype} = $values{$valuetype}/1000;
+			$values{$valuetype} = $values{$valuetype} / 1000.;
 		}
-		$updatestring.=':'.$values{$valuetype};
+		$updatestring .= ':' . $values{$valuetype};
+	}
+
+	if ($verbose > 1) {
+		print "Updating $dstbeacon <- $srcbeacon with $updatestring\n";
 	}
 
 	if (!RRDs::update(build_rrd_file_path($historydir, $dstbeacon, $srcbeacon, $asmorssm), $updatestring)) {
