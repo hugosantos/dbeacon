@@ -45,7 +45,6 @@ static int (*_McastListen)(int, const address &) = _McastListenOldAPI;
 #define MCAST_JOIN_GROUP 42
 #define MCAST_JOIN_SOURCE_GROUP 46
 #define MCAST_LEAVE_SOURCE_GROUP 47
-#define MCAST_FILTER	48
 
 struct group_req {
 	uint32_t gr_interface;
@@ -57,6 +56,11 @@ struct group_source_req {
 	struct sockaddr_storage gsr_group;
 	struct sockaddr_storage gsr_source;
 };
+
+#endif
+
+#if !defined MCAST_FILTER
+#define MCAST_FILTER	48
 
 struct group_filter {
 	uint32_t gf_interface;
