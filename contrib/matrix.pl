@@ -32,6 +32,7 @@ our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
 our $matrix_link_title = 0;
 our $default_full_matrix = 0;
+our $faq_page = 'http://mars.innerghost.net/~hugo/www/dbeacon/FAQ.html';
 
 do 'matrix.conf';
 
@@ -399,10 +400,15 @@ sub build_header {
 	my $view_len = scalar(@view);
 	my $i;
 
-	print '<p style="margin: 0"><span style="float: left"><b>View</b>&nbsp;<small>(';
+	print '<p style="margin: 0"><span style="float: left"><b>View</b>';
+
+	do_faq_qlink('views');
+
 	$attname ||= '';
 	$hideatt ||= '';
 	$at ||= '';
+
+	print ' <small>(';
 
 	if (not $atthideinfo) {
 		print "<a href=\"$url?hideinfo=1&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
@@ -468,6 +474,21 @@ sub make_ripe_search_url {
 	my ($ip) = @_;
 
 	return "http://www.ripe.net/whois?form_type=simple&amp;full_query_string=&amp;searchtext=$ip&amp;do_search=Search";
+}
+
+sub do_faq_link {
+	my ($txt, $ctx) = @_;
+
+	if ($faq_page) {
+		print ' <a style="text-decoration: none" href="', $faq_page, '#', $ctx;
+		print '">', $txt, '</a>';
+	}
+}
+
+sub do_faq_qlink {
+	my $ctx = shift;
+
+	return do_faq_link('<small>[?]</small>', $ctx);
 }
 
 sub render_matrix {
@@ -609,7 +630,9 @@ sub render_matrix {
 	print '</table>', "\n";
 
 	if (scalar(@repnosources) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons that report no received sources</h4>', "\n";
+		print '<h4 style="margin-bottom: 0">Beacons that report no received sources';
+		do_faq_qlink('nosources');
+		print '</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@repnosources) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
@@ -620,15 +643,20 @@ sub render_matrix {
 	}
 
 	if (scalar(@lowrx) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons that report only a small number of received sources</h4>', "\n";
+		print '<h4 style="margin-bottom: 0">Beacons that report only a small number of received sources';
+		do_faq_qlink('lowsources');
+		print '</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@lowrx) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
 
-			print '<ul>Receives:<ul>', "\n";
+			print ' <small>Receives</small> { ';
+
+			my $first = 1;
 
 			foreach $b (keys %{$adj{$a}[NEIGH]}) {
-				print '<li>';
+				print ', ' if not $first;
+				$first = 0;
 				if ($ids{$b}) {
 					print '<b>S', $ids{$b}, '</b> ', beacon_name($b);
 				} else {
@@ -636,10 +664,9 @@ sub render_matrix {
 					print ' (', $adj{$b}[NAME], ')' if $adj{$b}[NAME];
 					print '</span>';
 				}
-				print '</li>', "\n";
 			}
 
-			print '</ul></ul>';
+			print ' }';
 
 			print '</li>', "\n";
 		}
@@ -647,7 +674,9 @@ sub render_matrix {
 	}
 
 	if (scalar(@localnoreceive) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons not received localy</h4>', "\n";
+		print '<h4 style="margin-bottom: 0">Beacons not received localy';
+		do_faq_qlink('localonly');
+		print '</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@localnoreceive) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
@@ -658,7 +687,9 @@ sub render_matrix {
 	}
 
 	if (scalar(@warmingup) > 0) {
-		print '<h4>Beacons warming up (age < 30 secs)</h4>', "\n";
+		print '<h4>Beacons warming up (age < 30 secs)';
+		do_faq_qlink('warmingup');
+		print '</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@warmingup) {
 			print '<li>', $a;
