@@ -30,8 +30,8 @@
 
 struct group_req
 {
-       uint32_t  gr_interface;   /* interface index */
-       struct    sockaddr_storage gr_group;       /* group address */
+       uint32_t gr_interface;
+       struct sockaddr_storage gr_group;
 };
 
 struct group_source_req {
@@ -672,12 +672,7 @@ void handle_gc() {
 	while (i != sources.end()) {
 		bool remove = false;
 		if ((now - i->second.lastevent) > 30000) {
-			if (i->second.ASM.s.valid) {
-				i->second.ASM.s.valid = false;
-				i->second.lastevent = now;
-			} else {
-				remove = true;
-			}
+			remove = true;
 		}
 		if (!remove) {
 			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
@@ -901,7 +896,7 @@ void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buf
 
 				// trigger local SSM join
 				if (!addr_is_equal(addr, beaconUnicastAddr))
-					getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts);
+					getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts).adminContact = stats.contact;
 			}
 		}
 	}
