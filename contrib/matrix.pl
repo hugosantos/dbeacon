@@ -389,6 +389,9 @@ sub render_matrix {
 							if ($txt eq "") {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
+								if ($attname eq 'delay' or $attname eq 'jitter') {
+									$txt = sprintf("%.1f", $txt);
+								}
 								print "<td class=\"fulladjacent\">";
 								make_history_link($b, $a, "asm", $txt, "historyurl");
 								print "</td>";
@@ -399,6 +402,10 @@ sub render_matrix {
 							if (($txt eq "") and ($txtssm eq "")) {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
+								if ($attname eq 'delay' or $attname eq 'jitter') {
+									$txt = sprintf("%.1f", $txt);
+									$txtssm = sprintf("%.1f", $txtssm);
+								}
 								make_matrix_cell($b, $a, "asm", $txt, "historyurl");
 								make_matrix_cell($b, $a, "ssm", $txtssm, "historyurl");
 							}
