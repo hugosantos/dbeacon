@@ -56,6 +56,8 @@ struct beaconSource {
 	string name;
 	struct in6_addr addr;
 
+	uint64_t creation;
+
 	uint64_t lastevent;
 
 	uint32_t lastseq;
@@ -564,7 +566,7 @@ uint64_t get_timestamp() {
 	return timestamp;
 }
 
-static inline beaconSource &getSource(const char *name, uint32_t seq) {
+static inline beaconSource &getSource(const char *name, uint32_t seq, uint64_t now) {
 	map<string, beaconSource>::iterator i = sources.find(name);
 	if (i != sources.end())
 		return i->second;
@@ -572,6 +574,8 @@ static inline beaconSource &getSource(const char *name, uint32_t seq) {
 	beaconSource &src = sources[name];
 
 	src.name = name;
+
+	src.creation = now;
 
 	src.lastseq = seq;
 
@@ -683,7 +687,7 @@ void beaconSource::update(const in6_addr *from, int ttl, uint32_t seqnum, uint64
 }
 
 void updateStats(const char *name, const in6_addr *from, int ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
-	getSource(name, seqnum).update(from, ttl, seqnum, timestamp, now);
+	getSource(name, seqnum, now).update(from, ttl, seqnum, timestamp, now);
 }
 
 int send_probe() {
@@ -811,6 +815,8 @@ void do_dump() {
 		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", probeName, sessionName);
 		fprintf(fp, "\t\t<sources>\n");
 
+		uint64_t now = get_timestamp();
+
 		for (map<string, beaconSource>::const_iterator i = sources.begin(); i != sources.end(); i++) {
 			if (i->second.hasstats) {
 				inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
@@ -818,6 +824,7 @@ void do_dump() {
 				fprintf(fp, "\t\t\t\t<name>%s</name>\n", i->first.c_str());
 				fprintf(fp, "\t\t\t\t<address>%s</address>\n", tmp);
 				fprintf(fp, "\t\t\t\t<ttl>%i</ttl>\n", i->second.lastttl);
+				fprintf(fp, "\t\t\t\t<localage>%llu</localage>\n", (now - i->second.creation) / 1000);
 				fprintf(fp, "\t\t\t\t<loss>%.1f</loss>\n", i->second.avgloss);
 				fprintf(fp, "\t\t\t\t<delay>%.3f</delay>\n", i->second.avgdelay);
 				fprintf(fp, "\t\t\t\t<jitter>%.3f</jitter>\n", i->second.avgjitter);
