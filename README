@@ -8,8 +8,9 @@ Also implements the protocol used by the java beacon originally used in the m6bo
   mainly by
     Hugo Santos <hsantos@av.it.pt>
   with help from
-    Hoerdt Mickael <hoerdt@clarinet.u-strasbg.fr>
-    Bernhard Schmidt <bschmidt@teleport-iabg.de>
+    Hoerdt Mickael <hoerdt@clarinet.u-strasbg.fr> [ipv4 port, testing]
+    Sebastian Chaumontet <sebastien@chaumontet.net> [testing]
+    Bernhard Schmidt <bschmidt@teleport-iabg.de> [testing]
 
     did i mention little green men from mars?
 
