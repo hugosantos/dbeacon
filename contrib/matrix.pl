@@ -6,7 +6,7 @@
 # Modifications by Hugo Santos
 
 # change this filename to your dump file
-my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
+my $dump_file = "/home/hugo/work/mcast/dbeacon.old/dump.xml";
 
 # Program code follows
 
@@ -374,10 +374,10 @@ sub start_handler {
 		$sessiongroup = $atts{"addr"};
 		$ssm_sessiongroup = $atts{"ssmgroup"};
 	} elsif ($tag eq "beacon") {
-		if ($atts{"addr"} ne "") {
-			$current_beacon = $atts{"addr"};
-			$current_source = "";
+		$current_beacon = $atts{"addr"};
+		$current_source = "";
 
+		if ($atts{"addr"} ne "") {
 			if (($atts{"name"} ne "") and ($atts{"age"} > 0)) {
 				$g->add_vertex($current_beacon);
 				$g->set_vertex_attribute($current_beacon, "name", $atts{"name"});
@@ -394,8 +394,9 @@ sub start_handler {
 			parse_stats($current_source, "ssm_", %atts);
 		}
 	} elsif ($tag eq "source") {
+		$current_source = $atts{"addr"};
+
 		if (($atts{"name"} ne "") and ($atts{"addr"} ne "")) {
-			$current_source = $atts{"addr"};
 			if (not $g->has_vertex($current_source)) {
 				$g->add_vertex($current_source);
 
