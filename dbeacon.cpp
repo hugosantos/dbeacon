@@ -707,7 +707,7 @@ void Stats::check_validity(uint64_t now) {
 		valid = false;
 }
 
-static void removeSource(const beaconSourceAddr &baddr);
+static void removeSource(const beaconSourceAddr &baddr, bool);
 
 void handle_gc() {
 	Sources::iterator i = sources.begin();
@@ -742,7 +742,7 @@ void handle_gc() {
 			Sources::iterator j = i;
 			i++;
 
-			removeSource(j->first);
+			removeSource(j->first, true);
 		}
 	}
 }
@@ -838,7 +838,7 @@ static inline beaconSource &getSource(const beaconSourceAddr &baddr, const char 
 	return src;
 }
 
-void removeSource(const beaconSourceAddr &baddr) {
+void removeSource(const beaconSourceAddr &baddr, bool timeout) {
 	Sources::iterator i = sources.find(baddr);
 	if (i != sources.end()) {
 		if (verbose) {
@@ -847,9 +847,9 @@ void removeSource(const beaconSourceAddr &baddr) {
 			baddr.print(tmp, sizeof(tmp));
 
 			if (i->second.identified) {
-				fprintf(stderr, "Removing source %s [%s]\n", tmp, i->second.name.c_str());
+				fprintf(stderr, "Removing source %s [%s]%s\n", tmp, i->second.name.c_str(), (timeout ? " by Timeout" : ""));
 			} else {
-				fprintf(stderr, "Removing source %s\n", tmp);
+				fprintf(stderr, "Removing source %s%s\n", tmp, (timeout ? " by Timeout" : ""));
 			}
 		}
 
@@ -998,7 +998,7 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 					src.webSites[hd[0]] = url;
 				}
 			} else if (hd[0] == T_LEAVE) {
-				removeSource(*from);
+				removeSource(*from, false);
 				break;
 			}
 		}
@@ -1424,8 +1424,9 @@ void do_dump() {
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
-				fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 			}
+			fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
+			fprintf(fp, " lastupdate=\"%llu\"", (now - i->second.lastevent) / 1000);
 
 			if (i->second.ASM.s.valid) {
 				fprintf(fp, "\n\t\t\t\t");
