@@ -1,0 +1,44 @@
+dbeacon - distributed beacon
+----------------------------
+
+A IPv6 Multicast Beacon. Useful for testing connectivity with other multicast
+nodes. Original project from NLANR. Improved by little green men from mars.
+Also implements the protocol used by the java beacon originally used in the m6bone.
+
+  mainly by
+    Hugo Santos <hsantos@av.it.pt>
+  with help from
+    Hoerdt Mickael <hoerdt@clarinet.u-strasbg.fr>
+    Bernhard Schmidt <bschmidt@teleport-iabg.de>
+
+    did i mention little green men from mars?
+
+Running
+-------
+
+Usage: dbeacon [OPTIONS...]
+
+  -n NAME                Specifies the beacon name
+  -a MAIL                Supply administration contact (new protocol only)
+  -b BEACON_ADDR/PORT    Multicast group address to send probes to
+  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied
+  -M REDIST_ADDR/PORT    Redistribute and listen for reports in multicast addr
+  -d                     Dump reports to xml each 5 secs
+  -D FILE                Specifies dump file (default is dump.xml)
+  -l LOCAL_ADDR/PORT     Listen for reports from other probes
+  -L REPORT_ADDR/PORT    Listen to reports from other probs in multicast group REPORT_ADDR
+  -P                     Use new protocol
+  -v                     be (very) verbose
+  -U                     Dump periodic bandwidth usage reports to stdout
+
+A good command line would be
+
+./dbeacon -P -a YOURMAIL -n SITENAME -b ff1e::f00d:beac/10000
+
+add -d if you want to reuse the statistics locally
+
+Licensing
+---------
+
+This code is licensed with the GNU Public Licence (GPL).
+
