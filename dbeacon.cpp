@@ -175,7 +175,7 @@ struct beaconMcastState {
 	void update(uint8_t, uint32_t, uint64_t, uint64_t);
 };
 
-typedef map<int, string> WebSites;
+typedef std::map<int, string> WebSites;
 
 struct beaconSource {
 	beaconSource();
@@ -196,7 +196,7 @@ struct beaconSource {
 	void setName(const string &);
 	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
 
-	typedef map<beaconSourceAddr, beaconExternalStats> ExternalSources;
+	typedef std::map<beaconSourceAddr, beaconExternalStats> ExternalSources;
 	ExternalSources externalSources;
 
 	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
@@ -204,7 +204,7 @@ struct beaconSource {
 	WebSites webSites;
 };
 
-typedef map<beaconSourceAddr, beaconSource> Sources;
+typedef std::map<beaconSourceAddr, beaconSource> Sources;
 
 static Sources sources;
 
