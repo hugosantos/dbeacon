@@ -626,7 +626,7 @@ sub render_matrix {
 	}
 
 	if (scalar(@localnoreceive) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons not being received locally via ASM</h4>', "\n";
+		print '<h4 style="margin-bottom: 0">Beacons that receive no sources</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@localnoreceive) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
