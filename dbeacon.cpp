@@ -760,6 +760,8 @@ void handle_probe(int sock, content_type type) {
 		} else if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
 			ttl = *(int *)CMSG_DATA(hdr);
 		} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
+			ttl = *(uint8_t *)CMSG_DATA(hdr);
+		} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_TTL) {
 			ttl = *(int *)CMSG_DATA(hdr);
 		}
 	}
