@@ -132,7 +132,7 @@ sub build_vertex_from_rrd {
 }
 
 sub full_url0 {
-	return "$url?dst=$dst&src=$src";
+	return "$url?dst=$dst&amp;src=$src";
 }
 
 sub full_url {
@@ -140,7 +140,7 @@ sub full_url {
 	{
 		$type = "ttl";
 	}
-	return "$url?dst=$dst&src=$src&type=$type";
+	return "$url?dst=$dst&amp;src=$src&amp;type=$type";
 }
 
 sub parse_dump_file {
@@ -179,7 +179,7 @@ sub make_history_url {
 	$dstbeacon =~ s/\/\d+$//;
         $srcbeacon =~ s/\/\d+$//;
 
-	return "$url?history=1&src=" . $dst->[1] . "-$dstbeacon.$type&dst=" . $src->[1] . "-$srcbeacon";
+	return "$url?history=1&amp;src=" . $dst->[1] . "-$dstbeacon.$type&amp;dst=" . $src->[1] . "-$srcbeacon";
 }
 
 sub build_name {
@@ -328,7 +328,7 @@ sub start_document {
 
 	print "<h1 style=\"margin: 0\">$title</h1>\n";
 
-	print "<small>Current server time is " . localtime() ."$additionalinfo</small><br />\n";
+	print "<p style=\"margin: 0\"><small>Current server time is " . localtime() ."$additionalinfo</small></p>\n";
 }
 
 sub build_header {
@@ -344,7 +344,7 @@ sub build_header {
 			function move(way) {
 				selectedvalue = document.timenavigator.offset.options[document.timenavigator.offset.selectedIndex].value;
 				newdate = '.$at.' + selectedvalue * way;
-				url = "'."$url?what=$attwhat&att=$attname&at=".'"+newdate;
+				url = "'."$url?what=$attwhat&amp;att=$attname&amp;at=".'"+newdate;
 				location.href=url;
 			}</script>';
 
@@ -369,36 +369,34 @@ sub build_header {
 		print '</form>';
 
 	} else {
-	print "<br /><b>Current stats for</b> <code>$sessiongroup</code>";
-	if ($ssm_sessiongroup) {
-		print " (SSM: <code>$ssm_sessiongroup</code>)";
+		print "<p><b>Current stats for</b> <code>$sessiongroup</code>";
+		if ($ssm_sessiongroup) {
+			print " (SSM: <code>$ssm_sessiongroup</code>)";
+		}
+
+		my $last_update_time = check_outdated_dump();
+		if ($last_update_time) {
+			print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
+		}
+		print "</p>";
 	}
 
-	print "<br />";
+	my $hideatt;
 
-	my $last_update_time = check_outdated_dump();
-	if ($last_update_time) {
-		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
+	if ($atthideinfo) {
+		$hideatt = "hideinfo=1&amp;";
 	}
 
-	print "<br />";
-}
-my $hideatt;
+	my $whatatt = "what=$attwhat&amp;";
 
-if ($atthideinfo) {
-	$hideatt = "hideinfo=1&";
-}
+	my @view = ("ttl", "loss", "delay", "jitter");
+	my @view_name = ("TTL", "Loss", "Delay", "Jitter");
+	my @view_type = ("hop count", "percentage", "ms", "ms");
 
-my $whatatt = "what=$attwhat&";
+	my $view_len = scalar(@view);
+	my $i;
 
-my @view = ("ttl", "loss", "delay", "jitter");
-my @view_name = ("TTL", "Loss", "Delay", "Jitter");
-my @view_type = ("hop count", "percentage", "ms", "ms");
-
-my $view_len = scalar(@view);
-my $i;
-
-print "<span style=\"float: left\"><b>View</b>&nbsp;<small>(";
+	print "<p style=\"margin: 0\"><span style=\"float: left\"><b>View</b>&nbsp;<small>(";
 	if (not defined($attname)){
 		$attname = "";
 	}
@@ -410,23 +408,23 @@ print "<span style=\"float: left\"><b>View</b>&nbsp;<small>(";
 	}
 
 	if (not $atthideinfo) {
-		print "<a href=\"$url?hideinfo=1&$whatatt&att=$attname&at=$at\">Hide Source Info</a>";
+		print "<a href=\"$url?hideinfo=1&amp;$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
 	} else {
-		print "<a href=\"$url?hideinfo=0&$whatatt&att=$attname&at=$at\">Show Source Info</a>";
+		print "<a href=\"$url?hideinfo=0&amp;$whatatt&amp;att=$attname&amp;at=$at\">Show Source Info</a>";
 	}
 
 	if ($attwhat eq "asm") {
-		print ", <a href=\"$url?$hideatt&what=both&att=$attname&at=$at\">ASM and SSM</a>";
-		print ", <a href=\"$url?$hideatt&what=ssmorasm&att=$attname&at=$at\">SSM or ASM</a>";
+		print ", <a href=\"$url?$hideatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		print ", <a href=\"$url?$hideatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
 	} elsif ($attwhat eq "ssmorasm") {
-		print ", <a href=\"$url?$hideatt&what=both&att=$attname&at=$at\">ASM and SSM</a>";
-		print ", <a href=\"$url?$hideatt&what=asm&att=$attname&at=$at\">ASM only</a>";
+		print ", <a href=\"$url?$hideatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		print ", <a href=\"$url?$hideatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	} else {
-		print ", <a href=\"$url?$hideatt&what=ssmorasm&att=$attname&at=$at\">SSM or ASM</a>";
-		print ", <a href=\"$url?$hideatt&what=asm&att=$attname&at=$at\">ASM only</a>";
+		print ", <a href=\"$url?$hideatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+		print ", <a href=\"$url?$hideatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	}
 
-	print ")</small>:</span>";
+	print ")</small>:</span></p>";
 
 	print "<ul id=\"view\" style=\"float: left\">\n";
 	for ($i = 0; $i < $view_len; $i++) {
@@ -436,18 +434,18 @@ print "<span style=\"float: left\"><b>View</b>&nbsp;<small>(";
 		if ($attname eq $att) {
 			print "<span class=\"viewitem\" id=\"currentview\">$attn</span>";
 		} else {
-			print "<a class=\"viewitem\" href=\"$url?$hideatt$whatatt" . "att=$att&at=$at\">$attn</a>";
+			print "<a class=\"viewitem\" href=\"$url?$hideatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
 		}
 		print " <small>(" . $view_type[$i] . ")</small></li>\n";
 	}
 	print "</ul>\n";
 
-	print "<br /><br />\n";
+	print "<p style=\"margin: 0; margin-bottom: 1em\">&nbsp;</p>";
 }
 
 sub end_document {
 	print "<hr />\n";
-	print "<small>matrix.pl - a tool for dynamic viewing of $dbeacon information and history. by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small>\n";
+	print "<p style=\"margin: 0\"><small>matrix.pl - a tool for dynamic viewing of $dbeacon information and history. by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>\n";
 
 	print "</body>\n";
 	print "</html>\n";
@@ -456,7 +454,7 @@ sub end_document {
 sub make_ripe_search_url {
 	my ($ip) = @_;
 
-	return "http://www.ripe.net/whois?form_type=simple&full_query_string=&searchtext=$ip&do_search=Search";
+	return "http://www.ripe.net/whois?form_type=simple&amp;full_query_string=&amp;searchtext=$ip&amp;do_search=Search";
 }
 
 sub render_matrix {
@@ -490,9 +488,9 @@ sub render_matrix {
 	}
 	my $addinfo;
 	if ($attat > 0) {
-		$addinfo = " (<a href=\"$url?what=$attwhat&att=$attname\">Live stats</a>)";
+		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname\">Live stats</a>)";
 	} else {
-		$addinfo = " (<a href=\"$url?what=$attwhat&att=$attname&at=".time()."\">Past stats</a>)"
+		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=".time()."\">Past stats</a>)"
 	}
 
 	start_document($addinfo);
@@ -606,8 +604,6 @@ sub render_matrix {
 	}
 
 	if (not $atthideinfo) {
-		print "<br />\n";
-
 		print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
 		print "<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
@@ -628,9 +624,10 @@ sub render_matrix {
 
 				print "<td>";
 				if ($flag_url_format ne "" and $g->has_vertex_attribute($a, "country")) {
+					my $country = lc $g->get_vertex_attribute($a, "country");
 					print "<img src=\"";
-					printf $flag_url_format, lc $g->get_vertex_attribute($a, "country");
-					print "\" style=\"vertical-align: middle; border: 1px solid black\" />";
+					printf $flag_url_format, $country;
+					print "\" alt=\"$country\" style=\"vertical-align: middle; border: 1px solid black\" />";
 				}
 				print "</td>";
 
@@ -657,7 +654,7 @@ sub render_matrix {
 				print "</tr>\n";
 			}
 		}
-		print "</table>\n<br />\n";
+		print "</table>\n";
 	}
 
 	if (scalar(@warmingup) > 0) {
@@ -715,7 +712,7 @@ sub render_matrix {
 		print "</ul>\n";
 	}
 
-	print "<p>If you wish to add a beacon to your site, you may use $dbeacon";
+	print "<p><br />If you wish to add a beacon to your site, you may use $dbeacon";
 	if (defined($step)) {
 		print ".</p>\n";
 	} else {
@@ -726,7 +723,6 @@ sub render_matrix {
 		}
 		print " -a CONTACT</code></p>\n";
 	}
-
 
 	end_document();
 }
@@ -993,7 +989,7 @@ sub do_list_beacs {
 	}
 
 	foreach my $foo (@vals) {
-		print '<option value="'.$url.'?history=1&dst=';
+		print '<option value="'.$url.'?history=1&amp;dst=';
 		if ($name eq 'srcc') {
 			print $dst.'&src='.$foo;
 		} else {
@@ -1018,8 +1014,8 @@ sub do_list_beacs {
 
 sub graphthumb {
 	my ($type) = shift;
-	print '<a href="' . full_url0() . "&history=1&type=$type\">\n";
-	print '<img style="margin-right: 0.5em; margin-bottom: 0.5em" border="0" src="'.full_url0()."&type=$type&img=true&thumb=true&age=$age\" /></a><br />\n";
+	print '<a href="' . full_url0() . "&amp;history=1&amp;type=$type\">\n";
+	print '<img style="margin-right: 0.5em; margin-bottom: 0.5em" border="0" src="'.full_url0()."&amp;type=$type&amp;img=true&amp;thumb=true&amp;age=$age\" /></a><br />\n";
 }
 
 sub list_graph {
@@ -1068,7 +1064,7 @@ sub list_graph {
 		print "<ul>\n";
 
 		foreach my $beac (@beacs) {
-			print '<li><a href="'.$url.'?history=1&dst=' . $beac . '">' . (get_name_from_host($beac))[0] . "</a></li>\n";
+			print '<li><a href="'.$url.'?history=1&amp;dst=' . $beac . '">' . (get_name_from_host($beac))[0] . "</a></li>\n";
 		}
 
 		print "</ul>\n";
@@ -1096,7 +1092,7 @@ sub list_graph {
 			print "<li>";
 
 			if (defined($pairs{$key}[0])) {
-				print '<a href="?history=1&dst='.$dst.'&src=' . $pairs{$key}[0] . '">';
+				print '<a href="?history=1&amp;dst=' . $dst . '&amp;src=' . $pairs{$key}[0] . '">';
 			}
 
 			print ((get_name_from_host($key))[0]);
@@ -1106,7 +1102,7 @@ sub list_graph {
 			}
 
 			if (defined($pairs{$key}[1])) {
-				print ' / <a href="?history=1&dst='.$dst.'&src=' . $pairs{$key}[1] . "\">SSM</a>";
+				print ' / <a href="?history=1&amp;dst='.$dst.'&amp;src=' . $pairs{$key}[1] . "\">SSM</a>";
 			}
 
 			print "</li>\n";
@@ -1138,7 +1134,7 @@ sub list_graph {
 		print "<p>Last: ";
 
 		foreach my $agen (@propersortedages) {
-			print " <a href=\"" . full_url0() . "&history=1&age=" . $agen . "\">" . $ages{$agen} . "</a>";
+			print " <a href=\"" . full_url0() . "&amp;history=1&amp;age=" . $agen . "\">" . $ages{$agen} . "</a>";
 		}
 
 		print "</p>\n";
@@ -1148,7 +1144,7 @@ sub list_graph {
 		print "<div style=\"margin-left: 2em\">\n";
 		# Dst, src and type selected => Displaying all time range graphs
 		foreach my $age ('-1d','-1w','-1m','-1y') {
-			print "<img style=\"margin-bottom: 0.5em\" src=\"" . full_url() . "&age=$age&img=true\" /><br />";
+			print "<img style=\"margin-bottom: 0.5em\" src=\"" . full_url() . "&amp;age=$age&amp;img=true\" /><br />";
 		}
 		print "</div>";
 	}
@@ -1174,7 +1170,6 @@ sub start_base_document {
 	}
 
 	print "</head>\n<body>\n";
-	print "<body>\n";
 }
 
 sub print_default_style() {
