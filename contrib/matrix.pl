@@ -29,6 +29,7 @@ if (not $attname) {
 }
 
 my $atthideinfo = $page->param('hideinfo');
+my $attwhat = $page->param('what') or "both";
 
 my $sessiongroup;
 my $ssm_sessiongroup;
@@ -51,7 +52,7 @@ build_header();
 
 my $what_td = "colspan=\"2\"";
 
-if ($page->param("what") eq "asm") {
+if ($attwhat eq "asm") {
 	$what_td = "";
 }
 
@@ -119,7 +120,7 @@ foreach $a (@V) {
 				if ($b ne $a and $g->has_edge($b, $a)) {
 					my $txt = $g->get_edge_attribute($b, $a, $attname);
 
-					if ($page->param("what") eq "asm") {
+					if ($attwhat eq "asm") {
 						if ($txt eq "") {
 							print "<td class=\"noinfo\">N/A</td>";
 						} else {
@@ -492,6 +493,8 @@ sub build_header {
 		$hideatt = "hideinfo=1&";
 	}
 
+	my $whatatt = "what=$attwhat&";
+
 	my @view = ("ttl", "loss", "delay", "jitter");
 	my @view_name = ("TTL", "Loss", "Delay", "Jitter");
 	my @view_type = ("hop count", "percentage", "ms", "ms");
@@ -499,14 +502,21 @@ sub build_header {
 	my $view_len = scalar(@view);
 	my $i;
 
-	print "<span style=\"float: left\"><b>View</b>&nbsp;<small>";
+	print "<span style=\"float: left\"><b>View</b>&nbsp;<small>(";
 
 	if (not $atthideinfo) {
-		print "(<a href=\"$url?hideinfo=1&att=$attname\">Hide Source Info</a>)";
+		print "<a href=\"$url?hideinfo=1&$whatatt&att=$attname\">Hide Source Info</a>";
 	} else {
-		print "(<a href=\"$url?hideinfo=0&att=$attname\">Show Source Info</a>)";
+		print "<a href=\"$url?hideinfo=0&$whatatt&att=$attname\">Show Source Info</a>";
 	}
-	print "</small>:</span>";
+
+	if ($attwhat eq "asm") {
+		print ", <a href=\"$url?$hideatt&what=both&att=$attname\">ASM and SSM</a>";
+	} else {
+		print ", <a href=\"$url?$hideatt&what=asm&att=$attname\">ASM only</a>";
+	}
+
+	print ")</small>:</span>";
 
 	print "<ul id=\"view\" style=\"float: left\">\n";
 	for ($i = 0; $i < $view_len; $i++) {
@@ -516,7 +526,7 @@ sub build_header {
 		if ($attname eq $att) {
 			print "<span class=\"viewitem\" id=\"currentview\">$attn</span>";
 		} else {
-			print "<a class=\"viewitem\" href=\"$url?$hideatt" . "att=$att\">$attn</a>";
+			print "<a class=\"viewitem\" href=\"$url?$hideatt$whatatt" . "att=$att\">$attn</a>";
 		}
 		print " <small>(" . $view_type[$i] . ")</small></li>\n";
 	}
