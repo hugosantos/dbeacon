@@ -552,7 +552,7 @@ int main(int argc, char **argv) {
 		insert_event(DUMP_BIG_BW_EVENT, 600000);
 	}
 
-	send_report(REPORT_EVENT);
+	send_report(WEBSITE_REPORT_EVENT);
 
 	signal(SIGUSR1, dumpBigBwStats);
 
@@ -1194,6 +1194,13 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 	if (!write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, adminContact.c_str()))
 		return -1;
 
+	if (type == WEBSITE_REPORT_EVENT) {
+		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
+			if (!write_tlv_string(buff, maxlen, ptr, j->first, j->second.c_str()))
+				return -1;
+		return ptr;
+	}
+
 	uint64_t now = get_timestamp();
 
 	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
@@ -1212,9 +1219,6 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 			int namelen = i->second.name.size();
 			int contactlen = i->second.adminContact.size();
 			len += 2 + namelen + 2 + contactlen;
-		} else if (type == WEBSITE_REPORT_EVENT) {
-			for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
-				len += 2 + j->second.size();
 		} else {
 			len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
 		}
@@ -1241,9 +1245,6 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 		if (type == MAP_REPORT_EVENT) {
 			write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
 			write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
-		} else if (type == WEBSITE_REPORT_EVENT) {
-			for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
-				write_tlv_string(buff, maxlen, ptr, j->first, j->second.c_str());
 		} else {
 			uint32_t age = (now - i->second.creation) / 1000;
 
