@@ -315,6 +315,13 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+	addrlen = beaconUnicastAddr.addrlen();
+
+	if (getsockname(mcastSock, beaconUnicastAddr.saddr(), &addrlen) != 0) {
+		perror("getsockname");
+		return -1;
+	}
+
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
 		int sock = SetupSocketAndFDSet(i->first, true, i->second == NSSMPROBE);
 		if (sock < 0)
