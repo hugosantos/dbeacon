@@ -310,18 +310,18 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 	}
 
 	int cres;
-	addrinfo hint, *res;
+	addrinfo hint, *rres, *res;
 	memset(&hint, 0, sizeof(hint));
 
 	hint.ai_family = forceFamily;
 	hint.ai_socktype = SOCK_DGRAM;
 
-	if ((cres = getaddrinfo(tmp, port, &hint, &res)) != 0) {
+	if ((cres = getaddrinfo(tmp, port, &hint, &rres)) != 0) {
 		fprintf(stderr, "getaddrinfo failed: %s\n", gai_strerror(cres));
 		return false;
 	}
 
-	for (; res; res = res->ai_next) {
+	for (res = rres; res; res = res->ai_next) {
 		set(res->ai_addr);
 		if (multicast) {
 			if (is_multicast())
@@ -329,6 +329,8 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 		} else if (!is_unspecified())
 			break;
 	}
+
+	freeaddrinfo(rres);
 
 	if (!res) {
 		fprintf(stderr, "No usable records for %s\n", tmp);
