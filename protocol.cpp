@@ -107,7 +107,7 @@ int build_report(uint8_t *buff, int maxlen, int type, bool publishsources) {
 		uint64_t now = get_timestamp();
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-			if (!i->second.identified)
+			if (type == MAP_REPORT && !i->second.identified)
 				continue;
 
 			if (!i->second.ASM.s.valid && !i->second.SSM.s.valid)
