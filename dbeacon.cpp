@@ -55,6 +55,8 @@ struct beaconSource {
 	string name;
 	struct in6_addr addr;
 
+	uint64_t lastevent;
+
 	uint32_t lastseq;
 	uint64_t lasttimestamp;
 
@@ -68,7 +70,7 @@ struct beaconSource {
 
 	uint32_t cacheseqnum[PACKETS_PERIOD+1];
 
-	void refresh(uint32_t);
+	void refresh(uint32_t, uint64_t);
 	void update(const in6_addr *, uint32_t, uint64_t, uint64_t);
 };
 
@@ -80,6 +82,7 @@ struct beaconExternalStats {
 };
 
 struct externalBeacon {
+	in6_addr addr;
 	map<string, beaconExternalStats> sources;
 };
 
@@ -361,9 +364,16 @@ void handle_gc() {
 	uint64_t now = get_timestamp();
 
 	while (i != sources.end()) {
-		if (i->second.hasstats) {
-			if ((now - i->second.lasttimestamp) > 60000)
+		bool remove = false;
+		if ((now - i->second.lastevent) > 60000) {
+			if (i->second.hasstats) {
 				i->second.hasstats = false;
+				i->second.lastevent = now;
+			} else {
+				remove = true;
+			}
+		}
+		if (!remove) {
 			i++;
 		} else {
 			map<string, beaconSource>::iterator j = i;
@@ -469,6 +479,8 @@ void handle_jreport(int sock) {
 	if (parse_jreport(buffer, len, session, name, beac) < 0)
 		return;
 
+	beac.addr = from.sin6_addr;
+
 	externalBeacons[name] = beac;
 }
 
@@ -570,12 +582,13 @@ static inline beaconSource &getSource(const char *name, uint32_t seq) {
 }
 
 beaconSource::beaconSource() {
-	refresh(0);
+	refresh(0, 0);
 }
 
-void beaconSource::refresh(uint32_t seq) {
+void beaconSource::refresh(uint32_t seq, uint64_t now) {
 	lastseq = seq;
 	lasttimestamp = 0;
+	lastevent = now;
 
 	packetcount = packetcountreal = 0;
 	pointer = 0;
@@ -586,31 +599,22 @@ void beaconSource::refresh(uint32_t seq) {
 	hasstats = false;
 }
 
-template<typename T>
-T udiff(T a, T b) {
-	if (a > b)
-		return a - b;
-	return b - a;
-}
+template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; }
 
 void beaconSource::update(const in6_addr *from, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
-	// int64_t diff = now - (int64_t)timestamp;
-
-	// if (diff < 0)
-	//	return;
-
 	int64_t diff = udiff(now, timestamp);
 
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
-		refresh(seqnum - 1);
+		refresh(seqnum - 1, now);
 	}
 
-	if (seqnum < lastseq && (seqnum - lastseq) >= packetcount)
+	if (seqnum < lastseq && (lastseq - seqnum) >= packetcount)
 		return;
 
 	memcpy(&addr, from, sizeof(in6_addr));
 
 	lasttimestamp = timestamp;
+	lastevent = now;
 
 	bool dup = false;
 
@@ -799,13 +803,13 @@ void do_dump() {
 	if (!fp)
 		return;
 
+	char tmp[64];
+
 	fprintf(fp, "<beacons>\n");
 
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
 		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", probeName, sessionName);
 		fprintf(fp, "\t\t<sources>\n");
-
-		char tmp[64];
 
 		for (map<string, beaconSource>::const_iterator i = sources.begin(); i != sources.end(); i++) {
 			if (i->second.hasstats) {
@@ -830,7 +834,8 @@ void do_dump() {
 	}
 
 	for (map<string, externalBeacon>::const_iterator i = externalBeacons.begin(); i != externalBeacons.end(); i++) {
-		fprintf(fp, "\t<beacon name=\"%s\">\n", i->first.c_str());
+		inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
+		fprintf(fp, "\t<beacon name=\"%s\" addr=\"%s\">\n", i->first.c_str(), tmp);
 
 		for (map<string, beaconExternalStats>::const_iterator j = i->second.sources.begin();
 						j != i->second.sources.end(); j++) {
