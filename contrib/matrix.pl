@@ -141,7 +141,8 @@ foreach $a (@V) {
 	if (scalar($g->edges($c)) ge 1) {
 		print "<tr>";
 		print "<td class=\"beacname\">";
-		print "$a <b>R$i</b>";
+		my $name = $g->get_vertex_attribute($a, "name");
+		print "$name <b>R$i</b>";
 		print "</td>";
 		foreach $b (@V) {
 			my $txt;
@@ -195,10 +196,11 @@ print "<table cellspacing=\"0\" cellpadding=\"0\" id=\"beacs\">";
 print "<tr><th>Beacon Name</th><th>Source Address/Port</th><th>Admin Contact</th><th>Age</th></tr>\n";
 
 foreach $a (@V) {
+	my $name = $g->get_vertex_attribute($a, "name");
 	my $addr = $g->get_vertex_attribute($a, "addr");
 	my $contact = $g->get_vertex_attribute($a, "contact");
 	my $age = $g->get_vertex_attribute($a, "age");
-	print "<tr><td class=\"name\">$a</td><td class=\"addr\">$addr</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age secs</td></tr>\n";
+	print "<tr><td class=\"name\">$name</td><td class=\"addr\">$addr</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age secs</td></tr>\n";
 }
 
 print "</table>";
@@ -235,13 +237,14 @@ sub start_handler {
 			}
 		}
 
-		$current_beacon = $fname;
+		$current_beacon = $faddr;
 
 		if ($fname ne "") {
-			$g->add_vertex($fname);
-			$g->set_vertex_attribute($fname, "contact", $fadmin);
-			$g->set_vertex_attribute($fname, "addr", $faddr);
-			$g->set_vertex_attribute($fname, "age", $fage);
+			$g->add_vertex($faddr);
+			$g->set_vertex_attribute($faddr, "name", $fname);
+			$g->set_vertex_attribute($faddr, "contact", $fadmin);
+			$g->set_vertex_attribute($faddr, "addr", $faddr);
+			$g->set_vertex_attribute($faddr, "age", $fage);
 		}
 	} elsif ($tag eq "ssm") {
 		my $fttl = -1;
@@ -301,23 +304,24 @@ sub start_handler {
 		}
 
 		if ($fname ne "") {
-			$current_source = $fname;
-			$g->add_vertex($fname);
-			$g->set_vertex_attribute($fname, "contact", $fadmin);
-			$g->set_vertex_attribute($fname, "addr", $faddr);
+			$current_source = $faddr;
+			$g->add_vertex($faddr);
+			$g->set_vertex_attribute($faddr, "name", $fname);
+			$g->set_vertex_attribute($faddr, "contact", $fadmin);
+			$g->set_vertex_attribute($faddr, "addr", $faddr);
 
-			$g->add_edge($fname, $current_beacon);
+			$g->add_edge($faddr, $current_beacon);
 			if ($fttl ge 0) {
-				$g->set_edge_attribute($fname, $current_beacon, "ttl", $fttl);
+				$g->set_edge_attribute($faddr, $current_beacon, "ttl", $fttl);
 			}
 			if ($floss ge 0) {
-				$g->set_edge_attribute($fname, $current_beacon, "loss", $floss);
+				$g->set_edge_attribute($faddr, $current_beacon, "loss", $floss);
 			}
 			if ($fdelay ge 0) {
-				$g->set_edge_attribute($fname, $current_beacon, "delay", $fdelay);
+				$g->set_edge_attribute($faddr, $current_beacon, "delay", $fdelay);
 			}
 			if ($fjitter ge 0) {
-				$g->set_edge_attribute($fname, $current_beacon, "jitter", $fjitter);
+				$g->set_edge_attribute($faddr, $current_beacon, "jitter", $fjitter);
 			}
 		}
 	}
