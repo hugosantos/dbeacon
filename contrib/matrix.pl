@@ -80,15 +80,15 @@ if (defined($history_enabled) and $history_enabled and defined($page->param('img
 } else {
 	my ($start,$step);
 
-	if (defined ($page->param('at')) and $page->param('at')=~/^\d+$/) {
+	if (defined($page->param('at')) and $page->param('at')=~/^\d+$/) {
 		# Build matrix from old data
-		($start,$step) = build_vertex_from_rrd();
+		($start, $step) = build_vertex_from_rrd();
 	} else {
 		# Buils matrix from live data
 		parse_dump_file($dumpfile);
 	}
 
-	render_matrix($start,$step);
+	render_matrix($start, $step);
 }
 
 sub build_vertex_from_rrd {
@@ -104,19 +104,19 @@ sub build_vertex_from_rrd {
 		foreach my $srcbeacon (get_beacons($historydir.'/'.$dstbeacon)) {
 			my ($srcname,$srcaddr,$asmorssm) = get_name_from_host($srcbeacon);
 
-			if (not $g->has_vertex($srcaddr)) {
-				$g->add_vertex($srcaddr);
-				$g->set_vertex_attribute($srcaddr, "name", $srcname);
-			}
-
-			$g->add_edge($srcaddr, $dstaddr);
-
 			($start,$step,$names,$data) = RRDs::fetch(build_rrd_file_path($historydir,  $dstbeacon, $srcbeacon, $asmorssm), 'AVERAGE',
 				 '-s',$page->param('at'),'-e',$page->param('at'));
 
 			if (RRDs::error) {
 				next;
 			}
+
+			if (not $g->has_vertex($srcaddr)) {
+				$g->add_vertex($srcaddr);
+				$g->set_vertex_attribute($srcaddr, "name", $srcname);
+			}
+
+			# $g->add_edge($srcaddr, $dstaddr);
 
 			for (my $i = 0; $i < $#$names+1; $i++) {
 				if (defined($$data[0][$i])) {
@@ -292,7 +292,7 @@ sub start_handler {
 				$g->set_vertex_attribute($current_source, 'country', $atts{'country'});
 			}
 
-			$g->add_edge($current_source, $current_beacon);
+			# $g->add_edge($current_source, $current_beacon);
 		}
 	} elsif ($tag eq 'website') {
 		if ($atts{'type'} ne '' and $atts{'url'} ne '') {
@@ -509,19 +509,24 @@ sub render_matrix {
 
 	my @V = $g->vertices();
 
-	print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adj\">\n";
-	print "<tr><td>&nbsp;</td>";
+	print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
+	print '<tr><td>&nbsp;</td>';
 	foreach $c (@V) {
 		my $age = $g->get_vertex_attribute($c, "age");
 
 		if ((defined($age)) and ($age < 30)) {
 			push (@warmingup, $c);
-		} elsif (not scalar($g->edges($c))) {
+		} elsif (not scalar($g->out_edges($c)) and not scalar($g->in_edges($c))) {
 			push (@problematic, $c);
 		} else {
-			print '<td ', $what_td, '><b>S', $i, '</b></td>';
-			$g->set_vertex_attribute($c, "id", $i);
+			my $id = $i;
 			$i++;
+
+			$g->set_vertex_attribute($c, "id", $id);
+
+			if (scalar($g->out_edges($c)) > 0) {
+				print '<td ', $what_td, '><b>S', $id, '</b></td>';
+			}
 
 			if (scalar($g->in_edges($c)) == 0) {
 				push (@localnoreceive, $c);
@@ -536,19 +541,24 @@ sub render_matrix {
 			print '<tr>';
 			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $id, '</b></td>';
 			foreach $b (@V) {
-				if ($g->get_vertex_attribute($b, "id") >= 1) {
+				if ($g->get_vertex_attribute($b, "id") >= 1 and scalar($g->out_edges($b)) > 0) {
 					if ($b ne $a and $g->has_edge($b, $a)) {
 						my $txt = $g->get_edge_attribute($b, $a, "asm_$attname");
+						my $txtssm = $g->get_edge_attribute($b, $a, "ssm_$attname");
 
-						if (($attname eq 'delay' or $attname eq 'jitter') and defined($txt)) {
-							$txt = sprintf("%.1f", $txt);
+						if ($attname ne 'ttl') {
+							if (defined($txt)) {
+								$txt = sprintf("%.1f", $txt);
+							}
+							if (defined($txtssm)) {
+								$txtssm = sprintf("%.1f", $txtssm);
+							}
 						}
 
 						if ($attwhat eq "asm" or $attwhat eq "ssmorasm") {
 							my $whattype = "asm";
 							my $cssclass = "fulladjacent";
 							if ($attwhat eq "ssmorasm") {
-								my $txtssm = $g->get_edge_attribute($b, $a, "ssm_$attname");
 								if (defined($txtssm)) {
 									$txt = $txtssm;
 									$whattype = "ssm";
@@ -571,9 +581,6 @@ sub render_matrix {
 							if (not defined($txt) and not defined($txtssm)) {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
-								if (($attname eq 'delay' or $attname eq 'jitter') and defined($txtssm)) {
-									$txtssm = sprintf("%.1f", $txtssm);
-								}
 								make_matrix_cell($b, $a, "asm", $txt, "historyurl");
 								make_matrix_cell($b, $a, "ssm", $txtssm, "historyurl");
 							}
@@ -633,7 +640,11 @@ sub render_matrix {
 
 			print "<li>$prob";
 			if ($name) {
-				print " ($name, " . $g->get_vertex_attribute($prob, "contact") . ")";
+				print ' (', $name;
+				if ($g->has_vertex_attribute($prob, 'contact')) {
+					print $g->get_vertex_attribute($prob, 'contact');
+				}
+				print ')';
 			}
 
 			my $ned = scalar(@neighs);
@@ -642,22 +653,25 @@ sub render_matrix {
 				$k = 3;
 			}
 
-			print "<ul>Received from:<ul>\n";
+			if ($ned) {
+				print "<ul>Received from:<ul>\n";
 
-			for (my $l = 0; $l < $k; $l++) {
-				$name = $g->get_vertex_attribute($neighs[$l], "name");
-				print "<li><span class=\"beacon\">" . $neighs[$l];
-				if ($name) {
-					print " ($name)";
+				for (my $l = 0; $l < $k; $l++) {
+					$name = $g->get_vertex_attribute($neighs[$l], "name");
+					print "<li><span class=\"beacon\">" . $neighs[$l];
+					if ($name) {
+						print " ($name)";
+					}
+					print "</span></li>\n";
 				}
-				print "</span></li>\n";
+
+				if ($k < $ned) {
+					print "<li>and others</li>\n";
+				}
+				print '</ul></ul>';
 			}
 
-			if ($k < $ned) {
-				print "<li>and others</li>\n";
-			}
-
-			print "</ul></ul></li>\n";
+			print '</li>', "\n";
 		}
 		print "</ul>\n";
 	}
