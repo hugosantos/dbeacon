@@ -91,7 +91,7 @@ void MulticastStartup() {
 
 		// Check if OS supports MCAST_FILTER
 
-		if (getsockopt(sock, IPPROTO_IP, MCAST_FILTER, &flt, &fltlen) != ENOPROTOOPT) {
+		if (getsockopt(sock, IPPROTO_IP, MCAST_FILTER, &flt, &fltlen) == 0 && errno != ENOPROTOOPT) {
 			if (verbose) {
 				fprintf(stderr, "Using new Multicast Filter API\n");
 			}
