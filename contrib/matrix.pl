@@ -46,55 +46,12 @@ my $tree = $parser->parsefile($dump_file);
 
 start_document();
 
-print "<br /><b>Current stats for</b> <code>$sessiongroup</code>";
-if ($ssm_sessiongroup) {
-	print " (SSM: <code>$ssm_sessiongroup</code>)";
-}
-print "<br /><br />\n";
-
-my $url = $page->script_name();
-my $hideatt;
-
-if ($atthideinfo) {
-	$hideatt = "hideinfo=1&";
-}
-
-my @view = ("ttl", "loss", "delay", "jitter");
-my @view_name = ("TTL", "Loss", "Delay", "Jitter");
-my @view_type = ("hop count", "percentage", "ms", "ms");
-
-my $view_len = scalar(@view);
-my $i;
-
-print "<span style=\"float: left\"><b>View</b>&nbsp;<small>";
-
-if (not $atthideinfo) {
-	print "(<a href=\"$url?hideinfo=1&att=$attname\">Hide Source Info</a>)";
-} else {
-	print "(<a href=\"$url?hideinfo=0&att=$attname\">Show Source Info</a>)";
-}
-print "</small>:</span>";
-
-print "<ul id=\"view\" style=\"float: left\">\n";
-for ($i = 0; $i < $view_len; $i++) {
-	my $att = $view[$i];
-	my $attn = $view_name[$i];
-	print "<li>";
-	if ($attname eq $att) {
-		print "<span class=\"currentview\">$attn</span>";
-	} else {
-		print "<a href=\"$url?$hideatt" . "att=$att\">$attn</a>";
-	}
-	print " <small>(" . $view_type[$i] . ")</small></li>\n";
-}
-print "</ul>\n";
-
-print "<br /><br />\n";
+build_header();
 
 print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adj\">\n";
 
 my $c;
-$i = 1;
+my $i = 1;
 my @problematic = ();
 my @warmingup = ();
 
@@ -452,6 +409,53 @@ ul#view li {
 	print "<h1 style=\"margin: 0\">IPv6 Multicast Beacon</h1>\n";
 
 	print "<small>Current server time is " . localtime() . "</small><br />\n";
+}
+
+sub build_header {
+	print "<br /><b>Current stats for</b> <code>$sessiongroup</code>";
+	if ($ssm_sessiongroup) {
+		print " (SSM: <code>$ssm_sessiongroup</code>)";
+	}
+	print "<br /><br />\n";
+
+	my $url = $page->script_name();
+	my $hideatt;
+
+	if ($atthideinfo) {
+		$hideatt = "hideinfo=1&";
+	}
+
+	my @view = ("ttl", "loss", "delay", "jitter");
+	my @view_name = ("TTL", "Loss", "Delay", "Jitter");
+	my @view_type = ("hop count", "percentage", "ms", "ms");
+
+	my $view_len = scalar(@view);
+	my $i;
+
+	print "<span style=\"float: left\"><b>View</b>&nbsp;<small>";
+
+	if (not $atthideinfo) {
+		print "(<a href=\"$url?hideinfo=1&att=$attname\">Hide Source Info</a>)";
+	} else {
+		print "(<a href=\"$url?hideinfo=0&att=$attname\">Show Source Info</a>)";
+	}
+	print "</small>:</span>";
+
+	print "<ul id=\"view\" style=\"float: left\">\n";
+	for ($i = 0; $i < $view_len; $i++) {
+		my $att = $view[$i];
+		my $attn = $view_name[$i];
+		print "<li>";
+		if ($attname eq $att) {
+			print "<span class=\"currentview\">$attn</span>";
+		} else {
+			print "<a href=\"$url?$hideatt" . "att=$att\">$attn</a>";
+		}
+		print " <small>(" . $view_type[$i] . ")</small></li>\n";
+	}
+	print "</ul>\n";
+
+	print "<br /><br />\n";
 }
 
 sub end_document {
