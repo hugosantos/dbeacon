@@ -242,6 +242,10 @@ static uint64_t bigBytesReceived = 0;
 static uint64_t bigBytesSent = 0;
 static uint64_t lastDumpBwTS = 0;
 
+static uint64_t dumpBytesReceived = 0;
+static uint64_t dumpBytesSent = 0;
+static uint64_t lastDumpDumpBwTS = 0;
+
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
 static void handle_probe(int, content_type);
@@ -620,7 +624,7 @@ int main(int argc, char **argv) {
 
 	fprintf(stdout, "Local name is %s\n", beaconName.c_str());
 
-	startTime = lastDumpBwTS = get_timestamp();
+	startTime = lastDumpBwTS = lastDumpDumpBwTS = get_timestamp();
 
 	while (1) {
 		fd_set readset;
@@ -1450,7 +1454,16 @@ void do_dump() {
 
 	char tmp[64];
 
-	fprintf(fp, "<beacons>\n");
+	uint64_t now = get_timestamp();
+	uint64_t diff = now - lastDumpDumpBwTS;
+	lastDumpDumpBwTS = now;
+
+	double rxRate = dumpBytesReceived * 8 / ((double)diff);
+	double txRate = dumpBytesSent * 8 / ((double)diff);
+	dumpBytesReceived = 0;
+	dumpBytesSent = 0;
+
+	fprintf(fp, "<beacons rxrate=\"%.2lf\" txrate=\"%.2lf\">\n", rxRate, txRate);
 
 	fprintf(fp, "<group addr=\"%s\"", sessionName);
 
@@ -1460,8 +1473,6 @@ void do_dump() {
 	}
 
 	fprintf(fp, " int=\"%.2lf\">\n", beacInt);
-
-	uint64_t now = get_timestamp();
 
 	if (!probeAddr.is_unspecified()) {
 		beaconUnicastAddr.print(tmp, sizeof(tmp));
@@ -1585,6 +1596,8 @@ void do_bw_dump(bool big) {
 
 		bigBytesReceived += bytesReceived;
 		bigBytesSent += bytesSent;
+		dumpBytesReceived += bytesReceived;
+		dumpBytesSent += bytesSent;
 		bytesReceived = 0;
 		bytesSent = 0;
 
