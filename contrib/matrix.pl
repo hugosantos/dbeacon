@@ -23,6 +23,7 @@ our $title = "IPv6 Multicast Beacon";
 our $default_hideinfo = 0;	# one of '0', '1'
 our $default_what = "both";	# one of 'both', 'asm'
 our $history_enabled = 1;
+our $css_file;
 
 do("matrix.conf");
 
@@ -977,9 +978,21 @@ sub start_base_document {
 	print "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
 
 	print "<head>
-	\t<title>$title</title>
-\t<meta http-equiv=\"refresh\" content=\"60\" />
-\t<style type=\"text/css\">
+	<title>$title</title>
+	<meta http-equiv=\"refresh\" content=\"60\" />\n";
+
+	if ($css_file) {
+		print "\t<link rel=\"stylesheet\" text=\"text/css\" href=\"$css_file\" />\n";
+	} else {
+		print_default_style();
+	}
+
+	print "</head>\n<body>\n";
+	print "<body>\n";
+}
+
+sub print_default_style() {
+	print "\t<style type=\"text/css\">
 body {
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: 100%;
@@ -1071,9 +1084,6 @@ a.historyurl, a.historyurl:visited {
 	text-decoration: none;
 }
 
-\t</style>
-</head>\n";
-
-	print "<body>\n";
+\t</style>";
 }
 
