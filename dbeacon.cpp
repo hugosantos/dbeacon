@@ -13,6 +13,8 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
+#include <libgen.h>
+
 #include <map>
 #include <string>
 #include <iostream>
@@ -1290,8 +1292,17 @@ void dumpStats(FILE *fp, const Stats &s, uint64_t now, int sttl, bool diff) {
 }
 
 void do_dump() {
-	string tmpf = ".working.";
-	tmpf += dumpFile;
+	char tmpd[256], tmpn[256];
+
+	strncpy(tmpd, dumpFile.c_str(), sizeof(tmpd));
+	strncpy(tmpn, dumpFile.c_str(), sizeof(tmpn));
+
+	char *basen = basename(tmpn);
+	char *dirn = dirname(tmpd);
+
+	string tmpf = dirn;
+	tmpf += "/.working.";
+	tmpf += basen;
 
 	FILE *fp = fopen(tmpf.c_str(), "w");
 	if (!fp)
