@@ -46,7 +46,7 @@ static struct sockaddr_in6 probeAddr;
 static int mcastSock;
 static int largestSock = 0;
 static fd_set readSet;
-static bool verbose = false;
+static int verbose = 0;
 static bool newProtocol = false;
 
 enum content_type {
@@ -286,7 +286,7 @@ int main(int argc, char **argv) {
 			usage();
 			return -1;
 		} else if (res == 'v') {
-			verbose = true;
+			verbose++;
 		} else if (res == 'P') {
 			newProtocol = true;
 		} else if (res == 'f') {
@@ -432,6 +432,9 @@ static int send_count = 0;
 void handle_event() {
 	timer t = *timers.begin();
 	timers.erase(timers.begin());
+
+	if (verbose > 1)
+		fprintf(stderr, "Event %i\n", t.type);
 
 	switch (t.type) {
 	case SEND_EVENT:
@@ -776,8 +779,8 @@ int parse_jreport(uint8_t *buffer, int len, uint64_t recvdts, string &session, s
 }
 
 void handle_mcast(int sock, content_type cnt) {
-	if (cnt == JPROBE) {
-		handle_probe(sock, JPROBE);
+	if (cnt == JPROBE || cnt == NPROBE) {
+		handle_probe(sock, cnt);
 	} else if (cnt == JREPORT) {
 		handle_jreport(sock);
 	}
