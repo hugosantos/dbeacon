@@ -1677,7 +1677,7 @@ void do_dump() {
 	dumpBytesReceived = 0;
 	dumpBytesSent = 0;
 
-	fprintf(fp, "<beacons rxrate=\"%.2lf\" txrate=\"%.2lf\" versioninfo=\"%s\">\n", rxRate, txRate, versionInfo);
+	fprintf(fp, "<beacons rxrate=\"%.2f\" txrate=\"%.2f\" versioninfo=\"%s\">\n", rxRate, txRate, versionInfo);
 
 	fprintf(fp, "<group addr=\"%s\"", sessionName);
 
@@ -1686,7 +1686,7 @@ void do_dump() {
 		fprintf(fp, " ssmgroup=\"%s\"", tmp);
 	}
 
-	fprintf(fp, " int=\"%.2lf\">\n", beacInt);
+	fprintf(fp, " int=\"%.2f\">\n", beacInt);
 
 	if (!probeAddr.is_unspecified()) {
 		beaconUnicastAddr.print(tmp, sizeof(tmp));
@@ -1796,7 +1796,7 @@ void doLaunchSomething() {
 }
 
 static void outputBwStats(uint32_t diff, uint64_t txbytes, double txrate, uint64_t rxbytes, double rxrate) {
-	fprintf(stdout, "BW Usage for %u secs: RX %llu bytes (%.2lf Kb/s) TX %llu bytes (%.2lf Kb/s)\n",
+	fprintf(stdout, "BW Usage for %u secs: RX %llu bytes (%.2f Kb/s) TX %llu bytes (%.2f Kb/s)\n",
 			diff, txbytes, txrate, rxbytes, rxrate);
 }
 
