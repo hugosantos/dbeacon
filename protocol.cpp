@@ -1,6 +1,6 @@
 #include "dbeacon.h"
 #include "protocol.h"
-
+#include <math.h>
 #include <netinet/in.h>
 
 using namespace std;
@@ -57,7 +57,7 @@ static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, u
 	// stats[1] = htonl(*((uint32_t *)&st.s.avgjitter));
 
 	b[17] = (uint8_t)(st.s.avgloss * 0xff);
-	b[18] = (uint8_t)(st.s.avgdup * 0xff);
+	b[18] = st.s.avgdup > 10. ? 0xff : ((uint8_t)ceil(st.s.avgdup * 25.5));
 	b[19] = (uint8_t)(st.s.avgooo * 0xff);
 
 	ptr += 20;
@@ -220,7 +220,7 @@ static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 	st.avgjitter = *(float *)&tmp;
 
 	st.avgloss = tlv[19] / 255.;
-	st.avgdup = tlv[20] / 255.;
+	st.avgdup = tlv[20] == 0xff ? 1e10 : tlv[20] / 25.5;
 	st.avgooo = tlv[21] / 255.;
 
 	st.valid = true;
