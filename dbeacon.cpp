@@ -523,7 +523,6 @@ int main(int argc, char **argv) {
 		redist.push_back(probeAddr);
 
 		if (!ssmProbeAddr.is_unspecified()) {
-			insert_event(SSM_SENDING_EVENT, 100);
 			mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
 		}
 	} else {
@@ -583,8 +582,10 @@ int main(int argc, char **argv) {
 		if (sock < 0)
 			return -1;
 		mcastSocks.push_back(make_pair(sock, i->second));
-		if (i->second == NSSMPROBE)
+		if (i->second == NSSMPROBE) {
 			ssmMcastSock = sock;
+			insert_event(SSM_SENDING_EVENT, 100);
+		}
 	}
 
 	signal(SIGUSR1, dumpBigBwStats);
@@ -1308,13 +1309,13 @@ void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, 
 	}
 }
 
-static int send_nprobe(int sock, uint32_t &seq) {
+static int send_nprobe(const sockaddr *addr, socklen_t addrlen, uint32_t &seq) {
 	int len;
 
 	len = build_nprobe(buffer, sizeof(buffer), seq, get_timestamp());
 	seq++;
 
-	len = sendto(sock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
+	len = sendto(mcastSock, buffer, len, 0, addr, addrlen);
 	if (len > 0)
 		bytesSent += len;
 	return len;
@@ -1323,13 +1324,13 @@ static int send_nprobe(int sock, uint32_t &seq) {
 int send_probe() {
 	static uint32_t seq = rand();
 
-	return send_nprobe(mcastSock, seq);
+	return send_nprobe((sockaddr *)&probeAddr, probeAddr.sockaddr_len(), seq);
 }
 
 int send_ssm_probe() {
 	static uint32_t seq = rand();
 
-	return send_nprobe(ssmMcastSock, seq);
+	return send_nprobe((sockaddr *)&ssmProbeAddr, ssmProbeAddr.sockaddr_len(), seq);
 }
 
 static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer, uint8_t type, const char *str) {
