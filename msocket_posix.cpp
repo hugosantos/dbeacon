@@ -1,6 +1,6 @@
 /*
  * dbeacon, a Multicast Beacon
- *   msocket.cpp
+ *   msocket_posix.cpp
  *
  * Copyright (C) 2005 Hugo Santos
  *
