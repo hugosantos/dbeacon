@@ -8,7 +8,6 @@
 use CGI;
 use Graph::Directed;
 use XML::Parser;
-use Switch;
 use integer;
 use strict;
 
@@ -476,6 +475,7 @@ a.historyurl, a.historyurl:visited {
 	print "<h1 style=\"margin: 0\">IPv6 Multicast Beacon</h1>\n";
 
 	print "<small>Current server time is " . localtime() . "</small><br />\n";
+	# print "<small>Last stats retrieved at " . (stat($dump_file))[9] . "</small><br />\n";
 }
 
 sub build_header {
