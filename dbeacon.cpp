@@ -46,7 +46,6 @@ using namespace std;
  *
  */
 
-#define NEW_BEAC_INT	5
 #define NEW_BEAC_PCOUNT	10
 #define NEW_BEAC_VER	1
 
@@ -65,6 +64,9 @@ static int largestSock = 0;
 static fd_set readSet;
 static int verbose = 0;
 static bool newProtocol = false;
+static bool dumpBwReport = false;
+
+static double beacInt = 5.;
 
 static uint64_t startTime = 0;
 
@@ -301,7 +303,6 @@ int main(int argc, char **argv) {
 
 	bool dump = false;
 	bool force = false;
-	bool dump_bw = false;
 
 	const char *intf = 0;
 
@@ -386,7 +387,7 @@ int main(int argc, char **argv) {
 		} else if (res == 'f') {
 			force = true;
 		} else if (res == 'U') {
-			dump_bw = true;
+			dumpBwReport = true;
 		} else if (res == -1) {
 			break;
 		}
@@ -479,9 +480,10 @@ int main(int argc, char **argv) {
 	if (dump)
 		insert_event(DUMP_EVENT, 5000);
 
-	if (dump_bw) {
-		insert_event(DUMP_BW_EVENT, 10000);
-		insert_event(DUMP_BW_EVENT, 600000);
+	insert_event(DUMP_BW_EVENT, 10000);
+
+	if (dumpBwReport) {
+		insert_event(DUMP_BIG_BW_EVENT, 600000);
 	}
 
 	if (newProtocol)
@@ -614,7 +616,11 @@ void handle_event() {
 		insert_event(SENDING_EVENT, 100);
 		send_count = 0;
 	} else if (t.type == SENDING_EVENT && send_count == NEW_BEAC_PCOUNT) {
-		insert_event(WILLSEND_EVENT, (uint32_t)ceil(Exprnd(NEW_BEAC_INT) * 1000));
+		insert_event(WILLSEND_EVENT, (uint32_t)ceil(Exprnd(beacInt) * 1000));
+	} else if (t.type == REPORT_EVENT) {
+		insert_event(REPORT_EVENT, (uint32_t)ceil(2 * beacInt * 1000));
+	} else if (t.type == MAPREPORT_EVENT) {
+		insert_event(MAPREPORT_EVENT, (uint32_t)ceil(6 * beacInt * 1000));
 	} else {
 		insert_sorted_event(t);
 	}
@@ -1428,7 +1434,7 @@ void do_dump() {
 
 	char tmp[64];
 
-	fprintf(fp, "<beacons>\n");
+	fprintf(fp, "<beacons int=\"%.2lf\">\n", beacInt);
 
 	uint64_t now = get_timestamp();
 
@@ -1436,6 +1442,8 @@ void do_dump() {
 		inet_ntop(AF_INET6, &beaconUnicastAddr.sin6_addr, tmp, sizeof(tmp));
 		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s/%d\"",
 				(newProtocol ? beaconName : probeName), sessionName, tmp, ntohs(beaconUnicastAddr.sin6_port));
+		if (!adminContact.empty())
+			fprintf(fp, " contact=\"%s\"", adminContact.c_str());
 		if (ssmMcastSock) {
 			inet_ntop(AF_INET6, &ssmProbeAddr.sin6_addr, tmp, sizeof(tmp));
 			fprintf(fp, " ssmgroup=\"%s/%d\"", tmp, ntohs(ssmProbeAddr.sin6_port));
@@ -1545,12 +1553,24 @@ void do_bw_dump(bool big) {
 		bigBytesSent = 0;
 		lastDumpBwTS = get_timestamp();
 	} else {
-		fprintf(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)\n",
-				bytesReceived, bytesReceived * 8 / 10000., bytesSent, bytesSent * 8 / 10000.);
+		double incomingRate = bytesReceived * 8 / 10000.;
+
+		if (dumpBwReport) {
+			fprintf(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)\n",
+					bytesReceived, incomingRate, bytesSent, bytesSent * 8 / 10000.);
+		}
+
 		bigBytesReceived += bytesReceived;
 		bigBytesSent += bytesSent;
 		bytesReceived = 0;
 		bytesSent = 0;
+
+		// adjust beacInt
+		if (incomingRate < 4.)
+			incomingRate = 4.;
+
+		// Increase traffic will result in a larger interval between probe sending events
+		beacInt = 4 * (log(incomingRate) / 1.38);
 	}
 }
 
