@@ -85,6 +85,12 @@ These are some of the Frequently Asked Questions.
 
   Check dbeacon's website.
 
+- I run Debian, what packages do i need to install in order to setup a matrix?
+
+  Besides a web server (such as 'apache') you need 'perl' and
+  'libxml-parser-perl'. If you wish to use the history feature you must also
+  install 'librrds-perl'.
+
 - Why are some matrix cells painted in a lighter green than others?
 
   When in 'SSM or ASM' view (the default one), a bright green cell means that
@@ -95,9 +101,35 @@ These are some of the Frequently Asked Questions.
 
   For a detailed explanation on dbeacon's protocol read the included PROTOCOL file.
 
-- I didn't found a response in the FAQ, what should I do ?
+- I didn't found a response in the FAQ, what should I do?
 
   Either join #m6bone in the irc.freenode.net network or mail one of the developers.
 
+- Where can i find more information about multicast?
+
+  You may find information about the IPv6 Multicast Backbone in www.m6bone.net.
+
+  Additionaly Marco d'Itri was kind enough to supply a list of documents with
+  lots of multicast information, from architecture to Cisco's configuration.
+
+    http://www.renater.fr/Video/IPv6/Multicast-Oct2003/P/
+    http://www.my6.net.my/presentation_paper/HidetsuguConference.pdf
+    http://www.cs.tut.fi/kurssit/83390/materials/SSM-Sorin.pdf
+    http://www.cs.tut.fi/kurssit/83390/materials/ipv6-multicast-and-anycast.pdf
+    http://www.terena.nl/tech/task-forces/tf-ngn/presentations/tf-ngn14/20040510_JD_M6Bone.pdf
+    http://ipmon.sprint.com/pubs_trs/tutorials/Source-Specific-Multicast.pdf
+    ftp://ftpeng.cisco.com/ipmulticast/ssm/SSM-4dev/index.html
+    http://www.nanog.org/mtg-0102/ppt/eubanks/index.htm
+    http://www.cisco.com/univercd/cc/td/doc/product/software/ios121/121newft/121t/121t3/dtssm.htm
+    ftp://ftpeng.cisco.com/ipmulticast/ssm/index.html
+    ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/Multicast_Deployment_Made_Easy.pdf
+    ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/IP_Multicast_Configuration_Guide.pdf
+    http://www.m6bone.net/IMG/pdf/cisco-guide.pdf
+    http://andrew.triumf.ca/AG/multicast/ "multicast notes"
+    http://www.cisco.com/ca/events/pdfs/Interdomain_IPMulticast.pdf
+    http://www.hep.ucl.ac.uk/~ytl/multi-cast/
+    http://www.aarnet.edu.au/engineering/guides/multicast/rno-implementation.html
+    http://www.abilene.iu.edu/mccook.html
+    http://archive.dante.net/nep/GEANT-MULTICAST/stepbystep.html
 
 
