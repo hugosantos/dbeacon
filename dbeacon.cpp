@@ -1373,9 +1373,9 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 
 void dumpStats(FILE *fp, const Stats &s, int sttl, bool diff) {
 	if (!diff)
-		fprintf(fp, " ttl=\"%i\"\n", s.rttl);
+		fprintf(fp, " ttl=\"%i\"", s.rttl);
 	else if (sttl)
-		fprintf(fp, " ttl=\"%i\"\n", sttl - s.rttl);
+		fprintf(fp, " ttl=\"%i\"", sttl - s.rttl);
 	fprintf(fp, " loss=\"%.1f\"", s.avgloss);
 	fprintf(fp, " delay=\"%.3f\"", s.avgdelay);
 	fprintf(fp, " jitter=\"%.3f\"", s.avgjitter);
@@ -1408,7 +1408,7 @@ void do_dump() {
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 				fprintf(fp, " addr=\"%s/%d\"", tmp, i->first.second);
-				fprintf(fp, "\t\t\t\tage=\"%llu\"", (now - i->second.creation) / 1000);
+				fprintf(fp, " age=\"%llu\"\n\t\t\t", (now - i->second.creation) / 1000);
 				dumpStats(fp, i->second.s, i->second.sttl, true);
 				if (i->second.s_ssm.valid) {
 					fprintf(fp, ">\n");
@@ -1453,7 +1453,7 @@ void do_dump() {
 				inet_ntop(AF_INET6, &j->first.first, tmp, sizeof(tmp));
 				fprintf(fp, " addr=\"%s/%d\"", tmp, j->first.second);
 				if (j->second.s.valid) {
-					fprintf(fp, "\t\t\t\tage=\"%u\"", j->second.age);
+					fprintf(fp, " age=\"%u\"\n\t\t\t", j->second.age);
 					dumpStats(fp, j->second.s, i->second.sttl, false);
 				}
 				fprintf(fp, " />\n");
