@@ -133,11 +133,10 @@ sub render_matrix {
 	print "\n";
 
 	foreach $a (keys %adj) {
-		my $id = $ids{$a};
-		if ($id >= 1 and $adj{$a}[IN_EDGE] > 0) {
-			printf("|%-2d.%-12s |",$id,substr(beacon_name($a),0,12));	
+		if (defined $ids{$a} and $ids{$a} > 0 and $adj{$a}[IN_EDGE] > 0) {
+			printf("|%-2d.%-12s |",$ids{$a},substr(beacon_name($a),0,12));	
 			foreach $b (keys %adj) {
-				if ($ids{$b} >= 1 and $adj{$b}[OUT_EDGE] > 0) {
+				if (defined $ids{$b} and $ids{$b} > 1 and $adj{$b}[OUT_EDGE] > 0) {
 					if ($b ne $a and defined($adj{$a}[NEIGH]{$b})) {
 						my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
 						my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};

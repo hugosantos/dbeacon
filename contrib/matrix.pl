@@ -516,12 +516,11 @@ sub render_matrix {
 	print "</tr>\n";
 
 	foreach $a (@sortedkeys) {
-		my $id = $ids{$a};
-		if ($id >= 1 and $adj{$a}[IN_EDGE] > 0) {
+		if (defined $ids{$a} and $ids{$a} > 0 and $adj{$a}[IN_EDGE] > 0) {
 			print '<tr>';
-			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $id, '</b></td>';
+			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
 			foreach $b (@sortedkeys) {
-				if ($ids{$b} >= 1 and $adj{$b}[OUT_EDGE] > 0) {
+				if (defined $ids{$b} and $ids{$b} > 0 and $adj{$b}[OUT_EDGE] > 0) {
 					if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
 						my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
 						my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
