@@ -45,9 +45,27 @@ struct group_source_req {
 
 using namespace std;
 
-/* a simple scheme to identify ip family in a string */
+struct address : sockaddr_storage {
+	address();
 
-int id_family(const char *addr) {
+	sockaddr_in *v4() { return (sockaddr_in *)this; }
+	sockaddr_in6 *v6() { return (sockaddr_in6 *)this; }
+
+	static int family(const char *);
+
+	bool is_multicast() const;
+	bool is_unspecified() const;
+
+	bool is_equal(const address &) const;
+
+	void print(char *, size_t) const;
+};
+
+address::address() {
+	memset(this, 0, sizeof(*this));
+}
+
+int address::family(const char *addr) {
 	if (strchr(addr, ':') != NULL)
 		return AF_INET6;
 	else if (strchr(addr, '.') != NULL)
@@ -55,60 +73,48 @@ int id_family(const char *addr) {
 	return -1;
 }
 
-/* return true if the address is in multicast range */
-
-static inline bool in_is_addr_multicast(struct sockaddr_storage *addr) {
-	if (addr->ss_family == AF_INET6) {
-		struct sockaddr_in6 *sin6src = (struct sockaddr_in6 *)addr;
-		return IN6_IS_ADDR_MULTICAST(&sin6src->sin6_addr);
-	} else if (addr->ss_family == AF_INET) {
-		struct sockaddr_in *sinsrc = (struct sockaddr_in *)addr;
-		return IN_CLASSD(htonl(sinsrc->sin_addr.s_addr));
-	}
+bool address::is_multicast() const {
+	if (ss_family == AF_INET6)
+		return IN6_IS_ADDR_MULTICAST(&((sockaddr_in6 *)this)->sin6_addr);
+	else if (ss_family == AF_INET)
+		return IN_CLASSD(&((sockaddr_in *)this)->sin_addr.s_addr);
 	return false;
 }
 
-bool in_is_addr_unspecified(struct sockaddr_storage *addr) {
-	if(addr->ss_family == AF_INET6) {
-		struct sockaddr_in6 *sin6src = (struct sockaddr_in6 *)addr;
-		return IN6_IS_ADDR_UNSPECIFIED(&sin6src->sin6_addr);
-	} else if(addr->ss_family == AF_INET) {
-		struct sockaddr_in *sinsrc = (struct sockaddr_in *)addr;
-		return sinsrc->sin_addr.s_addr == 0;
-	}
+bool address::is_unspecified() const {
+	if (ss_family == AF_INET6)
+		return IN6_IS_ADDR_UNSPECIFIED(&((sockaddr_in6 *)this)->sin6_addr);
+	else if (ss_family == AF_INET)
+		return ((sockaddr_in *)this)->sin_addr.s_addr == 0;
 	return true;
 }
 
-void print_inaddr(const sockaddr_storage *addr, char *str, int len, bool full) {
+void address::print(char *str, size_t len) const {
 	uint16_t port;
 
-	if (addr->ss_family == AF_INET6) {
-		struct sockaddr_in6 *sin6src = (struct sockaddr_in6 *)addr;
+	if (ss_family == AF_INET6) {
+		struct sockaddr_in6 *sin6src = (struct sockaddr_in6 *)this;
 		inet_ntop(AF_INET6, &sin6src->sin6_addr, str, len);
 		port = ntohs(sin6src->sin6_port);
-	} else if(addr->ss_family == AF_INET) {
-		struct sockaddr_in *sinsrc = (struct sockaddr_in *)addr;
+	} else if (ss_family == AF_INET) {
+		struct sockaddr_in *sinsrc = (struct sockaddr_in *)this;
 		inet_ntop(AF_INET, &sinsrc->sin_addr, str, len);
 		port = ntohs(sinsrc->sin_port);
 	} else {
 		return;
 	}
 
-	if (full) {
-		snprintf(str + strlen(str), len - strlen(str), "/%u", port);
-	}
+	snprintf(str + strlen(str), len - strlen(str), "/%u", port);
 }
 
-static inline bool addr_is_equal(const sockaddr_storage &a1, const sockaddr_storage &a2) {
-	if (a1.ss_family != a2.ss_family)
+bool address::is_equal(const address &a) const {
+	if (ss_family != a.ss_family)
 		return false;
-	if (a1.ss_family == AF_INET6) {
-		return memcmp(&((sockaddr_in6 *)&a1)->sin6_addr, &((sockaddr_in6 *)&a2)->sin6_addr, sizeof(in6_addr)) == 0;
-	} else if (a1.ss_family == AF_INET) {
-		return ((sockaddr_in *)&a1)->sin_addr.s_addr == ((sockaddr_in *)&a2)->sin_addr.s_addr;
-	} else {
-		return false;
-	}
+	if (ss_family == AF_INET6)
+		return memcmp(&((sockaddr_in6 *)this)->sin6_addr, &((sockaddr_in6 *)&a)->sin6_addr, sizeof(in6_addr)) == 0;
+	else if (ss_family == AF_INET)
+		return ((sockaddr_in *)this)->sin_addr.s_addr == ((sockaddr_in *)&a)->sin_addr.s_addr;
+	return false;
 }
 
 /*
@@ -132,9 +138,9 @@ static char beaconName[256];
 static char probeName[256] = "";
 static int mcastInterface = 0;
 static string adminContact;
-static struct sockaddr_storage probeAddr;
-static struct sockaddr_storage beaconUnicastAddr;
-static struct sockaddr_storage ssmProbeAddr;
+static address probeAddr;
+static address beaconUnicastAddr;
+static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
 static int largestSock = 0;
 static fd_set readSet;
@@ -162,10 +168,10 @@ enum {
 	T_SSM_STATS = 'S'
 };
 
-static vector<pair<sockaddr_storage, content_type> > mcastListen;
+static vector<pair<address, content_type> > mcastListen;
 static vector<pair<int, content_type> > mcastSocks;
 
-static vector<sockaddr_storage> redist;
+static vector<address> redist;
 
 enum {
 	REPORT_EVENT,
@@ -182,7 +188,7 @@ enum {
 #define PACKETS_PERIOD 40
 #define PACKETS_VERY_OLD 150
 
-typedef sockaddr_storage beaconSourceAddr;
+typedef address beaconSourceAddr;
 
 struct beaconExternalStats;
 
@@ -193,6 +199,8 @@ struct Stats {
 	uint64_t timestamp, lastupdate;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 	uint8_t rttl;
+
+	void check_validity(uint64_t);
 };
 
 struct beaconMcastState {
@@ -217,7 +225,7 @@ struct beaconSource {
 	bool identified;
 	string name;
 	string adminContact;
-	struct sockaddr_storage addr;
+	address addr;
 
 	uint64_t creation;
 
@@ -255,7 +263,7 @@ struct beaconExternalStats {
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
 static void handle_probe(int, content_type);
-static void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len, bool);
+static void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len, bool);
 static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
@@ -276,11 +284,11 @@ static uint64_t lastDumpBwTS = 0;
 
 static uint64_t get_timestamp();
 
-static int SetupSocket(sockaddr_storage*, bool, bool);
-static int MulticastListen(int, sockaddr_storage *);
+static int SetupSocket(address *, bool, bool);
+static int MulticastListen(int, address *);
 
-static int SSMJoin(int, const struct sockaddr_storage *);
-static int SSMLeave(int, const struct sockaddr_storage *);
+static int SSMJoin(int, const address *);
+static int SSMLeave(int, const address *);
 
 static inline double Rand() {
 	return rand() / (double)RAND_MAX;
@@ -290,8 +298,8 @@ static inline double Exprnd(double mean) {
 	return -mean * log(1 - Rand());
 }
 
-static inline bool operator < (const sockaddr_storage &a1, const sockaddr_storage &a2) {
-	return memcmp(&a1, &a2, sizeof(sockaddr_storage)) < 0;
+static inline bool operator < (const address &a1, const address &a2) {
+	return memcmp(&a1, &a2, sizeof(address)) < 0;
 }
 
 static uint8_t buffer[2048];
@@ -316,29 +324,24 @@ void usage() {
 	fprintf(stderr, "\n");
 }
 
-static bool parse_addr_port(const char *str, sockaddr_storage *addr) {
+static bool parse_addr_port(const char *str, address *addr) {
 	char tmp[64];
-	struct sockaddr_in *sinsrc=(struct sockaddr_in*)addr;
-	struct sockaddr_in6 *sin6src=(struct sockaddr_in6*)addr;
-	int af_family = id_family(str);
 
-	memset(addr, 0, sizeof(sockaddr_storage));
+	int family = address::family(str);
+	if (family == -1)
+		return false;
 
-	if (af_family == AF_INET6) {
-		sin6src->sin6_family = af_family;
-	} else if (af_family == AF_INET) {
-		sinsrc->sin_family = af_family;
-	}
+	addr->ss_family = family;
 
 	strcpy(tmp, str);
 
 	char *p = strchr(tmp, '/');
 	if (p) {
 		char *end;
-		if (af_family == AF_INET6) {
-			sin6src->sin6_port = htons(strtoul(p + 1, &end, 10));
-		} else if (af_family == AF_INET) {
-			sinsrc->sin_port = htons(strtoul(p + 1, &end, 10));
+		if (family == AF_INET6) {
+			addr->v6()->sin6_port = htons(strtoul(p + 1, &end, 10));
+		} else if (family == AF_INET) {
+			addr->v4()->sin_port = htons(strtoul(p + 1, &end, 10));
 		}
 		if (*end)
 			return false;
@@ -347,11 +350,11 @@ static bool parse_addr_port(const char *str, sockaddr_storage *addr) {
 		return false;
 	}
 
-	if (af_family == AF_INET6) {
-		if (inet_pton(af_family, tmp, &sin6src->sin6_addr) <= 0)
+	if (family == AF_INET6) {
+		if (inet_pton(family, tmp, &addr->v6()->sin6_addr) <= 0)
 			return false;
-	} else if (af_family == AF_INET) {
-		if (inet_pton(af_family, tmp, &sinsrc->sin_addr) <= 0)
+	} else if (family == AF_INET) {
+		if (inet_pton(family, tmp, &addr->v4()->sin_addr) <= 0)
 			return false;
 	}
 
@@ -363,16 +366,13 @@ int main(int argc, char **argv) {
 
 	srand(time(NULL));
 
-	memset(&probeAddr, 0, sizeof(probeAddr));
-	memset(&ssmProbeAddr, 0, sizeof(ssmProbeAddr));
-
 	bool dump = false;
 	bool force = false;
 
 	const char *intf = 0;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:b:r:S:l:L:dD:i:hvPfU");
+		res = getopt(argc, argv, "n:a:b:r:S:l:L:dD:i:hvfU");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -402,19 +402,19 @@ int main(int argc, char **argv) {
 				return -1;
 			}
 
-			if (!in_is_addr_multicast(&probeAddr)) {
+			if (!probeAddr.is_multicast()) {
 				fprintf(stderr, "Beacon group address is not a multicast address.\n");
 				return -1;
 			}
 		} else if (res == 'r') {
-			struct sockaddr_storage addr;
+			struct address addr;
 			if (!parse_addr_port(optarg, &addr)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
 			redist.push_back(addr);
 		} else if (res == 'S') {
-			if (!parse_addr_port(optarg, &ssmProbeAddr) || !in_is_addr_multicast(&ssmProbeAddr)) {
+			if (!parse_addr_port(optarg, &ssmProbeAddr) || !ssmProbeAddr.is_multicast()) {
 				fprintf(stderr, "Bad address format for SSM channel.\n");
 				return -1;
 			}
@@ -423,12 +423,12 @@ int main(int argc, char **argv) {
 			if (res == 'D')
 				dumpFile = optarg;
 		} else if (res == 'l' || res == 'L') {
-			struct sockaddr_storage addr;
+			struct address addr;
 			if (!parse_addr_port(optarg, &addr)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
-			if (res == 'L' && !in_is_addr_multicast(&addr)) {
+			if (res == 'L' && !addr.is_multicast()) {
 				fprintf(stderr, "Specified address is not a multicast group.\n");
 				return -1;
 			}
@@ -462,8 +462,8 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	if (!in_is_addr_unspecified(&probeAddr)) {
-		print_inaddr(&probeAddr, sessionName, sizeof(sessionName), true);
+	if (!probeAddr.is_unspecified()) {
+		probeAddr.print(sessionName, sizeof(sessionName));
 
 		if (!force && adminContact.empty()) {
 			fprintf(stderr, "No administration contact supplied.\n");
@@ -478,7 +478,7 @@ int main(int argc, char **argv) {
 
 		redist.push_back(probeAddr);
 
-		if (!in_is_addr_unspecified(&ssmProbeAddr)) {
+		if (ssmProbeAddr.is_unspecified()) {
 			mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
 		}
 	} else {
@@ -487,8 +487,7 @@ int main(int argc, char **argv) {
 
 	FD_ZERO(&readSet);
 
-	sockaddr_storage local;
-	memset(&local, 0, sizeof(local));
+	address local;
 	local.ss_family = probeAddr.ss_family;
 
 	mcastSock = SetupSocket(&local, false, false);
@@ -499,17 +498,17 @@ int main(int argc, char **argv) {
 
 	socklen_t addrlen = sizeof(probeAddr);
 
-	if (connect(mcastSock, (struct sockaddr *)&probeAddr, addrlen) != 0) {
+	if (connect(mcastSock, (sockaddr *)&probeAddr, addrlen) != 0) {
 		perror("Failed to connect multicast socket");
 		return -1;
 	}
 
-	if (getsockname(mcastSock, (struct sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
+	if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
 		perror("getsockname");
 		return -1;
 	}
 
-	for (vector<pair<sockaddr_storage, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
+	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
 		int sock = SetupSocket(&i->first, i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
@@ -667,6 +666,11 @@ void handle_event() {
 	}
 }
 
+void Stats::check_validity(uint64_t now) {
+	if ((now - lastupdate) > 30000)
+		valid = false;
+}
+
 void handle_gc() {
 	Sources::iterator i = sources.begin();
 
@@ -678,13 +682,8 @@ void handle_gc() {
 			remove = true;
 		}
 		if (!remove) {
-			if ((now - i->second.ASM.s.lastupdate) > 30000) {
-				i->second.ASM.s.valid = false;
-			}
-
-			if ((now - i->second.SSM.s.lastupdate) > 30000) {
-				i->second.SSM.s.valid = false;
-			}
+			i->second.ASM.s.check_validity(now);
+			i->second.SSM.s.check_validity(now);
 
 			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
 			while (j != i->second.externalSources.end()) {
@@ -693,12 +692,8 @@ void handle_gc() {
 					j++;
 					i->second.externalSources.erase(k);
 				} else {
-					if ((now - j->second.ASM.lastupdate) > 30000) {
-						j->second.ASM.valid = false;
-					}
-					if ((now - j->second.SSM.lastupdate) > 30000) {
-						j->second.SSM.valid = false;
-					}
+					j->second.ASM.check_validity(now);
+					j->second.SSM.check_validity(now);
 
 					j++;
 				}
@@ -720,12 +715,10 @@ void handle_gc() {
 
 void handle_probe(int sock, content_type type) {
 	int len;
-	struct sockaddr_storage from;
+	address from;
 	struct msghdr msg;
 	struct iovec iov;
 	uint8_t ctlbuf[64];
-
-	memset(&from, 0, sizeof(from));
 
 	msg.msg_name = (char *)&from;
 	msg.msg_namelen = sizeof(from);
@@ -744,7 +737,7 @@ void handle_probe(int sock, content_type type) {
 
 	if (verbose > 3) {
 		char tmp[64];
-		print_inaddr(&from, tmp, sizeof(tmp), true);
+		from.print(tmp, sizeof(tmp));
 		fprintf(stderr, "recvmsg(%s): len = %u\n", tmp, len);
 	}
 
@@ -789,7 +782,7 @@ static inline beaconSource &getSource(const beaconSourceAddr &baddr, const char 
 	if (verbose) {
 		char tmp[64];
 
-		print_inaddr(&baddr, tmp, sizeof(tmp), true);
+		baddr.print(tmp, sizeof(tmp));
 
 		if (name) {
 			fprintf(stderr, "Adding source %s [%s]\n", tmp, name);
@@ -844,7 +837,7 @@ static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 	return true;
 }
 
-void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buff, int len, bool ssm) {
+void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int len, bool ssm) {
 	if (len < 4)
 		return;
 
@@ -889,8 +882,7 @@ void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buf
 				if (hd[1] < blen)
 					continue;
 
-				sockaddr_storage addr;
-				memset(&addr, 0, sizeof(addr));
+				address addr;
 
 				if (hd[0] == T_SOURCE_INFO) {
 					sockaddr_in6 *a6 = (sockaddr_in6 *)&addr;
@@ -927,7 +919,7 @@ void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buf
 				}
 
 				// trigger local SSM join
-				if (!addr_is_equal(addr, beaconUnicastAddr))
+				if (!addr.is_equal(beaconUnicastAddr))
 					getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts).adminContact = stats.contact;
 			}
 		}
@@ -964,7 +956,7 @@ void beaconSource::setName(const string &n) {
 	identified = true;
 }
 
-beaconExternalStats &beaconSource::getExternal(const sockaddr_storage &baddr, uint64_t ts) {
+beaconExternalStats &beaconSource::getExternal(const address &baddr, uint64_t ts) {
 	ExternalSources::iterator k = externalSources.find(baddr);
 	if (k == externalSources.end()) {
 		externalSources.insert(make_pair(baddr, beaconExternalStats()));
@@ -973,7 +965,7 @@ beaconExternalStats &beaconSource::getExternal(const sockaddr_storage &baddr, ui
 		k->second.age = 0;
 
 		char tmp[64];
-		print_inaddr(&baddr, tmp, sizeof(tmp), true);
+		baddr.print(tmp, sizeof(tmp));
 
 		if (verbose)
 			fprintf(stderr, "Adding external source (%s) %s\n", name.c_str(), tmp);
@@ -1239,11 +1231,11 @@ int send_report(bool map) {
 	if (len < 0)
 		return len;
 
-	for (vector<sockaddr_storage>::const_iterator i = redist.begin(); i != redist.end(); i++) {
-		const sockaddr_storage *to = &(*i);
+	for (vector<address>::const_iterator i = redist.begin(); i != redist.end(); i++) {
+		const address *to = &(*i);
 
 		char tmp[64];
-		print_inaddr(to, tmp, sizeof(tmp), true);
+		to->print(tmp, sizeof(tmp));
 
 		if (verbose) {
 			cerr << "Sending Report to " << tmp << endl;
@@ -1315,14 +1307,15 @@ void do_dump() {
 
 	uint64_t now = get_timestamp();
 
-	if (!in_is_addr_unspecified(&probeAddr)) {
-		print_inaddr(&beaconUnicastAddr, tmp, sizeof(tmp), true);
+	if (!probeAddr.is_unspecified()) {
+		beaconUnicastAddr.print(tmp, sizeof(tmp));
+
 		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s\"",
 				beaconName, sessionName, tmp);
 		if (!adminContact.empty())
 			fprintf(fp, " contact=\"%s\"", adminContact.c_str());
 		if (ssmMcastSock) {
-			print_inaddr(&ssmProbeAddr, tmp, sizeof(tmp), true);
+			ssmProbeAddr.print(tmp, sizeof(tmp));
 			fprintf(fp, " ssmgroup=\"%s\"", tmp);
 		}
 		fprintf(fp, " age=\"%llu\" lastupdate=\"0\">\n", (now - startTime) / 1000);
@@ -1330,7 +1323,7 @@ void do_dump() {
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
 			if (i->second.ASM.s.valid && i->second.identified) {
-				print_inaddr(&i->first, tmp, sizeof(tmp), true);
+				i->first.print(tmp, sizeof(tmp));
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
@@ -1365,7 +1358,7 @@ void do_dump() {
 			if (!i->second.adminContact.empty())
 				fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 		}
-		print_inaddr(&i->first, tmp, sizeof(tmp), true);
+		i->first.print(tmp, sizeof(tmp));
 		fprintf(fp, " addr=\"%s\"", tmp);
 		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 		fprintf(fp, " lastupdate=\"%llu\"", (now - i->second.lastevent) / 1000);
@@ -1379,7 +1372,7 @@ void do_dump() {
 				fprintf(fp, " name=\"%s\"", j->second.name.c_str());
 				fprintf(fp, " contact=\"%s\"", j->second.contact.c_str());
 			}
-			print_inaddr(&j->first, tmp, sizeof(tmp), true);
+			j->first.print(tmp, sizeof(tmp));
 			fprintf(fp, " addr=\"%s\"", tmp);
 			fprintf(fp, " age=\"%u\"\n\t\t\t\t", j->second.age);
 			if (j->second.ASM.valid) {
@@ -1441,7 +1434,7 @@ void dumpBigBwStats(int) {
 			bigBytesReceived, bigBytesReceived * 8 / (1000. * diff), bigBytesSent, bigBytesSent * 8 / (1000. * diff));
 }
 
-int MulticastListen(int sock, struct sockaddr_storage *grpaddr) {
+int MulticastListen(int sock, address *grpaddr) {
 	struct group_req grp;
 
 	memset(&grp, 0, sizeof(grp));
@@ -1451,7 +1444,7 @@ int MulticastListen(int sock, struct sockaddr_storage *grpaddr) {
 	return setsockopt(sock, grpaddr->ss_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, MCAST_JOIN_GROUP, &grp, sizeof(grp));
 }
 
-static int SSMJoinLeave(int sock, int type, const struct sockaddr_storage *srcaddr) {
+static int SSMJoinLeave(int sock, int type, const address *srcaddr) {
 	struct group_source_req req;
 	memset(&req, 0, sizeof(req));
 
@@ -1463,28 +1456,23 @@ static int SSMJoinLeave(int sock, int type, const struct sockaddr_storage *srcad
 	return setsockopt(sock, IPPROTO_IPV6, type, &req, sizeof(req));
 }
 
-int SSMJoin(int sock, const struct sockaddr_storage *srcaddr) {
+int SSMJoin(int sock, const address *srcaddr) {
 	return SSMJoinLeave(sock, MCAST_JOIN_SOURCE_GROUP, srcaddr);
 }
 
-int SSMLeave(int sock, const struct sockaddr_storage *srcaddr) {
+int SSMLeave(int sock, const address *srcaddr) {
 	return SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, srcaddr);
 }
 
-int SetupSocket(sockaddr_storage *addr, bool needTSHL, bool ssm) {
+int SetupSocket(address *addr, bool needTSHL, bool ssm) {
 	if (verbose) {
 		char tmp[64];
-		print_inaddr(addr, tmp, sizeof(tmp), true);
+		addr->print(tmp, sizeof(tmp));
 		fprintf(stderr, "SetupSocket(%s)\n", tmp);
 	}
 
-	struct sockaddr_in *sinsrc;
-	struct sockaddr_in6 *sin6src;
 	int af_family = addr->ss_family;
 	int level = af_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
-
-	sinsrc = (struct sockaddr_in *)addr;
-	sin6src = (struct sockaddr_in6 *)addr;
 
 	int sock = socket(af_family, SOCK_DGRAM, 0);
 	if (sock < 0) {
@@ -1499,7 +1487,7 @@ int SetupSocket(sockaddr_storage *addr, bool needTSHL, bool ssm) {
 		return -1;
 	}
 
-	if (bind(sock, (struct sockaddr *)addr, af_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in)) != 0) {
+	if (bind(sock, (sockaddr *)addr, af_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in)) != 0) {
 		perror("Failed to bind multicast socket");
 		return -1;
 	}
@@ -1530,19 +1518,10 @@ int SetupSocket(sockaddr_storage *addr, bool needTSHL, bool ssm) {
 		return -1;
 	}
 
-	if (af_family == AF_INET) {
-		if (IN_CLASSD(htonl(sinsrc->sin_addr.s_addr))){
-			if (MulticastListen(sock, addr) != 0) {
-				perror("Failed to join multicast group");
-				return -1;
-			}
-		}
-	} else if (af_family == AF_INET6) {
-		if (!ssm && IN6_IS_ADDR_MULTICAST(&sin6src->sin6_addr)) {
-			if (MulticastListen(sock, addr) != 0) {
-				perror("Failed to join multicast group");
-				return -1;
-			}
+	if (!ssm && addr->is_multicast()) {
+		if (MulticastListen(sock, addr) != 0) {
+			perror("Failed to join multicast group");
+			return -1;
 		}
 	}
 
