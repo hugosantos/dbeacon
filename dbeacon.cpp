@@ -562,7 +562,7 @@ static int send_count = 0;
 static int send_ssm_count = 0;
 
 uint32_t timeFact(int val, bool random) {
-	return (uint32_t) (random ? ceil(Exprnd(beacInt) * 1000) : (beacInt * val * 1000));
+	return (uint32_t) ((random ? ceil(Exprnd(beacInt * val)) : (beacInt * val)) * 1000);
 }
 
 void handle_event() {
@@ -610,13 +610,13 @@ void handle_event() {
 	} else if (t.type == SSM_SENDING_EVENT && send_ssm_count == NEW_BEAC_PCOUNT) {
 		insert_event(WILLSEND_SSM_EVENT, timeFact(1, true));
 	} else if (t.type == REPORT_EVENT) {
-		insert_event(REPORT_EVENT, timeFact(2, true));
+		insert_event(REPORT_EVENT, timeFact(2));
 	} else if (t.type == SSM_REPORT_EVENT) {
-		insert_event(SSM_REPORT_EVENT, timeFact(3, true));
+		insert_event(SSM_REPORT_EVENT, timeFact(3));
 	} else if (t.type == MAP_REPORT_EVENT) {
-		insert_event(MAP_REPORT_EVENT, timeFact(6, true));
+		insert_event(MAP_REPORT_EVENT, timeFact(6));
 	} else if (t.type == WEBSITE_REPORT_EVENT) {
-		insert_event(WEBSITE_REPORT_EVENT, timeFact(24, true));
+		insert_event(WEBSITE_REPORT_EVENT, timeFact(24));
 	} else {
 		insert_sorted_event(t);
 	}
