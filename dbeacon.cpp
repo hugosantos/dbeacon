@@ -978,6 +978,7 @@ beaconExternalStats &beaconSource::getExternal(const sockaddr_storage &baddr, ui
 	beaconExternalStats &stats = k->second;
 
 	stats.lastupdate = ts;
+	stats.age = 0;
 
 	return stats;
 }
