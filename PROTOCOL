@@ -1,0 +1,97 @@
+Below is described the current dbeacon protocol version 1.
+
+All dbeacon messages have a common header of 4 bytes. This header includes a
+magic value, the protocol version and message type.
+
+-------------------------
+|  0  |  1  |  2  |  3  |
+-------------------------
+|   0xbeac  |  1  |  T  |
+-------------------------
+
+There are two types of messages: Probes (0) and Reports (1).
+
+Probes
+------
+
+Probes are very simple packets which are used to gather statistics about hosts.
+
+-------------------------
+|  0  |  1  |  2  |  3  |
+-------------------------
+|   0xbeac  |  1  |  0  |
+-------------------------
+|    sequence number    |
+-------------------------
+|       timestamp       |
+-------------------------
+
+Reports
+-------
+
+Reports are used to report local stats to other beacons, advertise known
+addr<->name mappings, etc.
+
+-------------------------
+|  0  |  1  |  2  |  3  |
+-------------------------
+|   0xbeac  |  1  |  1  |
+-------------------------
+| TTL |
+-------
+
+Following this initial header, several blocks may follow, encoded using a simple
+TLV format. TTL is the original TTL when the report was sent.
+
+Each TLV block is started by the TLV header, which consists of 2 bytes, one for
+the block type, the second for the block length. The following types are
+defined as of current date:
+
+enum {
+	T_BEAC_NAME = 'n',
+	T_ADMIN_CONTACT = 'a',
+	T_SOURCE_INFO = 'I',
+	T_ASM_STATS = 'A',
+	T_SSM_STATS = 'S'
+};
+
+T_BEAC_NAME and T_ADMIN_CONTACT are strings, non-zero terminated.
+
+T_SOURCE_INFO has the following format:
+
+-------------------------
+|  0  |  1  |  2  |  3  |
+-------------------------
+|       source addr     |
+-------------------------
+|         (cont)        |
+-------------------------
+|         (cont)        |
+-------------------------
+|         (cont)        |
+-------------------------
+|   port    |
+-------------
+
+Following addr/port, other TLVs may be encoded inside the T_SOURCE_INFO. These
+include T_BEAC_NAME, T_ADMIN_CONTACT and T_{ASM,SSM}_STATS.
+
+T_ASM_STATS and T_SSM_STATS have the same format, only different types:
+
+-------------------------
+|  0  |  1  |  2  |  3  |
+-------------------------
+|     lasttimestamp     |
+-------------------------
+|          age          |
+-------------------------
+| TTL |    avgdelay     |
+-------------------------
+| ... |    avgjitter    |
+-------------------------
+| ... | loss| dup | ooo |
+-------------------------
+
+avgdelay and avgjitter are encoded using IEEE 754 single floating point format.
+loss, dup and ooo have values between 0 and 255.
+
