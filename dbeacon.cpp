@@ -202,6 +202,7 @@ static int largestSock = 0;
 static fd_set readSet;
 static int verbose = 0;
 static bool dumpBwReport = false;
+static string launchSomething;
 
 static double beacInt = 5.;
 
@@ -370,9 +371,13 @@ void usage() {
 	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
 	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
+	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename.\n");
 	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
 	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
 	fprintf(stderr, "\n");
+}
+
+void fixDumpFile() {
 }
 
 int main(int argc, char **argv) {
@@ -394,7 +399,7 @@ int main(int argc, char **argv) {
 	const char *intf = 0;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S:dD:l:W:vUhf");
+		res = getopt(argc, argv, "n:a:i:b:r:S:dD:l:L:W:vUhf");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -440,6 +445,8 @@ int main(int argc, char **argv) {
 				return -1;
 			}
 			mcastListen.push_back(make_pair(addr, NREPORT));
+		} else if (res == 'L') {
+			launchSomething = optarg;
 		} else if (res == 'W') {
 			int type = T_WEBSITE_GENERIC;
 			if (strncmp(optarg, "lg$", 3) == 0) {
@@ -465,6 +472,8 @@ int main(int argc, char **argv) {
 			break;
 		}
 	}
+
+	fixDumpFile();
 
 	if (intf) {
 		mcastInterface = if_nametoindex(intf);
@@ -1366,18 +1375,11 @@ void dumpStats(FILE *fp, const Stats &s, uint64_t now, int sttl, bool diff) {
 	fprintf(fp, " dup=\"%.3f\"", s.avgdup);
 }
 
+static void doLaunchSomething();
+
 void do_dump() {
-	char tmpd[256], tmpn[256];
-
-	strncpy(tmpd, dumpFile.c_str(), sizeof(tmpd));
-	strncpy(tmpn, dumpFile.c_str(), sizeof(tmpn));
-
-	char *basen = basename(tmpn);
-	char *dirn = dirname(tmpd);
-
-	string tmpf = dirn;
-	tmpf += "/.working.";
-	tmpf += basen;
+	string tmpf = dumpFile;
+	tmpf += ".working";
 
 	FILE *fp = fopen(tmpf.c_str(), "w");
 	if (!fp)
@@ -1494,6 +1496,16 @@ void do_dump() {
 	fclose(fp);
 
 	rename(tmpf.c_str(), dumpFile.c_str());
+
+	if (!launchSomething.empty())
+		doLaunchSomething();
+}
+
+void doLaunchSomething() {
+	pid_t p = fork();
+	if (p == 0) {
+		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile.c_str());
+	}
 }
 
 void do_bw_dump(bool big) {
