@@ -2,6 +2,7 @@
 #include "protocol.h"
 #include <math.h>
 #include <netinet/in.h>
+#include <stdio.h>
 
 using namespace std;
 
