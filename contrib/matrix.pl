@@ -596,7 +596,7 @@ sub render_matrix {
 	print "</table>\n";
 
 	if (scalar(@localnoreceive) > 0) {
-		print "<h4 style=\"margin-bottom: 0\">The following beacons are not being received locally</h4>\n";
+		print "<h4 style=\"margin-bottom: 0\">The following beacons are not being received locally via ASM</h4>\n";
 		print "<ul>\n";
 		foreach $a (@localnoreceive) {
 			my $id = $g->get_vertex_attribute($a, "id");
