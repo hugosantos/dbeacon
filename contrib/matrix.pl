@@ -570,7 +570,7 @@ sub render_matrix {
 					} else {
 						push (@repnosources, $c);
 					}
-				} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) < 0.1 and $adj{$c}[IN_EDGE] < 6) {
+				} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) < 0.2 and $adj{$c}[IN_EDGE] < 6) {
 					push (@lowrx, $c);
 				} else {
 					push (@rx, $c);
