@@ -495,6 +495,8 @@ sub render_matrix {
 	my @problematic = ();
 	my @warmingup = ();
 	my @localnoreceive = ();
+	my @lowrx = ();
+	my @rx = ();
 
 	my %ids;
 
@@ -519,69 +521,100 @@ sub render_matrix {
 			$ids{$c} = $i;
 			$i++;
 
-			push (@localnoreceive, $c) if not $adj{$c}[IN_EDGE];
+			if (not $adj{$c}[IN_EDGE]) {
+				push (@localnoreceive, $c);
+			} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) < 0.1 and $adj{$c}[IN_EDGE] < 6) {
+				push (@lowrx, $c);
+			} else {
+				push (@rx, $c);
+			}
 		}
 	}
 
 	print "</tr>\n";
 
-	foreach $a (@sortedkeys) {
-		if ($ids{$a} > 0 and $adj{$a}[IN_EDGE] > 0) {
-			print '<tr>';
-			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
-			foreach $b (@sortedkeys) {
-				if ($ids{$b} > 0 and $adj{$b}[OUT_EDGE] > 0) {
-					if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
-						my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
-						my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
+	foreach $a (@rx) {
+		print '<tr>';
+		print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
+		foreach $b (@sortedkeys) {
+			if ($ids{$b} > 0 and $adj{$b}[OUT_EDGE] > 0) {
+				if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
+					my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
+					my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
 
-						if ($attname ne 'ttl') {
-							$txt = sprintf "%.1f", $txt if defined $txt;
-							$txtssm = sprintf "%.1f", $txtssm if defined $txtssm;
-						}
-
-						if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
-							my $whattype = 'asm';
-							my $cssclass = 'fulladjacent';
-							if ($attwhat eq 'ssmorasm') {
-								if (defined $txtssm) {
-									$txt = $txtssm;
-									$whattype = 'ssm';
-								} elsif (defined $txt) {
-									$cssclass = 'nossm_fulladjacent';
-									$txt = "<i>$txt</i>";
-								}
-							}
-
-							if (not defined $txt) {
-								print '<td ', $what_td, ' class="blackhole">XX</td>';
-							} else {
-								print '<td class="', $cssclass, '">';
-								make_history_link($b, $a, $whattype, $txt, 'historyurl');
-								print '</td>';
-							}
-						} else {
-							if (not defined $txt and not defined $txtssm) {
-								print '<td ', $what_td, ' class="blackhole">XX</td>';
-							} else {
-								make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
-								make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
-							}
-						}
-					} elsif ($a eq $b) {
-						print '<td ', $what_td, ' class="corner">&nbsp;</td>';
-					} else {
-						print '<td ', $what_td, ' class="blackhole">XX</td>';
+					if ($attname ne 'ttl') {
+						$txt = sprintf "%.1f", $txt if defined $txt;
+						$txtssm = sprintf "%.1f", $txtssm if defined $txtssm;
 					}
+
+					if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
+						my $whattype = 'asm';
+						my $cssclass = 'fulladjacent';
+						if ($attwhat eq 'ssmorasm') {
+							if (defined $txtssm) {
+								$txt = $txtssm;
+								$whattype = 'ssm';
+							} elsif (defined $txt) {
+								$cssclass = 'nossm_fulladjacent';
+								$txt = "<i>$txt</i>";
+							}
+						}
+
+						if (not defined $txt) {
+							print '<td ', $what_td, ' class="blackhole">XX</td>';
+						} else {
+							print '<td class="', $cssclass, '">';
+							make_history_link($b, $a, $whattype, $txt, 'historyurl');
+							print '</td>';
+						}
+					} else {
+						if (not defined $txt and not defined $txtssm) {
+							print '<td ', $what_td, ' class="blackhole">XX</td>';
+						} else {
+							make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
+							make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
+						}
+					}
+				} elsif ($a eq $b) {
+					print '<td ', $what_td, ' class="corner">&nbsp;</td>';
+				} else {
+					print '<td ', $what_td, ' class="blackhole">XX</td>';
 				}
 			}
-			print '</tr>', "\n";
 		}
+		print '</tr>', "\n";
 	}
 	print '</table>', "\n";
 
+	if (scalar(@lowrx) > 0) {
+		print '<h4 style="margin-bottom: 0">Beacons that only receive a small number of other beacons</h4>', "\n";
+		print '<ul>', "\n";
+		foreach $a (@lowrx) {
+			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+
+			print '<ul>Receives:<ul>', "\n";
+
+			foreach $b (keys %{$adj{$a}[NEIGH]}) {
+				print '<li>';
+				if ($ids{$b}) {
+					print '<b>S', $ids{$b}, '</b> ', beacon_name($b);
+				} else {
+					print '<span class="beacon">', $b;
+					print ' (', $adj{$b}[NAME], ')' if $adj{$b}[NAME];
+					print '</span>';
+				}
+				print '</li>', "\n";
+			}
+
+			print '</ul></ul>';
+
+			print '</li>', "\n";
+		}
+		print '</ul>', "\n";
+	}
+
 	if (scalar(@localnoreceive) > 0) {
-		print '<h4 style="margin-bottom: 0">The following beacons are not being received locally via ASM</h4>', "\n";
+		print '<h4 style="margin-bottom: 0">Beacons not being received locally via ASM</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@localnoreceive) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
@@ -592,7 +625,7 @@ sub render_matrix {
 	}
 
 	if (scalar(@warmingup) > 0) {
-		print '<h3>Beacons warming up (age < 30 secs)</h3>', "\n";
+		print '<h4>Beacons warming up (age < 30 secs)</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@warmingup) {
 			print '<li>', $a;
@@ -603,7 +636,7 @@ sub render_matrix {
 	}
 
 	if (scalar(@problematic) ne 0) {
-		print '<h3>Beacons with no connectivity</h3>', "\n";
+		print '<h4>Beacons with no connectivity</h4>', "\n";
 		print '<ul>', "\n";
 		my $len = scalar(@problematic);
 		for (my $j = 0; $j < $len; $j++) {
