@@ -1,0 +1,38 @@
+- What does 'dbeacon' mean?
+
+- Why should i run 'dbeacon'?
+
+- I googled and found another beacon at NLAR, how does dbeacon differ from it?
+
+- Why isn't dbeacon using RTP/RTCP?
+
+- What is ASM? and SSM?
+
+- Do i need to be 'root' to run dbeacon?
+
+- Can i deploy several dbeacons in the same host?
+
+- Where should i deploy dbeacon in my network?
+
+- How can i make my flag to show up in the matrix page?
+
+- I read the usage of 'ntpd' is recommended, why is that?
+
+- How do i setup the history feature?
+
+- How much disk space is required for the history feature?
+
+- My beacon is in the 'Beacons that report no received sources' list.
+  What does it mean and how can i fix it?
+
+- How much bandwidth will dbeacon consume?
+
+- Is IPv4 supported?
+
+- Is my Operating System supported?
+
+- Where can i find a dbeacon Debian package?
+
+- Why are some matrix cells painted in a lighter green than others?
+
+
