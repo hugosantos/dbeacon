@@ -15,13 +15,12 @@ Frequently Asked Questions (FAQ)
   * Why doesn't dbeacon use RTP/RTCP?
 
     Historically, dbeacon was designed to be compatible with the DAST/NLANR
-    java beacon version which was not relying on RTP/RTCP at all. After
-    dropping down the compatibility we thought to use RTCP to gather various
-    multicast figures because it would have been possible to plug dbeacon on
-    any RTP/RTCP application. It has been finally decided to design a specific
-    protocol mainly because dbeacon is a specific application and do not
-    require a general protocol like RTP/RTCP. Moreover, RTCP do no support SSM
-    natively, so a new protocol has been designed so support it.
+    java beacon version which doesn't use RTP/RTCP. After dropping down the
+    compatibility we considered implementing RTCP to gather various multicast
+    figures because it would have been possible to plug dbeacon to any RTP/RTCP
+    application. Finally we decided that dbeacon was a specialized application
+    and to implement additional features such as using SSM would require a new
+    protocol.
 
   * What is ASM? and SSM?
 
@@ -37,18 +36,18 @@ Frequently Asked Questions (FAQ)
   * Can i deploy several dbeacons in the same host?
 
     Yes, you may run as many dbeacons as your OS has resources for. A dbeacon
-    is identified by a tuple (source address/source port), and multiple dbeacon
-    running on the same machine are differenciated by their source port. Be
-    carefull to set MULTICAST_LOOP to 1 if you want to test multicast
-    connectivity between processs on the same host.
+    is identified by a tuple (source address/source port), and multiple
+    dbeacons running on the same machine are differenciated by their source
+    port.
 
   * Where should i deploy dbeacon in my network?
 
-    The rule is simple : where you want to check your multicast connectivity.
-    If you got 5 IP subnetwork and that they are all multicast enabled, it make
-    senses to deploy a beacon on each subnetwork. Also, be carefull of IGMP/MLD
-    snooping issues : you may encounter multicast problems with IGMP/MLD
-    snooping and thus deploy a beacon on each swichted LAN of your network.
+    The rule is simple: wherever you want to check your multicast connectivity
+    status. If you have 5 multicast enabled subnetworks it makes sense to
+    deploy a dbeacon on each subnetwork. Also, be carefull of IGMP/MLD snooping
+    issues: you may encounter multicast problems with IGMP/MLD snooping and in
+    those cases should deploy a dbeacon on each switched segment of your
+    network.
 
   * How can i make my flag show up in the matrix page?
 
@@ -65,17 +64,23 @@ Frequently Asked Questions (FAQ)
 
   * How do i setup the history feature?
 
-    History feature depends on rrd (Round Robin Database) feature implemented
-    as a perl module. So before enabling it in the matrix.conf file, be sure to
-    have it installed. (perl -MCPAN -e 'install RRD')
+    The history feature depends on the RRDs (Round Robin Database) perl module.
+    So before setting it up you must be sure have this module available (if you
+    are running Debian you may install librrds-perl, if not you may install it
+    from rrdtool's source code.
+
+    After RRDs is installed, set $history_enabled to 1 in your matrix.conf and
+    either run matrix.pl periodicly via dbeacon, using the parameters -I 60 -L
+    contrib/matrix.pl or from cron.
 
   * How much disk space is required for the history feature?
 
-    The History feature may take a lots of disk space, depending of the number
-    of source you are backlogging. The current implementation takes
-    approximatively 30Mb per tuple (source,destination), so beware that for 10
-    source you would have 300Mb to store. The good news is that the disk space
-    used don't vary with time as it is a round robin database.
+    The History feature may take a lot of disk space, depending of the number
+    of sources you are storing data for. The current implementation takes
+    approximatively 30Mb per tuple (source, destination), so beware that for 10
+    sources it would take 300Mb of disk space. This space however is constant
+    and doesn't increase with time due to the nature of the Round Robin
+    Database.
 
   * May i run a matrix page without history support?
 
@@ -96,7 +101,7 @@ Frequently Asked Questions (FAQ)
     It depends on the current number of beacons in the group. Due to adaptive
     intervals 'dbeacon' usually consumes bandwidth in a direct proportion to
     the number of beacons. For instance, for 14 beacons, it usualy consumes
-    around 10-12Kb/s if SSM is being used.
+    around 10Kb/s if SSM is being used.
 
   * Is IPv4 supported?
 
@@ -105,9 +110,11 @@ Frequently Asked Questions (FAQ)
   * Is my Operating System supported?
 
     It depends on what Operating System you run. At this moment dbeacon is
-    supported in Linux 2.4 and 2.6, with SSM support in versions >= 2.6.11. BSD
-    variants are also supported (you need the latest KAME kit to support SSM
-    though).
+    known to work in the following systems:
+
+      + Linux 2.4 and 2.6, with SSM support in versions >= 2.6.11.
+      + BSD variants (you need the latest KAME kit to support SSM).
+      + Solaris (no SSM support)
 
   * Where can i find a dbeacon Debian package?
 
@@ -126,7 +133,13 @@ Frequently Asked Questions (FAQ)
 
   * What do 'TTL', 'Loss', 'Delay' and 'Jitter' in the matrix page mean?
 
-    TODO
+    These are the various values gathered by the multicast beacon. The TTL is
+    derived from the Time to live value (Hop count) of the packets and
+    represents the number of multicast routers separating two specific sources.
+    The Loss represents the mean percentage of packet loss between two sources.
+    The Delay is a distance between two sources but expressed in miliseconds,
+    it represents the time for a packet to travel from one source to another.
+    Jitter represents the additionnal interarrival time between each probe.
 
   * Why are some matrix cells painted in a lighter green than others?
 
@@ -178,4 +191,8 @@ Frequently Asked Questions (FAQ)
       + http://www.abilene.iu.edu/mccook.html
       + http://archive.dante.net/nep/GEANT-MULTICAST/stepbystep.html
       + http://www.ipv6style.jp/en/tech/20041014/index.shtml
+
+-------------------------------------------------------------------------------
+
+                                     $Id$
 
