@@ -27,6 +27,8 @@ if (not $attname) {
 	$attname = "ttl";
 }
 
+my $atthideinfo = $page->param('hideinfo');
+
 my $sessiongroup;
 my $ssm_sessiongroup;
 
@@ -135,15 +137,39 @@ switch ($attname)
 }
 
 my $url = $page->script_name();
+my $hideatt;
 
-print "<p><b>Parameters:</b> [<a href=\"$url?att=ttl\">TTL</a>] [<a href=\"$url?att=loss\">Loss</a>] [<a href=\"$url?att=delay\">Delay</a>] [<a href=\"$url?att=jitter\">Jitter</a>]</p>\n";
+if ($atthideinfo) {
+	$hideatt = "hideinfo=1&";
+}
+
+my @options = ("ttl", "loss", "delay", "jitter");
+my @options_name = ("TTL", "Loss", "Delay", "Jitter");
+
+my $options_len = scalar(@options);
+my $i;
+
+print "<p><b>Parameters:</b>";
+for ($i = 0; $i < $options_len; $i++) {
+	my $att = $options[$i];
+	my $attname = $options_name[$i];
+	print " [<a href=\"$url?$hideatt" . "att=$att\">$attname</a>]";
+}
+
+if (not $atthideinfo) {
+	print " [<a href=\"$url?hideinfo=1&att=$attname\">Hide Source Info</a>]";
+} else {
+	print " [<a href=\"$url?hideinfo=0&att=$attname\">Show Source Info</a>]";
+}
+
+print "</p>\n";
 
 print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adj\">\n";
 
 print "<tr>";
 print "<td></td>";
 my $c;
-my $i = 1;
+$i = 1;
 my @problematic = ();
 my @warmingup = ();
 
@@ -213,6 +239,7 @@ print "</table>\n";
 
 print "<br />\n";
 
+if (not $atthideinfo) {
 print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
 print "<tr><td></td><td><b>Age</b></td><td><b>Source Address/Port</b></td><td><b>Admin Contact</b></td><td><b>W</b></td></tr>";
@@ -255,6 +282,7 @@ foreach $a (@V) {
 print "</table>\n";
 
 print "<br />\n";
+}
 
 if (scalar(@warmingup) > 0) {
 	print "<h3>Beacons warming up (age < 30 secs)</h3>\n";
