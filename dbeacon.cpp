@@ -675,7 +675,7 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 			stats.lastlocalupdate = recvdts;
 
 			stats.timestamp = ntohl(*(uint32_t *)ptr);
-			stats.age = ntohl(*(uint32_t *)(ptr + 4));
+			stats.age = ntohl(*((((uint32_t *)ptr)+1)));
 			stats.ttl = ptr[8];
 			tmp = ntohl(*(uint32_t *)(ptr + 9));
 			stats.avgdelay = *(float *)&tmp;
@@ -1162,8 +1162,8 @@ void do_dump() {
 			fprintf(fp, "\t\t\t<source");
 			fprintf(fp, " name=\"%s\"", j->first.c_str());
 			if (newProtocol) {
-				fprintf(fp, " ttl=\"%i\"", j->second.ttl);
-				fprintf(fp, " age=\"%llu\"", j->second.age);
+				fprintf(fp, " ttl=\"%u\"", j->second.ttl);
+				fprintf(fp, " age=\"%u\"", j->second.age);
 			}
 			fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
 			fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
