@@ -509,7 +509,12 @@ int main(int argc, char **argv) {
 			mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
 		}
 	} else {
-		strcpy(sessionName, beaconName);
+		if (mcastListen.empty()) {
+			fprintf(stderr, "Nothing to do, check `dbeacon -h`.\n");
+			return -1;
+		} else {
+			strcpy(sessionName, beaconName);
+		}
 	}
 
 	FD_ZERO(&readSet);
