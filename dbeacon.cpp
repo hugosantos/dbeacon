@@ -45,6 +45,9 @@ struct group_source_req {
 
 using namespace std;
 
+#define NEW_BEAC_PCOUNT	10
+#define NEW_BEAC_VER	1
+
 struct address : sockaddr_storage {
 	address();
 
@@ -62,6 +65,189 @@ struct address : sockaddr_storage {
 
 	void print(char *, size_t) const;
 };
+
+enum content_type {
+	NPROBE,
+	NSSMPROBE,
+	NREPORT
+};
+
+// Protocol TLV types
+enum {
+	T_BEAC_NAME = 'n',
+	T_ADMIN_CONTACT = 'a',
+	T_SOURCE_INFO_IPv4 = 'i',
+	T_SOURCE_INFO = 'I',
+	T_ASM_STATS = 'A',
+	T_SSM_STATS = 'S',
+
+	T_WEBSITE_GENERIC = 'G',
+	T_WEBSITE_MATRIX = 'M',
+	T_WEBSITE_LG = 'L',
+
+	T_LEAVE = 'Q'
+};
+
+// Timer Events
+enum {
+	GARBAGE_COLLECT_EVENT,
+	DUMP_EVENT,
+	DUMP_BW_EVENT,
+	DUMP_BIG_BW_EVENT,
+
+	SENDING_EVENT,
+	WILLSEND_EVENT,
+
+	REPORT_EVENT = 'R',
+	MAP_REPORT_EVENT,
+	WEBSITE_REPORT_EVENT
+};
+
+// Report types
+enum {
+	// This must match the above value
+	STATS_REPORT = 'R',
+	MAP_REPORT,
+	WEBSITE_REPORT,
+	LEAVE_REPORT
+};
+
+typedef address beaconSourceAddr;
+struct beaconExternalStats;
+
+#define PACKETS_PERIOD 40
+#define PACKETS_VERY_OLD 150
+
+struct Stats {
+	Stats() : valid(false) {}
+
+	bool valid;
+	uint64_t timestamp, lastupdate;
+	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
+	uint8_t rttl;
+
+	void check_validity(uint64_t);
+};
+
+struct beaconExternalStats {
+	beaconExternalStats() : identified(false) {}
+
+	uint64_t lastupdate;
+	uint32_t age;
+
+	Stats ASM, SSM;
+
+	bool identified;
+	string name, contact;
+};
+
+struct beaconMcastState {
+	uint32_t lastseq;
+
+	uint32_t packetcount, packetcountreal;
+	uint32_t pointer;
+
+	int lastdelay, lastjitter, lastloss, lastdup, lastooo;
+
+	Stats s;
+
+	uint32_t cacheseqnum[PACKETS_PERIOD+1];
+
+	void refresh(uint32_t, uint64_t);
+	void update(uint8_t, uint32_t, uint64_t, uint64_t);
+};
+
+typedef map<int, string> WebSites;
+
+struct beaconSource {
+	beaconSource();
+
+	bool identified;
+	string name;
+	string adminContact;
+	address addr;
+
+	uint64_t creation;
+
+	int sttl;
+
+	uint64_t lastevent;
+
+	beaconMcastState ASM, SSM;
+
+	void setName(const string &);
+	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
+
+	typedef map<beaconSourceAddr, beaconExternalStats> ExternalSources;
+	ExternalSources externalSources;
+
+	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
+
+	WebSites webSites;
+};
+
+typedef map<beaconSourceAddr, beaconSource> Sources;
+
+static Sources sources;
+
+static char sessionName[256] = "";
+static char beaconName[256];
+static int mcastInterface = 0;
+static string adminContact;
+static address probeAddr;
+static address beaconUnicastAddr;
+static address ssmProbeAddr;
+static int mcastSock, ssmMcastSock = 0;
+static int largestSock = 0;
+static fd_set readSet;
+static int verbose = 0;
+static bool dumpBwReport = false;
+
+static double beacInt = 5.;
+
+static uint64_t startTime = 0;
+
+static string dumpFile = "dump.xml";
+
+static vector<pair<address, content_type> > mcastListen;
+static vector<pair<int, content_type> > mcastSocks;
+
+static WebSites webSites;
+
+static vector<address> redist;
+
+static uint32_t bytesReceived = 0;
+static uint32_t bytesSent = 0;
+
+static uint64_t bigBytesReceived = 0;
+static uint64_t bigBytesSent = 0;
+static uint64_t lastDumpBwTS = 0;
+
+static void next_event(struct timeval *);
+static void insert_event(uint32_t, uint32_t);
+static void handle_probe(int, content_type);
+static void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len, bool);
+static void handle_mcast(int, content_type);
+static void handle_event();
+static void handle_gc();
+static int send_nprobe();
+static int send_report(int);
+static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
+
+static void do_dump();
+static void do_bw_dump(bool);
+static void dumpBigBwStats(int);
+static void sendLeaveReport(int);
+
+static uint64_t get_timestamp();
+
+static beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now);
+static void removeSource(const beaconSourceAddr &baddr, bool);
+
+static int SetupSocket(address *, bool, bool);
+static int MulticastListen(int, address *);
+static int SSMJoin(int, const address *);
+static int SSMLeave(int, const address *);
 
 address::address() {
 	memset(this, 0, sizeof(*this));
@@ -156,200 +342,6 @@ bool address::is_equal(const address &a) const {
 	return false;
 }
 
-/*
- * The new beacon protocol is very simple. Consisted of 2 types of messages:
- *  Probes and Reports
- * The smaller and more frequent are Probes, which consist only of a sequence
- * number and a timestamp. Report messages include beacon info, TTL info and
- * local beacon state (known sources and stats)
- *
- * One of the problems with the original protocol was the high usage of
- * bandwidth. In the new protocol, a burst of Probes (10 pps) are sent each
- * X seconds. X follows a exponential distribution with mean 5 seconds.
- *
- */
-
-#define NEW_BEAC_PCOUNT	10
-#define NEW_BEAC_VER	1
-
-static char sessionName[256] = "";
-static char beaconName[256];
-static int mcastInterface = 0;
-static string adminContact;
-static address probeAddr;
-static address beaconUnicastAddr;
-static address ssmProbeAddr;
-static int mcastSock, ssmMcastSock = 0;
-static int largestSock = 0;
-static fd_set readSet;
-static int verbose = 0;
-static bool dumpBwReport = false;
-
-static double beacInt = 5.;
-
-static uint64_t startTime = 0;
-
-static string dumpFile = "dump.xml";
-
-enum content_type {
-	NPROBE,
-	NSSMPROBE,
-	NREPORT
-};
-
-enum {
-	T_BEAC_NAME = 'n',
-	T_ADMIN_CONTACT = 'a',
-	T_SOURCE_INFO_IPv4 = 'i',
-	T_SOURCE_INFO = 'I',
-	T_ASM_STATS = 'A',
-	T_SSM_STATS = 'S',
-
-	T_WEBSITE_GENERIC = 'G',
-	T_WEBSITE_MATRIX = 'M',
-	T_WEBSITE_LG = 'L',
-
-	T_LEAVE = 'Q'
-};
-
-static vector<pair<address, content_type> > mcastListen;
-static vector<pair<int, content_type> > mcastSocks;
-
-typedef map<int, string> WebSites;
-static WebSites webSites;
-
-static vector<address> redist;
-
-enum {
-	GARBAGE_COLLECT_EVENT,
-	DUMP_EVENT,
-	DUMP_BW_EVENT,
-	DUMP_BIG_BW_EVENT,
-
-	SENDING_EVENT,
-	WILLSEND_EVENT,
-
-	REPORT_EVENT = 'R',
-	MAP_REPORT_EVENT,
-	WEBSITE_REPORT_EVENT
-};
-
-enum {
-	// This must match the above value
-	STATS_REPORT = 'R',
-	MAP_REPORT,
-	WEBSITE_REPORT,
-	LEAVE_REPORT
-};
-
-#define PACKETS_PERIOD 40
-#define PACKETS_VERY_OLD 150
-
-typedef address beaconSourceAddr;
-
-struct beaconExternalStats;
-
-struct Stats {
-	Stats() : valid(false) {}
-
-	bool valid;
-	uint64_t timestamp, lastupdate;
-	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
-	uint8_t rttl;
-
-	void check_validity(uint64_t);
-};
-
-struct beaconMcastState {
-	uint32_t lastseq;
-
-	uint32_t packetcount, packetcountreal;
-	uint32_t pointer;
-
-	int lastdelay, lastjitter, lastloss, lastdup, lastooo;
-
-	Stats s;
-
-	uint32_t cacheseqnum[PACKETS_PERIOD+1];
-
-	void refresh(uint32_t, uint64_t);
-	void update(uint8_t, uint32_t, uint64_t, uint64_t);
-};
-
-struct beaconSource {
-	beaconSource();
-
-	bool identified;
-	string name;
-	string adminContact;
-	address addr;
-
-	uint64_t creation;
-
-	int sttl;
-
-	uint64_t lastevent;
-
-	beaconMcastState ASM, SSM;
-
-	void setName(const string &);
-	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
-
-	typedef map<beaconSourceAddr, beaconExternalStats> ExternalSources;
-	ExternalSources externalSources;
-
-	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
-
-	WebSites webSites;
-};
-
-typedef map<beaconSourceAddr, beaconSource> Sources;
-
-static Sources sources;
-
-struct beaconExternalStats {
-	beaconExternalStats() : identified(false) {}
-
-	uint64_t lastupdate;
-	uint32_t age;
-
-	Stats ASM, SSM;
-
-	bool identified;
-	string name, contact;
-};
-
-static void next_event(struct timeval *);
-static void insert_event(uint32_t, uint32_t);
-static void handle_probe(int, content_type);
-static void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len, bool);
-static void handle_mcast(int, content_type);
-static void handle_event();
-static void handle_gc();
-static int send_nprobe();
-static int send_report(int);
-static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
-
-static void do_dump();
-static void do_bw_dump(bool);
-static void dumpBigBwStats(int);
-static void sendLeaveReport(int);
-
-static uint32_t bytesReceived = 0;
-static uint32_t bytesSent = 0;
-
-static uint64_t bigBytesReceived = 0;
-static uint64_t bigBytesSent = 0;
-static uint64_t lastDumpBwTS = 0;
-
-static uint64_t get_timestamp();
-
-static int SetupSocket(address *, bool, bool);
-static int MulticastListen(int, address *);
-
-static int SSMJoin(int, const address *);
-static int SSMLeave(int, const address *);
-
 static inline double Rand() {
 	return rand() / (double)RAND_MAX;
 }
@@ -377,10 +369,8 @@ void usage() {
 	fprintf(stderr, "  -d                     Dump reports to xml each 5 secs\n");
 	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
-	fprintf(stderr, "  -L REPORT_ADDR/PORT    Listen to reports from other probs in multicast group REPORT_ADDR\n");
 	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
-	fprintf(stderr, "  -P                     Use new protocol\n");
-	fprintf(stderr, "  -v                     be (very) verbose\n");
+	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
 	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
 	fprintf(stderr, "\n");
 }
@@ -404,7 +394,7 @@ int main(int argc, char **argv) {
 	const char *intf = 0;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:b:r:S:l:L:dD:i:W:hvfU");
+		res = getopt(argc, argv, "n:a:i:b:r:S:dD:l:W:vUhf");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -443,14 +433,10 @@ int main(int argc, char **argv) {
 			dump = true;
 			if (res == 'D')
 				dumpFile = optarg;
-		} else if (res == 'l' || res == 'L') {
+		} else if (res == 'l') {
 			address addr;
 			if (!addr.parse(optarg)) {
 				fprintf(stderr, "Bad address format.\n");
-				return -1;
-			}
-			if (res == 'L' && !addr.is_multicast()) {
-				fprintf(stderr, "Specified address is not a multicast group.\n");
 				return -1;
 			}
 			mcastListen.push_back(make_pair(addr, NREPORT));
@@ -549,8 +535,10 @@ int main(int argc, char **argv) {
 			ssmMcastSock = sock;
 	}
 
-	fprintf(stdout, "Local name is %s\n", beaconName);
+	signal(SIGUSR1, dumpBigBwStats);
+	signal(SIGINT, sendLeaveReport);
 
+	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
 	if (dump)
@@ -558,14 +546,12 @@ int main(int argc, char **argv) {
 
 	insert_event(DUMP_BW_EVENT, 10000);
 
-	if (dumpBwReport) {
+	if (dumpBwReport)
 		insert_event(DUMP_BIG_BW_EVENT, 600000);
-	}
 
 	send_report(WEBSITE_REPORT_EVENT);
 
-	signal(SIGUSR1, dumpBigBwStats);
-	signal(SIGINT, sendLeaveReport);
+	fprintf(stdout, "Local name is %s\n", beaconName);
 
 	startTime = lastDumpBwTS = get_timestamp();
 
@@ -615,7 +601,7 @@ void tv_diff(struct timeval *l, struct timeval *r) {
 	}
 }
 
-list<timer> timers;
+static list<timer> timers;
 
 void next_event(struct timeval *eventm) {
 	timeval now;
@@ -706,8 +692,6 @@ void Stats::check_validity(uint64_t now) {
 	if ((now - lastupdate) > 30000)
 		valid = false;
 }
-
-static void removeSource(const beaconSourceAddr &baddr, bool);
 
 void handle_gc() {
 	Sources::iterator i = sources.begin();
@@ -804,7 +788,7 @@ void handle_probe(int sock, content_type type) {
 	handle_nmsg(&from, recvdts, ttl, buffer, len, type == NSSMPROBE);
 }
 
-static inline beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now) {
+beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now) {
 	Sources::iterator i = sources.find(baddr);
 	if (i != sources.end()) {
 		i->second.lastevent = now;
@@ -1086,6 +1070,8 @@ void beaconMcastState::refresh(uint32_t seq, uint64_t now) {
 	s.avgdelay = s.avgjitter = s.avgloss = s.avgdup = s.avgooo = 0;
 	s.valid = false;
 }
+
+// logic adapted from java beacon
 
 void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t _now) {
 	uint64_t now = (uint32_t)_now;
