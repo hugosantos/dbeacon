@@ -73,7 +73,7 @@ struct address : sockaddr_storage {
 	int optlevel() const;
 	int sockaddr_len() const;
 
-	bool parse(const char *);
+	bool parse(const char *, bool = true);
 
 	bool is_multicast() const;
 	bool is_unspecified() const;
@@ -287,7 +287,7 @@ int address::family(const char *addr) {
 	return -1;
 }
 
-bool address::parse(const char *str) {
+bool address::parse(const char *str, bool reqport) {
 	char tmp[64];
 
 	int family = address::family(str);
@@ -309,7 +309,7 @@ bool address::parse(const char *str) {
 		if (*end)
 			return false;
 		*p = 0;
-	} else {
+	} else if (reqport) {
 		return false;
 	}
 
@@ -390,6 +390,7 @@ void usage() {
 	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -S GROUP_ADDR/PORT     Enables SSM reception/sending on GROUP_ADDR\n");
+	fprintf(stderr, "  -s ADDR                Bind to local address\n");
 	fprintf(stderr, "  -d                     Dump reports to xml each 5 secs\n");
 	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
@@ -422,7 +423,7 @@ int main(int argc, char **argv) {
 	const char *intf = 0;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S:dD:l:L:W:vUhf");
+		res = getopt(argc, argv, "n:a:i:b:r:S:s:dD:l:L:W:vUhf");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -455,6 +456,11 @@ int main(int argc, char **argv) {
 		} else if (res == 'S') {
 			if (!ssmProbeAddr.parse(optarg) || !ssmProbeAddr.is_multicast()) {
 				fprintf(stderr, "Bad address format for SSM channel.\n");
+				return -1;
+			}
+		} else if (res == 's') {
+			if (!beaconUnicastAddr.parse(optarg, false)) {
+				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
 		} else if (res == 'd' || res == 'D') {
@@ -551,16 +557,23 @@ int main(int argc, char **argv) {
 
 	// connect the socket to probeAddr, so the source address can be determined
 
-	socklen_t addrlen = sizeof(probeAddr);
+	if (beaconUnicastAddr.is_unspecified()) {
+		socklen_t addrlen = probeAddr.sockaddr_len();
 
-	if (connect(mcastSock, (sockaddr *)&probeAddr, addrlen) != 0) {
-		perror("Failed to connect multicast socket");
-		return -1;
-	}
+		if (connect(mcastSock, (sockaddr *)&probeAddr, addrlen) != 0) {
+			perror("Failed to connect multicast socket");
+			return -1;
+		}
 
-	if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
-		perror("getsockname");
-		return -1;
+		if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
+			perror("getsockname");
+			return -1;
+		}
+	} else {
+		if (bind(mcastSock, (sockaddr *)&beaconUnicastAddr, probeAddr.sockaddr_len()) != 0) {
+			perror("Failed to bind local socket");
+			return -1;
+		}
 	}
 
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
