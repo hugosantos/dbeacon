@@ -33,6 +33,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <netdb.h>
+#include <unistd.h>
 
 int _McastListenNewAPI(int sock, const address &grpaddr);
 int _McastListenOldAPI(int sock, const address &grpaddr);
