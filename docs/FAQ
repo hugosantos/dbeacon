@@ -1,142 +1,158 @@
 Frequently Asked Questions (FAQ)
---------------------------------
 
-These are some of the Frequently Asked Questions.
+  • What does 'dbeacon' mean?
 
-* What does 'dbeacon' mean?
+    'dbeacon' stands for Distributed Beacon. This named was adopted since it
+    doesn't require a centralized server.
 
-  'dbeacon' stands for Distributed Beacon. It is named like this because it
-  requires no central server to function.
+  • Why should i run 'dbeacon'?
 
-* Why should i run 'dbeacon'?
+    'dbeacon' might be useful if you are deploying intra or inter-domain
+    multicast in your network. It is a tool that might help you find
+    connectivity problems as well as to collect statistics about the current
+    connectivity.
 
-  You should run 'dbeacon' if you are deploying intra or inter-domain multicast
-  in your network. It is a tool that might help you find connectivity problems
-  as well as to collect statistics about the current connectivity.
+  • Why doesn't dbeacon use RTP/RTCP?
 
-* I googled and found another beacon at NLAR, how does dbeacon differ from it?
+    TODO
 
-* Why isn't dbeacon using RTP/RTCP?
+  • What is ASM? and SSM?
 
-* What is ASM? and SSM?
+    ASM and SSM are two multicast models. ASM stands for Any Source Multicast
+    while SSM for Source Specific Multicast. ASM provides a simple
+    bidirectional multicast model for hosts at the expense of router complexity
+    while SSM is a simpler unidirectional model.
 
-  ASM and SSM are two different multicast models. ASM stands for Any Source
-  Multicast while SSM stands for Source Specific Multicast. ASM provides a
-  simple bidirectional multicast model for hosts at the expense of router
-  complexity while SSM is a simpler unidirectional model.
+  • Do i need to be 'root' to run dbeacon?
 
-* Do i need to be 'root' to run dbeacon?
+    No, dbeacon is able (and should be) run as a simple user.
 
-  No, dbeacon is able (and should be) run as a simple user.
+  • Can i deploy several dbeacons in the same host?
 
-* Can i deploy several dbeacons in the same host?
+    Yes, you may run as many dbeacons as your OS has resources for.
 
-  Yes, you may run as many dbeacons as your OS has resources for.
+  • Where should i deploy dbeacon in my network?
 
-* Where should i deploy dbeacon in my network?
+    TODO
 
-* How can i make my flag to show up in the matrix page?
+  • How can i make my flag show up in the matrix page?
 
-  To make your flag show up in the matrix page, specify your Two Letter Country
-  Code when running dbeacon. For instance:
+    To make your flag show up in the matrix page, specify your Two Letter
+    Country Code when running dbeacon. For instance:
 
     ./dbeacon [...] -C EU
 
-* I read the usage of 'ntpd' is recommended, why is that?
+  • I read the usage of 'ntpd' is recommended, why is that?
 
-  'dbeacon' relies on the several beacon hosts to have their clocks properly
-  synchronized in order to collect good delay statistics. 'ntpd' provides this
-  feature.
+    'dbeacon' relies on the several beacon hosts to have their clocks properly
+    synchronized in order to collect good delay statistics. 'ntpd' provides
+    this feature.
 
-* How do i setup the history feature?
+  • How do i setup the history feature?
 
-* How much disk space is required for the history feature?
+    TODO
 
-* May i run a matrix page without history support?
+  • How much disk space is required for the history feature?
 
-  Yes, the history feature may be disabled via matrix.conf.
+    TODO
 
-* My beacon is in the 'Beacons that report no received sources' list.
-  What does it mean and how can i fix it?
+  • May i run a matrix page without history support?
 
-  This means that while some (or all) beacons are able to receive your multicast
-  packets, you weren't. This is due to a broken multicast setup, you should
-  investigate your routers for problems or contact your network administrator.
+    Yes, the history feature may be disabled via matrix.conf.
 
-* How much bandwidth will dbeacon consume?
+  • My beacon is in the 'Beacons that report no received sources' list. What
+    does it mean and how can i fix it?
 
-  It depends on the current number of beacons in the group. Due to adaptive
-  intervals 'dbeacon' usually consumes bandwidth in a direct proportion of the
-  number of beacons. So if there are currently 14 beacons, it should consume
-  around 14Kb/s in average (a more real number would be 10-12Kb/s).
+    This means that while some (or all) beacons are able to receive your
+    multicast packets, your beacon isn't receiving any other sources. This is
+    due to a broken multicast setup, you should investigate your routers for
+    problems or contact your network administrator.
 
-* Is IPv4 supported?
+  • How much bandwidth will dbeacon consume?
 
-  Yes, for ASM and SSM.
+    It depends on the current number of beacons in the group. Due to adaptive
+    intervals 'dbeacon' usually consumes bandwidth in a direct proportion to
+    the number of beacons. For instance, for 14 beacons, it usualy consumes
+    around 10-12Kb/s if SSM is being used.
 
-* Is my Operating System supported?
+  • Is IPv4 supported?
 
-  It depends on what Operating System you run. At this moment dbeacon is
-  supported in Linux 2.4 and 2.6, with SSM support in versions >= 2.6.11.
-  BSD variants are also supported, although for only ASM if don't have the
-  latest KAME stack.
+    Yes, for ASM and SSM.
 
-* Where can i find a dbeacon Debian package?
+  • Is my Operating System supported?
 
-  Check dbeacon's website.
+    It depends on what Operating System you run. At this moment dbeacon is
+    supported in Linux 2.4 and 2.6, with SSM support in versions >= 2.6.11. BSD
+    variants are also supported (you need the latest KAME kit to support SSM
+    though).
 
-* I run Debian, what packages do i need to install in order to setup a matrix?
+  • Where can i find a dbeacon Debian package?
 
-  Besides a web server (such as 'apache') you need 'perl' and
-  'libxml-parser-perl'. If you wish to use the history feature you must also
-  install 'librrds-perl'.
+    Check dbeacon's website.
 
-* How do i setup my Apache to run a matrix page?
+  • I run Debian, what packages do i need to install in order to setup a
+    matrix?
 
-  Just add the following line to your apache configuration:
+    Besides a web server (such as apache) you need perl and libxml-parser-perl.
+    If you wish to use the history feature you must also install librrds-perl.
+
+  • How do i setup my Apache to run a matrix page?
+
+    Just add the following line to your apache configuration:
 
     ScriptAlias /matrix/ /path/to/matrix.pl
 
-* What do 'TTL', 'Loss', 'Delay' and 'Jitter' in the matrix page mean?
+  • What do 'TTL', 'Loss', 'Delay' and 'Jitter' in the matrix page mean?
 
-* Why are some matrix cells painted in a lighter green than others?
+    TODO
 
-  When in 'SSM or ASM' view (the default one), a bright green cell means that
-  the currently displayed value was obtained via SSM, while a lighter green
-  points to ASM.
+  • Why are some matrix cells painted in a lighter green than others?
 
-* How does dbeacon's protocol work?
+    When in 'SSM or ASM' view (the default one), a bright green cell means that
+    the currently displayed value was obtained via SSM, while a lighter green
+    points to ASM.
 
-  For a detailed explanation on dbeacon's protocol read the included PROTOCOL file.
+  • How does dbeacon's protocol work?
 
-* I didn't found a response in the FAQ, what should I do?
+    For a detailed explanation on dbeacon's protocol read the included PROTOCOL
+    file.
 
-  Either join #m6bone in the irc.freenode.net network or mail one of the developers.
+  • I didn't found a response in the FAQ, what should I do?
 
-* Where can i find more information about multicast?
+    Either join #m6bone in the irc.freenode.net network or mail one of the
+    developers.
 
-  You may find information about the IPv6 Multicast Backbone in www.m6bone.net.
+  • Where can i find more information about multicast?
 
-  Additionaly Marco d'Itri was kind enough to supply a list of documents with
-  lots of multicast information, from architecture to Cisco's configuration.
+    You may find information about the IPv6 Multicast Backbone in
+    www.m6bone.net.
 
-    http://www.renater.fr/Video/IPv6/Multicast-Oct2003/P/
-    http://www.my6.net.my/presentation_paper/HidetsuguConference.pdf
-    http://www.cs.tut.fi/kurssit/83390/materials/SSM-Sorin.pdf
-    http://www.cs.tut.fi/kurssit/83390/materials/ipv6-multicast-and-anycast.pdf
-    http://www.terena.nl/tech/task-forces/tf-ngn/presentations/tf-ngn14/20040510_JD_M6Bone.pdf
-    http://ipmon.sprint.com/pubs_trs/tutorials/Source-Specific-Multicast.pdf
-    ftp://ftpeng.cisco.com/ipmulticast/ssm/SSM-4dev/index.html
-    http://www.nanog.org/mtg-0102/ppt/eubanks/index.htm
-    http://www.cisco.com/univercd/cc/td/doc/product/software/ios121/121newft/121t/121t3/dtssm.htm
-    ftp://ftpeng.cisco.com/ipmulticast/ssm/index.html
-    ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/Multicast_Deployment_Made_Easy.pdf
-    ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/IP_Multicast_Configuration_Guide.pdf
-    http://www.m6bone.net/IMG/pdf/cisco-guide.pdf
-    http://andrew.triumf.ca/AG/multicast/ "multicast notes"
-    http://www.cisco.com/ca/events/pdfs/Interdomain_IPMulticast.pdf
-    http://www.hep.ucl.ac.uk/~ytl/multi-cast/
-    http://www.aarnet.edu.au/engineering/guides/multicast/rno-implementation.html
-    http://www.abilene.iu.edu/mccook.html
-    http://archive.dante.net/nep/GEANT-MULTICAST/stepbystep.html
+    Additionaly Marco d'Itri was kind enough to supply a list of documents with
+    lots of multicast information, from architecture to Cisco's configuration.
+
+      □ http://www.renater.fr/Video/IPv6/Multicast-Oct2003/P/
+      □ http://www.my6.net.my/presentation_paper/HidetsuguConference.pdf
+      □ http://www.cs.tut.fi/kurssit/83390/materials/SSM-Sorin.pdf
+      □ http://www.cs.tut.fi/kurssit/83390/materials/
+        ipv6-multicast-and-anycast.pdf
+      □ http://www.terena.nl/tech/task-forces/tf-ngn/presentations/tf-ngn14/
+        20040510_JD_M6Bone.pdf
+      □ http://ipmon.sprint.com/pubs_trs/tutorials/
+        Source-Specific-Multicast.pdf
+      □ ftp://ftpeng.cisco.com/ipmulticast/ssm/SSM-4dev/index.html
+      □ http://www.nanog.org/mtg-0102/ppt/eubanks/index.htm
+      □ http://www.cisco.com/univercd/cc/td/doc/product/software/ios121/
+        121newft/121t/121t3/dtssm.htm
+      □ ftp://ftpeng.cisco.com/ipmulticast/ssm/index.html
+      □ ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/
+        Multicast_Deployment_Made_Easy.pdf
+      □ ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/
+        IP_Multicast_Configuration_Guide.pdf
+      □ http://www.m6bone.net/IMG/pdf/cisco-guide.pdf
+      □ http://www.cisco.com/ca/events/pdfs/Interdomain_IPMulticast.pdf
+      □ http://www.hep.ucl.ac.uk/~ytl/multi-cast/
+      □ http://www.aarnet.edu.au/engineering/guides/multicast/
+        rno-implementation.html
+      □ http://www.abilene.iu.edu/mccook.html
+      □ http://archive.dante.net/nep/GEANT-MULTICAST/stepbystep.html
 
