@@ -116,14 +116,13 @@ struct Stats {
 	Stats() : valid(false) {}
 
 	bool valid;
-	uint64_t timestamp;
+	uint64_t timestamp, lastupdate;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 	uint8_t rttl;
 };
 
 struct beaconMcastState {
 	uint32_t lastseq;
-	uint64_t lasttimestamp;
 
 	uint32_t packetcount, packetcountreal;
 	uint32_t pointer;
@@ -857,7 +856,7 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 		if (len == 12) {
 			uint32_t seq = ntohl(*((uint32_t *)(buff + 4)));
 			uint32_t ts = ntohl(*((uint32_t *)(buff + 8)));
-			getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts).update(ttl, seq, ts, (uint32_t)recvdts, ssm);
+			getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts).update(ttl, seq, ts, recvdts, ssm);
 		}
 		return;
 	}
@@ -903,6 +902,7 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 
 						if (!read_tlv_stats(pd, stats, *st))
 							break;
+						st->lastupdate = recvdts;
 					}
 				}
 
@@ -995,7 +995,7 @@ void handle_mcast(int sock, content_type cnt) {
 	}
 }
 
-uint64_t get_timestamp() {
+static inline uint64_t get_timestamp() {
 	struct timeval tv;
 	uint64_t timestamp;
 
@@ -1044,15 +1044,12 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 	beaconMcastState *st = ssm ? &SSM : &ASM;
 
 	st->update(ttl, seqnum, timestamp, now);
-
-	// if (verbose && st->s.avgloss < 1) {
-	//	cout << "Updating " << name << (ssm ? " (SSM)" : "") << ": " << st->s.avgdelay << ", " << st->s.avgloss << ", " << st->s.avgooo << ", " << st->s.avgdup << endl;
-	// }
 }
 
 void beaconMcastState::refresh(uint32_t seq, uint64_t now) {
 	lastseq = seq;
-	lasttimestamp = 0;
+	s.timestamp = 0;
+	s.lastupdate = now;
 
 	packetcount = packetcountreal = 0;
 	pointer = 0;
@@ -1062,7 +1059,13 @@ void beaconMcastState::refresh(uint32_t seq, uint64_t now) {
 	s.valid = false;
 }
 
-void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
+void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t _now) {
+	uint64_t now;
+	if (newProtocol)
+		now = (uint32_t)_now;
+	else
+		now = _now;
+
 	int64_t diff = udiff(now, timestamp);
 
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
@@ -1072,7 +1075,8 @@ void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, 
 	if (seqnum < lastseq && (lastseq - seqnum) >= packetcount)
 		return;
 
-	lasttimestamp = timestamp;
+	s.timestamp = timestamp;
+	s.lastupdate = _now;
 
 	bool dup = false;
 
@@ -1207,7 +1211,7 @@ bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t
 
 	uint8_t *b = buff + ptr;
 
-	*((uint32_t *)(b + 0)) = htonl((uint32_t)st.lasttimestamp);
+	*((uint32_t *)(b + 0)) = htonl((uint32_t)st.s.timestamp);
 	*((uint32_t *)(b + 4)) = htonl(age);
 	b[8] = sttl - st.s.rttl;
 
@@ -1314,7 +1318,7 @@ int build_jreport(uint8_t *buffer, int maxlen) {
 			continue;
 		if (!buf.write_string(i->second.name))
 			return -1;
-		if (!buf.write_longlong(i->second.ASM.lasttimestamp))
+		if (!buf.write_longlong(i->second.ASM.s.timestamp))
 			return -1;
 		if (!buf.write_float(i->second.ASM.s.avgdelay)) // 0
 			return -1;
@@ -1403,11 +1407,13 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 	return 4 + 4 + 4;
 }
 
-void dumpStats(FILE *fp, const Stats &s, int sttl, bool diff) {
+void dumpStats(FILE *fp, const Stats &s, uint64_t now, int sttl, bool diff) {
 	if (!diff)
 		fprintf(fp, " ttl=\"%i\"", s.rttl);
 	else if (sttl)
 		fprintf(fp, " ttl=\"%i\"", sttl - s.rttl);
+	if (newProtocol)
+		fprintf(fp, " rptage=\"%u\"", (uint32_t)((now - s.lastupdate) / 1000));
 	fprintf(fp, " loss=\"%.1f\"", s.avgloss);
 	fprintf(fp, " delay=\"%.3f\"", s.avgdelay);
 	fprintf(fp, " jitter=\"%.3f\"", s.avgjitter);
@@ -1447,12 +1453,12 @@ void do_dump() {
 				fprintf(fp, " addr=\"%s/%d\"", tmp, i->first.second);
 				fprintf(fp, " age=\"%llu\"\n\t\t\t\t", (now - i->second.creation) / 1000);
 				if (i->second.ASM.s.valid)
-					dumpStats(fp, i->second.ASM.s, i->second.sttl, true);
+					dumpStats(fp, i->second.ASM.s, now, i->second.sttl, true);
 				if (i->second.SSM.s.valid) {
 					fprintf(fp, ">\n");
 
 					fprintf(fp, "\t\t\t\t\t<ssm");
-					dumpStats(fp, i->second.SSM.s, i->second.sttl, true);
+					dumpStats(fp, i->second.SSM.s, now, i->second.sttl, true);
 					fprintf(fp, " /></source>\n");
 				} else {
 					fprintf(fp, " />\n");
@@ -1492,12 +1498,12 @@ void do_dump() {
 				fprintf(fp, " addr=\"%s/%d\"", tmp, j->first.second);
 				fprintf(fp, " age=\"%u\"\n\t\t\t\t", j->second.age);
 				if (j->second.ASM.valid) {
-					dumpStats(fp, j->second.ASM, i->second.sttl, false);
+					dumpStats(fp, j->second.ASM, now, i->second.sttl, false);
 				}
 				if (j->second.SSM.valid) {
 					fprintf(fp, ">\n");
 					fprintf(fp, "\t\t\t\t\t<ssm");
-					dumpStats(fp, j->second.SSM, i->second.sttl, false);
+					dumpStats(fp, j->second.SSM, now, i->second.sttl, false);
 					fprintf(fp, " /></source>\n");
 				} else {
 					fprintf(fp, " />\n");
@@ -1517,7 +1523,7 @@ void do_dump() {
 					j != i->second.jsources.end(); j++) {
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", j->first.c_str());
-				dumpStats(fp, j->second.ASM, 0, true);
+				dumpStats(fp, j->second.ASM, now, 0, true);
 				fprintf(fp, " />\n");
 			}
 
