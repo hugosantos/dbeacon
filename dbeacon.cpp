@@ -1325,7 +1325,7 @@ void do_dump() {
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
-				fprintf(fp, " addr=\"%s/%d\"", tmp,i->first.second);
+				fprintf(fp, " addr=\"%s/%d\"", tmp, i->first.second);
 				fprintf(fp, " ttl=\"%i\"\n", i->second.lastttl);
 				fprintf(fp, "\t\t\t\tage=\"%llu\"", (now - i->second.creation) / 1000);
 				fprintf(fp, " loss=\"%.1f\"", i->second.avgloss);
