@@ -46,6 +46,7 @@ static char probeName[256] = "";
 static int mcastInterface = 0;
 static string adminContact;
 static struct sockaddr_in6 probeAddr;
+static struct sockaddr_in6 beaconUnicastAddr;
 static int mcastSock;
 static int largestSock = 0;
 static fd_set readSet;
@@ -391,6 +392,20 @@ int main(int argc, char **argv) {
 	mcastSock = SetupSocket(&local, false);
 	if (mcastSock < 0)
 		return -1;
+
+	// connect the socket to probeAddr, so the source address can be determined
+
+	socklen_t addrlen = sizeof(probeAddr);
+
+	if (connect(mcastSock, (struct sockaddr *)&probeAddr, addrlen) != 0) {
+		perror("Failed to connect multicast socket");
+		return -1;
+	}
+
+	if (getsockname(mcastSock, (struct sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
+		perror("getsockname");
+		return -1;
+	}
 
 	for (vector<pair<sockaddr_in6, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
 		int sock = SetupSocket(&i->first, i->second == JPROBE || i->second == NPROBE);
@@ -1293,8 +1308,10 @@ void do_dump() {
 
 	fprintf(fp, "<beacons>\n");
 
+
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
-		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", (newProtocol ? beaconName : probeName), sessionName);
+		inet_ntop(AF_INET6, &beaconUnicastAddr.sin6_addr, tmp, sizeof(tmp));
+		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s\">\n", (newProtocol ? beaconName : probeName), sessionName, tmp);
 		fprintf(fp, "\t\t<sources>\n");
 
 		uint64_t now = get_timestamp();
