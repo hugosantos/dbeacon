@@ -14,6 +14,7 @@ use CGI;
 
 use Graph::Directed;
 use XML::Parser;
+use Switch;
 use strict;
 
 my $page = new CGI;
@@ -21,7 +22,7 @@ my $page = new CGI;
 print $page->header;
 
 my $attname = $page->param('att');
-if ($attname eq "") {
+if (not $attname) {
 	$attname = "ttl";
 }
 
@@ -112,6 +113,14 @@ print "<h4>Current Server time is $now</h4>\n";
 
 print "<h4>Current stats for $sessiongroup</h4>\n";
 
+switch ($attname)
+{
+  case "loss"	{ print "<h4>Current view is Loss in %</h4>\n" }
+  case "delay"	{ print "<h4>Current view is Delay in ms</h4>\n" }
+  case "jitter"	{ print "<h4>Current view is Jitter in ms</h4>\n" }
+  else		{ $attname = "ttl"; print "<h4>Current view is TTL in number of hops</h4>\n" }
+}
+
 my $url = $page->script_name();
 
 print "<p><b>Parameters:</b> [<a href=\"$url?att=ttl\">TTL</a>] [<a href=\"$url?att=loss\">Loss</a>] [<a href=\"$url?att=delay\">Delay</a>] [<a href=\"$url?att=jitter\">Jitter</a>]</p>\n";
@@ -152,13 +161,13 @@ foreach $a (@V) {
 			if ($g->has_edge($b, $a)) {
 				$txt = $g->get_edge_attribute($b, $a, $attname);
 				$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
-				if ($txt eq "") {
+				if (not $txt) {
 					$txt = "N/A";
 					$tdclass = "noinfo";
 				} else {
 					$tdclass = "adjacent";
 				}
-				if ($txtssm eq "") {
+				if (not $txtssm) {
 					$txtssm = "-";
 					$tdclasssm = "nossminfo";
 				} else {
