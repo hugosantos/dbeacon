@@ -96,6 +96,19 @@ void print_inaddr(const sockaddr_storage *addr, char *str, int len, bool full) {
 		snprintf(str + strlen(str), len - strlen(str), "/%u", port);
 	}
 }
+
+static inline bool addr_is_equal(const sockaddr_storage &a1, const sockaddr_storage &a2) {
+	if (a1.ss_family != a2.ss_family)
+		return false;
+	if (a1.ss_family == AF_INET6) {
+		return memcmp(&((sockaddr_in6 *)&a1)->sin6_addr, &((sockaddr_in6 *)&a2)->sin6_addr, sizeof(in6_addr)) == 0;
+	} else if (a1.ss_family == AF_INET) {
+		return ((sockaddr_in *)&a1)->sin_addr.s_addr == ((sockaddr_in *)&a2)->sin_addr.s_addr;
+	} else {
+		return false;
+	}
+}
+
 /*
  * The new beacon protocol is very simple. Consisted of 2 types of messages:
  *  Probes and Reports
@@ -669,7 +682,7 @@ void handle_gc() {
 		if (!remove) {
 			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
 			while (j != i->second.externalSources.end()) {
-				if ((now - j->second.lastlocalupdate) > 120000) {
+				if ((now - j->second.lastlocalupdate) > 30000) {
 					beaconSource::ExternalSources::iterator k = j;
 					j++;
 					i->second.externalSources.erase(k);
@@ -865,7 +878,8 @@ void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buf
 				a6->sin6_family = AF_INET6;
 
 				memcpy(&a6->sin6_addr, hd + 2, sizeof(in6_addr));
-				a6->sin6_port = ntohs(*(uint16_t *)(hd + 18));
+				// a6->sin6_port = ntohs(*(uint16_t *)(hd + 18));
+				a6->sin6_port = *(uint16_t *)(hd + 18);
 
 				beaconExternalStats &stats = src.getExternal(addr, recvdts);
 
@@ -886,7 +900,8 @@ void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buf
 				}
 
 				// trigger local SSM join
-				getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts);
+				if (!addr_is_equal(addr, beaconUnicastAddr))
+					getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts);
 			}
 		}
 	}
@@ -927,6 +942,12 @@ beaconExternalStats &beaconSource::getExternal(const sockaddr_storage &baddr, ui
 	if (k == externalSources.end()) {
 		externalSources.insert(make_pair(baddr, beaconExternalStats()));
 		k = externalSources.find(baddr);
+
+		char tmp[64];
+		print_inaddr(&baddr, tmp, sizeof(tmp), true);
+
+		if (verbose)
+			fprintf(stderr, "Adding external source (%s) %s\n", name.c_str(), tmp);
 	}
 
 	beaconExternalStats &stats = k->second;
@@ -1153,7 +1174,8 @@ int build_nreport(uint8_t *buff, int maxlen, bool map) {
 		sockaddr_in6 *addr = (sockaddr_in6 *)&i->first;
 
 		memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
-		*((uint16_t *)(buff + ptr + 16)) = htons(addr->sin6_port);
+		// *((uint16_t *)(buff + ptr + 16)) = htons(addr->sin6_port);
+		*((uint16_t *)(buff + ptr + 16)) = addr->sin6_port;
 		ptr += 18;
 
 		if (map) {
@@ -1373,16 +1395,12 @@ void dumpBigBwStats(int) {
 
 int MulticastListen(int sock, struct sockaddr_storage *grpaddr) {
 	struct group_req grp;
-	int lvl;
 
 	memset(&grp, 0, sizeof(grp));
 	grp.gr_interface = mcastInterface;
 	grp.gr_group = *grpaddr;
 
-	if(grpaddr->ss_family == AF_INET) lvl = IPPROTO_IP;
-	if(grpaddr->ss_family == AF_INET6) lvl = IPPROTO_IPV6;
-
-	return setsockopt(sock, lvl, MCAST_JOIN_GROUP, &grp, sizeof(grp));
+	return setsockopt(sock, grpaddr->ss_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, MCAST_JOIN_GROUP, &grp, sizeof(grp));
 }
 
 static int SSMJoinLeave(int sock, int type, const struct sockaddr_storage *srcaddr) {
