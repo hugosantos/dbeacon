@@ -165,11 +165,17 @@ enum {
 	T_SOURCE_INFO_IPv4 = 'i',
 	T_SOURCE_INFO = 'I',
 	T_ASM_STATS = 'A',
-	T_SSM_STATS = 'S'
+	T_SSM_STATS = 'S',
+
+	T_WEBSITE_GENERIC = 'G',
+	T_WEBSITE_MATRIX = 'M',
+	T_WEBSITE_LG = 'L'
 };
 
 static vector<pair<address, content_type> > mcastListen;
 static vector<pair<int, content_type> > mcastSocks;
+
+static vector<pair<int, string> > webSites;
 
 static vector<address> redist;
 
@@ -182,7 +188,8 @@ enum {
 
 	SENDING_EVENT,
 	WILLSEND_EVENT,
-	MAPREPORT_EVENT
+	MAP_REPORT_EVENT,
+	WEBSITE_REPORT_EVENT
 };
 
 #define PACKETS_PERIOD 40
@@ -268,7 +275,7 @@ static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
 static int send_nprobe();
-static int send_report(bool);
+static int send_report(int);
 static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 
 static void do_dump();
@@ -318,6 +325,7 @@ void usage() {
 	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
 	fprintf(stderr, "  -L REPORT_ADDR/PORT    Listen to reports from other probs in multicast group REPORT_ADDR\n");
+	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
 	fprintf(stderr, "  -P                     Use new protocol\n");
 	fprintf(stderr, "  -v                     be (very) verbose\n");
 	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
@@ -372,7 +380,7 @@ int main(int argc, char **argv) {
 	const char *intf = 0;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:b:r:S:l:L:dD:i:hvfU");
+		res = getopt(argc, argv, "n:a:b:r:S:l:L:dD:i:W:hvfU");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -433,6 +441,16 @@ int main(int argc, char **argv) {
 				return -1;
 			}
 			mcastListen.push_back(make_pair(addr, NREPORT));
+		} else if (res == 'W') {
+			int type = T_WEBSITE_GENERIC;
+			if (strncmp(optarg, "lg$", 3) == 0) {
+				type = T_WEBSITE_LG;
+				optarg += 3;
+			} else if (strncmp(optarg, "matrix$", 7) == 0) {
+				type = T_WEBSITE_MATRIX;
+				optarg += 7;
+			}
+			webSites.push_back(make_pair(type, optarg));
 		} else if (res == 'i') {
 			intf = optarg;
 		} else if (res == 'h') {
@@ -474,11 +492,12 @@ int main(int argc, char **argv) {
 
 		insert_event(SENDING_EVENT, 100);
 		insert_event(REPORT_EVENT, 10000);
-		insert_event(MAPREPORT_EVENT, 30000);
+		insert_event(MAP_REPORT_EVENT, 30000);
+		insert_event(WEBSITE_REPORT_EVENT, 120000);
 
 		redist.push_back(probeAddr);
 
-		if (ssmProbeAddr.is_unspecified()) {
+		if (!ssmProbeAddr.is_unspecified()) {
 			mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
 		}
 	} else {
@@ -530,7 +549,7 @@ int main(int argc, char **argv) {
 		insert_event(DUMP_BIG_BW_EVENT, 600000);
 	}
 
-	send_report(false);
+	send_report(REPORT_EVENT);
 
 	signal(SIGUSR1, dumpBigBwStats);
 
@@ -637,8 +656,9 @@ void handle_event() {
 		send_count ++;
 		break;
 	case REPORT_EVENT:
-	case MAPREPORT_EVENT:
-		send_report(t.type == MAPREPORT_EVENT);
+	case MAP_REPORT_EVENT:
+	case WEBSITE_REPORT_EVENT:
+		send_report(t.type);
 		break;
 	case GARBAGE_COLLECT_EVENT:
 		handle_gc();
@@ -659,8 +679,10 @@ void handle_event() {
 		insert_event(WILLSEND_EVENT, (uint32_t)ceil(Exprnd(beacInt) * 1000));
 	} else if (t.type == REPORT_EVENT) {
 		insert_event(REPORT_EVENT, (uint32_t)ceil(2 * beacInt * 1000));
-	} else if (t.type == MAPREPORT_EVENT) {
-		insert_event(MAPREPORT_EVENT, (uint32_t)ceil(6 * beacInt * 1000));
+	} else if (t.type == MAP_REPORT_EVENT) {
+		insert_event(MAP_REPORT_EVENT, (uint32_t)ceil(6 * beacInt * 1000));
+	} else if (t.type == WEBSITE_REPORT_EVENT) {
+		insert_event(WEBSITE_REPORT_EVENT, (uint32_t)ceil(24 * beacInt * 1000));
 	} else {
 		insert_sorted_event(t);
 	}
@@ -1145,7 +1167,7 @@ bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t
 	return true;
 }
 
-int build_nreport(uint8_t *buff, int maxlen, bool map) {
+int build_nreport(uint8_t *buff, int maxlen, int type) {
 	if (maxlen < 4)
 		return -1;
 
@@ -1181,10 +1203,13 @@ int build_nreport(uint8_t *buff, int maxlen, bool map) {
 		if (i->first.ss_family == AF_INET)
 			len = 6;
 
-		if (map) {
+		if (type == MAP_REPORT_EVENT) {
 			int namelen = i->second.name.size();
 			int contactlen = i->second.adminContact.size();
 			len += 2 + namelen + 2 + contactlen;
+		} else if (type == WEBSITE_REPORT_EVENT) {
+			for (vector<pair<int, string> >::const_iterator j = webSites.begin(); j != webSites.end(); j++)
+				len += 2 + j->second.size();
 		} else {
 			len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
 		}
@@ -1208,9 +1233,12 @@ int build_nreport(uint8_t *buff, int maxlen, bool map) {
 			ptr += 6;
 		}
 
-		if (map) {
+		if (type == MAP_REPORT_EVENT) {
 			write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
 			write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
+		} else if (type == WEBSITE_REPORT_EVENT) {
+			for (vector<pair<int, string> >::const_iterator j = webSites.begin(); j != webSites.end(); j++)
+				write_tlv_string(buff, maxlen, ptr, j->first, j->second.c_str());
 		} else {
 			uint32_t age = (now - i->second.creation) / 1000;
 
@@ -1224,10 +1252,10 @@ int build_nreport(uint8_t *buff, int maxlen, bool map) {
 	return ptr;
 }
 
-int send_report(bool map) {
+int send_report(int type) {
 	int len;
 
-	len = build_nreport(buffer, sizeof(buffer), map);
+	len = build_nreport(buffer, sizeof(buffer), type);
 	if (len < 0)
 		return len;
 
@@ -1319,6 +1347,12 @@ void do_dump() {
 			fprintf(fp, " ssmgroup=\"%s\"", tmp);
 		}
 		fprintf(fp, " age=\"%llu\" lastupdate=\"0\">\n", (now - startTime) / 1000);
+
+		for (vector<pair<int, string> >::const_iterator j = webSites.begin(); j != webSites.end(); j++) {
+			const char *typnam = j->first == T_WEBSITE_GENERIC ? "generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
+			fprintf(fp, "\t\t<website type=\"%s\" url=\"%s\" />\n", typnam, j->second.c_str());
+		}
+
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
