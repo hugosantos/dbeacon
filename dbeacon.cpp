@@ -1454,21 +1454,21 @@ int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
 		}
 	}
 
+	on = 0;
+
+	if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
+		perror("setsockopt(IPV6_MULTICAST_LOOP)");
+		return -1;
+	}
+
+	int ttl = 127;
+
+	if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
+		perror("setsockopt(IPV6_MULTICAST_HOPS)");
+		return -1;
+	}
+
 	if (IN6_IS_ADDR_MULTICAST(&addr->sin6_addr)) {
-		on = 0;
-
-		if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
-			perror("setsockopt(IPV6_MULTICAST_LOOP)");
-			return -1;
-		}
-
-		int ttl = 127;
-
-		if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
-			perror("setsockopt(IPV6_MULTICAST_HOPS)");
-			return -1;
-		}
-
 		if (IPv6MulticastListen(sock, &addr->sin6_addr) != 0) {
 			perror("Failed to join multicast group");
 			return -1;
