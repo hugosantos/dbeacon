@@ -27,7 +27,7 @@ our $historydir;
 $dumpfile = '../../dump.xml';
 $historydir = 'data';
 
-our $url = undef; # history.conf usually requires it
+our $url = ""; # history.conf usually requires it
 
 # Load perl config script which should overide default values
 do("history.conf");
