@@ -627,7 +627,7 @@ sub render_matrix {
 				print "</td>";
 
 				print "<td>";
-				if ($flag_url_format ne "" and $g->get_vertex_attribute($a, "country") ne "") {
+				if ($flag_url_format ne "" and $g->has_vertex_attribute($a, "country")) {
 					print "<img src=\"";
 					printf $flag_url_format, lc $g->get_vertex_attribute($a, "country");
 					print "\" style=\"vertical-align: middle; border: 1px solid black\" />";
