@@ -24,7 +24,7 @@ our $title = 'IPv6 Multicast Beacon';
 our $page_title = $title;
 our $default_hideinfo = 0;	# one of '0', '1'
 our $default_what = 'ssmorasm';	# one of 'ssmorasm', 'both', 'asm'
-our $history_enabled = 1;
+our $history_enabled = 0;
 our $css_file;
 our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
 our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
