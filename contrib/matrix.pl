@@ -386,22 +386,21 @@ sub start_handler {
 		}
 	} elsif ($tag eq "ssm") {
 		if ($current_source ne "") {
-			parse_stats($current_source, %atts, "ssm_");
+			parse_stats($current_source, "ssm_", %atts);
 		}
 	} elsif ($tag eq "source") {
 		if (($atts{"name"} ne "") and ($atts{"addr"} ne "")) {
-			my $addr = $atts{"addr"};
-			$current_source = $addr;
-			if (not $g->has_vertex($addr)) {
-				$g->add_vertex($addr);
+			$current_source = $atts{"addr"};
+			if (not $g->has_vertex($current_source)) {
+				$g->add_vertex($current_source);
 
-				$g->set_vertex_attribute($addr, "name", $atts{"name"});
-				$g->set_vertex_attribute($addr, "contact", $atts{"contact"});
+				$g->set_vertex_attribute($current_source, "name", $atts{"name"});
+				$g->set_vertex_attribute($current_source, "contact", $atts{"contact"});
 			}
 
-			$g->add_edge($addr, $current_beacon);
+			$g->add_edge($current_source, $current_beacon);
 
-			parse_stats($addr, %atts, "");
+			parse_stats($current_source, "", %atts);
 		}
 	} elsif ($tag eq "website") {
 		if ($atts{"type"} ne "" and $atts{"url"} ne "") {
@@ -415,7 +414,7 @@ sub start_handler {
 }
 
 sub parse_stats {
-	my ($addr, %atts, $prefix) = @_;
+	my ($addr, $prefix, %atts) = @_;
 
 	if ($atts{"ttl"} ge 0) {
 		$g->set_edge_attribute($addr, $current_beacon, $prefix . "ttl", $atts{"ttl"});
