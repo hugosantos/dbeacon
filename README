@@ -1,18 +1,20 @@
-dbeacon - distributed beacon
-----------------------------
+dbeacon, a Multicast Beacon
+---------------------------
 
-A IPv6 Multicast Beacon. Useful for testing connectivity with other multicast
-nodes. Original project from NLANR. Improved by little green men from mars.
-Also implements the protocol used by the java beacon originally used in the m6bone.
+dbeacon is a Multicast Beacon written in C++. The main purpose of a beacon is
+to monitor other beacon's reachability and collect statistics such as loss,
+delay and jitter between beacons. dbeacon supports both IPv4 and IPv6
+multicast, collecting information via ASM and SSM.
 
-  mainly by
-    Hugo Santos <hsantos@av.it.pt>
-  with help from
-    Hoerdt Mickael <hoerdt@clarinet.u-strasbg.fr> [ipv4 port, ideas, ssm pushing, testing]
-    Sebastien Chaumontet <sebastien@chaumontet.net> [testing, rrd tool history backend]
-    Bernhard Schmidt <bschmidt@teleport-iabg.de> [testing]
+dbeacon was originally only IPv6 capable, designed to be used in the m6bone.
 
-    did i mention little green men from mars?
+  Copyright (c) 2005 - Hugo Santos <hsantos@av.it.pt>
+
+  http://artemis.av.it.pt/~hsantos/software/dbeacon.html
+
+  o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;
+  o Ideas and testing by Sebastien Chaumontet;
+  o Bernhard Schmidt provided valuable resources and helped during testing.
 
 Running
 -------
@@ -40,7 +42,7 @@ Usage: dbeacon [OPTIONS...]
 
 To join our experimental deployment in the m6bone use:
 
-./dbeacon -a YOURMAIL -n SITENAME -b ff1e::1:f00d:beac -S
+	./dbeacon -a YOURMAIL -n SITENAME -b ff1e::1:f00d:beac -S
 
 Only use -S if are running Linux >= 2.6.11. There were some problems with SSM in earlier versions.
 
@@ -48,11 +50,10 @@ If you are interested in running the matrix script also use -d so dbeacon export
 
 A more complete command line would be
 
-./dbeacon -a MAIL -n NAME -b ff1e::1:f00d:beac -S -W http://yoursite.com -W matrix\$http://yoursite.com/matrix/ -d
+	./dbeacon -a MAIL -n NAME -b ff1e::1:f00d:beac -S -W http://yoursite.com -W matrix\$http://yoursite.com/matrix/ -d
 
 Licensing
 ---------
 
 This code is licensed with the GNU Public Licence (GPL) v2.
-
 
