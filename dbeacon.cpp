@@ -20,11 +20,11 @@
 using namespace std;
 
 /*
- * The new beacon protocol is very simple. Consisted of 3 types of messages:
- *  Probes, Idents and Reports
+ * The new beacon protocol is very simple. Consisted of 2 types of messages:
+ *  Probes and Reports
  * The smaller and more frequent are Probes, which consist only of a sequence
- * number and a timestamp. Ident messages include beacon info, TTL info, etc.
- * Reports are sent to report the local beacon state (known sources and stats)
+ * number and a timestamp. Report messages include beacon info, TTL info and
+ * local beacon state (known sources and stats)
  *
  * One of the problems with the original protocol was the high usage of
  * bandwidth. In the new protocol, a burst of Probes (10 pps) are sent each
@@ -41,6 +41,7 @@ static const int magicLen = 10;
 static char sessionName[256] = "";
 static char beaconName[256];
 static char probeName[256] = "";
+static string adminContact;
 static struct sockaddr_in6 probeAddr;
 static int mcastSock;
 static int largestSock = 0;
@@ -68,8 +69,7 @@ enum {
 	DUMP_EVENT,
 
 	SENDING_EVENT,
-	WILLSEND_EVENT,
-	IDENT_EVENT
+	WILLSEND_EVENT
 };
 
 #define PACKETS_PERIOD 40
@@ -80,6 +80,7 @@ struct beaconSource {
 
 	bool identified;
 	string name;
+	string adminContact;
 	struct in6_addr addr;
 
 	uint64_t creation;
@@ -113,6 +114,7 @@ static Sources sources;
 
 struct beaconExternalStats {
 	uint64_t timestamp;
+	uint32_t age, ttl;
 	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 };
 
@@ -138,10 +140,8 @@ static void handle_gc();
 static int send_jprobe();
 static int send_nprobe();
 static int send_report();
-static int send_nident();
 static int build_jprobe(uint8_t *, int, uint32_t, uint64_t);
 static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
-static int build_nident(uint8_t *, int);
 
 static void do_dump();
 
@@ -171,6 +171,7 @@ extern char *optarg;
 void usage() {
 	fprintf(stderr, "Usage: dbeacon [OPTIONS...]\n\n");
 	fprintf(stderr, "  -n NAME                Specifies the beacon name\n");
+	fprintf(stderr, "  -a MAIL                Supply administration contact (new protocol only)\n");
 	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -M REDIST_ADDR/PORT    Redistribute and listen for reports in multicast addr\n");
@@ -216,9 +217,10 @@ int main(int argc, char **argv) {
 	probeAddr.sin6_family = AF_INET6;
 
 	bool dump = false;
+	bool force = false;
 
 	while (1) {
-		res = getopt(argc, argv, "n:b:r:M:l:L:dhvP");
+		res = getopt(argc, argv, "n:a:b:r:M:l:L:dhvPf");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -236,6 +238,12 @@ int main(int argc, char **argv) {
 			snprintf(probeName, sizeof(probeName), "%s@%s", optarg, tmp);
 
 			strcpy(beaconName, optarg);
+		} else if (res == 'a') {
+			if (!strchr(optarg, '@')) {
+				fprintf(stderr, "Not a valid email address.\n");
+				return -1;
+			}
+			adminContact = optarg;
 		} else if (res == 'b') {
 			if (!parse_addr_port(optarg, &probeAddr)) {
 				fprintf(stderr, "Invalid beacon addr.\n");
@@ -280,6 +288,8 @@ int main(int argc, char **argv) {
 			verbose = true;
 		} else if (res == 'P') {
 			newProtocol = true;
+		} else if (res == 'f') {
+			force = true;
 		} else if (res == -1) {
 			break;
 		}
@@ -297,10 +307,14 @@ int main(int argc, char **argv) {
 			insert_event(SEND_EVENT, 100);
 			insert_event(REPORT_EVENT, 4000);
 		} else {
+			if (!force && adminContact.empty()) {
+				fprintf(stderr, "No administration contact supplied.\n");
+				return -1;
+			}
+
 			mcastListen.push_back(make_pair(probeAddr, NPROBE));
 
 			insert_event(SENDING_EVENT, 100);
-			insert_event(IDENT_EVENT, 5000);
 			insert_event(REPORT_EVENT, 10000);
 
 			redist.push_back(probeAddr);
@@ -329,6 +343,9 @@ int main(int argc, char **argv) {
 
 	if (dump)
 		insert_event(DUMP_EVENT, 5000);
+
+	if (newProtocol)
+		send_report();
 
 	while (1) {
 		fd_set readset;
@@ -425,9 +442,6 @@ void handle_event() {
 		break;
 	case REPORT_EVENT:
 		send_report();
-		break;
-	case IDENT_EVENT:
-		send_nident();
 		break;
 	case GARBAGE_COLLECT_EVENT:
 		handle_gc();
@@ -613,12 +627,60 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 			getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts).update(seq, ts, recvdts);
 		}
 	} else if (buff[3] == 1) {
-		if (len < 6 || (6 + buff[5]) != len)
+		if (len < 7 || (7 + buff[5]) > len || (7 + buff[5] + buff[6 + buff[5]]) > len)
 			return;
+
 		beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts);
+
 		src.lastttl = buff[4] - ttl;
-		src.setName(string((char *)buff + 5, buff[5]));
-	} else if (buff[3] == 2) {
+
+		string beacName((char *)buff + 5, buff[5]);
+
+		src.setName(beacName);
+		src.adminContact = string((char *)buff + 6 + buff[5], buff[6 + buff[5]]);
+
+		int hlen = 7 + buff[5] + buff[6 + buff[5]];
+		uint8_t *ptr = buff + hlen;
+		int plen = hlen;
+
+		uint32_t tmp;
+
+		externalBeacon beac;
+
+		beac.lastupdate = recvdts;
+		beac.addr = from->sin6_addr;
+
+		while (plen < len) {
+			int namelen = ptr[0];
+			int elen = 4 + 4 + 1 + 4 * 2 + 3;
+			if ((plen + 1 + namelen + elen) > len)
+				break;
+
+			string name((char *)ptr + 1, namelen);
+			ptr += 1 + namelen;
+
+			beaconExternalStats stats;
+
+			stats.timestamp = ntohl(*(uint32_t *)ptr);
+			stats.age = ntohl(*(uint32_t *)(ptr + 4));
+			stats.ttl = ptr[8];
+			tmp = ntohl(*(uint32_t *)(ptr + 9));
+			stats.avgdelay = *(float *)&tmp;
+			tmp = ntohl(*(uint32_t *)(ptr + 13));
+			stats.avgjitter = *(float *)&tmp;
+
+			stats.avgloss = ptr[17] / 255.;
+			stats.avgdup = ptr[18] / 255.;
+			stats.avgooo = ptr[19] / 255.;
+
+			ptr += 20;
+
+			plen += 1 + namelen + elen;
+
+			beac.sources[name] = stats;
+		}
+
+		externalBeacons[beacName] = beac;
 	}
 }
 
@@ -675,6 +737,8 @@ int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, exte
 			return -1;
 		if (!buf.read_float(stats.avgdup))
 			return -1;
+		stats.age = 0;
+		stats.ttl = 0;
 
 		rpt.sources[name] = stats;
 	}
@@ -814,7 +878,7 @@ void updateStats(const char *name, const sockaddr_in6 *from, int ttl, uint32_t s
 	beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), name, now);
 
 	src.addr = from->sin6_addr;
-	src.lastttl = ttl;
+	src.lastttl = 127 - ttl; // we assume jbeacons use TTL 127, which is usually true
 	
 	src.update(seqnum, timestamp, now);
 }
@@ -839,18 +903,67 @@ int send_nprobe() {
 	return sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
 }
 
-int send_nident() {
-	int len;
+int build_nreport(uint8_t *buff, int maxlen) {
+	int nl = strlen(beaconName);
+	int cl = adminContact.size();
 
-	len = build_nident(buffer, sizeof(buffer));
-	if (len < 0)
-		return len;
+	int len = 4 + 1 + 1 + nl + 1 + cl;
 
-	return sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
-}
+	if (maxlen < len)
+		return -1;
 
-int build_nreport(uint8_t *buffer, int maxlen) {
-	return -1;
+	// 0-2 magic
+	*((uint16_t *)buff) = htons(0xbeac);
+
+	// 3 version
+	buff[2] = NEW_BEAC_VER;
+
+	// 4 packet type
+	buff[3] = 1; // Report
+
+	buff[4] = 127; // Original Hop Limit
+
+	buff[5] = nl;
+	memcpy(buff + 6, beaconName, nl);
+
+	buff[6 + nl] = cl;
+	memcpy(buff + 7 + nl, adminContact.c_str(), cl);
+
+	uint8_t *ptr = buff + 7 + nl + cl;
+
+	uint64_t now = get_timestamp();
+
+	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
+		if (!i->second.hasstats || !i->second.identified)
+			continue;
+
+		int namelen = i->second.name.size();
+		int plen = 4 + 4 + 1 + 4 * 2 + 3;
+		if ((len + namelen + 1 + plen) > maxlen)
+			return -1;
+
+		ptr[0] = namelen;
+		memcpy(ptr + 1, i->second.name.c_str(), namelen);
+
+		ptr += 1 + namelen;
+
+		*((uint32_t *)ptr) = htonl((uint32_t)i->second.lasttimestamp);
+		*((uint32_t *)(ptr + 4)) = htonl((uint32_t)((i->second.creation - now) / 1000));
+		ptr[8] = i->second.lastttl;
+
+		uint32_t *stats = (uint32_t *)(ptr + 9);
+		stats[0] = htonl(*((uint32_t *)&i->second.avgdelay));
+		stats[1] = htonl(*((uint32_t *)&i->second.avgjitter));
+
+		ptr[17] = (uint8_t)(i->second.avgloss * 0xff);
+		ptr[18] = (uint8_t)(i->second.avgdup * 0xff);
+		ptr[19] = (uint8_t)(i->second.avgooo * 0xff);
+
+		ptr += plen;
+		len += plen + 1 + namelen;
+	}
+	
+	return len;
 }
 
 int build_jreport(uint8_t *buffer, int maxlen) {
@@ -964,31 +1077,6 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 	return 4 + 4 + 4;
 }
 
-int build_nident(uint8_t *buff, int maxlen) {
-	int l = strlen(beaconName);
-
-	int len = 4 + 1 + 1 + l;
-
-	if (maxlen < len)
-		return -1;
-
-	// 0-2 magic
-	*((uint16_t *)buff) = htons(0xbeac);
-
-	// 3 version
-	buff[2] = NEW_BEAC_VER;
-
-	// 4 packet type
-	buff[3] = 1; // Ident
-
-	buff[4] = 127; // Original Hop Limit
-
-	buff[5] = l;
-	memcpy(buff + 6, beaconName, l);
-	
-	return len;
-}
-
 void do_dump() {
 	FILE *fp = fopen("dump.xml", "w");
 	if (!fp)
@@ -1009,6 +1097,8 @@ void do_dump() {
 				inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
+				if (!i->second.adminContact.empty())
+					fprintf(fp, " admin=\"%s\"", i->second.adminContact.c_str());
 				fprintf(fp, " address=\"%s\"", tmp);
 				fprintf(fp, " ttl=\"%i\"", i->second.lastttl);
 				fprintf(fp, " localage=\"%llu\"", (now - i->second.creation) / 1000);
@@ -1034,8 +1124,18 @@ void do_dump() {
 
 		for (map<string, beaconExternalStats>::const_iterator j = i->second.sources.begin();
 						j != i->second.sources.end(); j++) {
-			fprintf(fp, "\t\t\t<source name=\"%s\" timestamp=\"%llu\" loss=\"%.1f\" delay=\"%.3f\" jitter=\"%.3f\" ooo=\"%.3f\" dup=\"%.3f\" />\n",
-				j->first.c_str(), j->second.timestamp, j->second.avgloss, j->second.avgdelay, j->second.avgjitter, j->second.avgooo, j->second.avgdup);
+			fprintf(fp, "\t\t\t<source");
+			fprintf(fp, " name=\"%s\"", j->first.c_str());
+			if (newProtocol) {
+				fprintf(fp, " ttl=\"%i\"", j->second.ttl);
+				fprintf(fp, " age=\"%llu\"", j->second.age);
+			}
+			fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
+			fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
+			fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
+			fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
+			fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
+			fprintf(fp, " />\n");
 		}
 
 		fprintf(fp, "\t</beacon>\n");
@@ -1069,7 +1169,6 @@ int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
 		perror("setsockopt");
 		return -1;
 	}
-
 
 	if (bind(sock, (struct sockaddr *)addr, sizeof(*addr)) != 0) {
 		perror("Failed to bind multicast socket");
