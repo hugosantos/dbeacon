@@ -225,15 +225,14 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	if (IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
-		fprintf(stderr, "No beacon address supplied.\n");
-		return -1;
+	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
+		mcastListen.push_back(make_pair(probeAddr, JPROBE));
+
+		inet_ntop(AF_INET6, &probeAddr.sin6_addr, sessionName, sizeof(sessionName));
+		sprintf(sessionName + strlen(sessionName), ":%u", 10000);
+	} else {
+		strcpy(sessionName, probeName);
 	}
-
-	mcastListen.push_back(make_pair(probeAddr, JPROBE));
-
-	inet_ntop(AF_INET6, &probeAddr.sin6_addr, sessionName, sizeof(sessionName));
-	sprintf(sessionName + strlen(sessionName), ":%u", 10000);
 
 	FD_ZERO(&readSet);
 
@@ -790,31 +789,33 @@ void do_dump() {
 
 	fprintf(fp, "<beacons>\n");
 
-	fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", probeName, sessionName);
-	fprintf(fp, "\t\t<sources>\n");
+	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
+		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", probeName, sessionName);
+		fprintf(fp, "\t\t<sources>\n");
 
-	char tmp[64];
+		char tmp[64];
 
-	for (map<string, beaconSource>::const_iterator i = sources.begin(); i != sources.end(); i++) {
-		if (i->second.hasstats) {
-			inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
-			fprintf(fp, "\t\t\t<source>\n");
-			fprintf(fp, "\t\t\t\t<name>%s</name>\n", i->first.c_str());
-			fprintf(fp, "\t\t\t\t<address>%s</address>\n", tmp);
-			fprintf(fp, "\t\t\t\t<loss>%.1f</loss>\n", i->second.avgloss);
-			fprintf(fp, "\t\t\t\t<delay>%.3f</delay>\n", i->second.avgdelay);
-			fprintf(fp, "\t\t\t\t<jitter>%.3f</jitter>\n", i->second.avgjitter);
-			fprintf(fp, "\t\t\t\t<ooo>%.3f</ooo>\n", i->second.avgooo);
-			fprintf(fp, "\t\t\t\t<dup>%.3f</dup>\n", i->second.avgdup);
-			fprintf(fp, "\t\t\t</source>\n");
+		for (map<string, beaconSource>::const_iterator i = sources.begin(); i != sources.end(); i++) {
+			if (i->second.hasstats) {
+				inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
+				fprintf(fp, "\t\t\t<source>\n");
+				fprintf(fp, "\t\t\t\t<name>%s</name>\n", i->first.c_str());
+				fprintf(fp, "\t\t\t\t<address>%s</address>\n", tmp);
+				fprintf(fp, "\t\t\t\t<loss>%.1f</loss>\n", i->second.avgloss);
+				fprintf(fp, "\t\t\t\t<delay>%.3f</delay>\n", i->second.avgdelay);
+				fprintf(fp, "\t\t\t\t<jitter>%.3f</jitter>\n", i->second.avgjitter);
+				fprintf(fp, "\t\t\t\t<ooo>%.3f</ooo>\n", i->second.avgooo);
+				fprintf(fp, "\t\t\t\t<dup>%.3f</dup>\n", i->second.avgdup);
+				fprintf(fp, "\t\t\t</source>\n");
+			}
 		}
+
+		fprintf(fp, "\t\t</sources>\n");
+
+		fprintf(fp, "\t</beacon>\n");
+
+		fprintf(fp, "\n");
 	}
-
-	fprintf(fp, "\t\t</sources>\n");
-
-	fprintf(fp, "\t</beacon>\n");
-
-	fprintf(fp, "\n");
 
 	for (map<string, externalBeacon>::const_iterator i = externalBeacons.begin(); i != externalBeacons.end(); i++) {
 		fprintf(fp, "\t<beacon name=\"%s\">\n", i->first.c_str());
@@ -848,6 +849,7 @@ int SetupSocket(sockaddr_in6 *addr, bool needTimeStamp) {
 	if (sock < 0) {
 		perror("Failed to create multicast socket");
 		return -1;
+	map<string, externalBeacon> externalBeacons;
 	}
 
 	if (bind(sock, (struct sockaddr *)addr, sizeof(*addr)) != 0) {
