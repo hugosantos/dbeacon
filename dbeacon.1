@@ -18,34 +18,50 @@ This is the IPv4/IPv6 address of the ASM group used by dbeacon to gather statist
 The name identifying you on the dbeacon session. If not specified, dbeacon will use the hostname of the running machine.
 .TP
 \fB-r\fR \fIREDIST_ADDR\fR/\fIPORT\fR
+Redistribute reports to the supplied host/port. Multiple may be supplied
 .TP
 \fB-S\fR \fIGROUP_ADDR\fR/\fIPORT\fR
+Enables SSM reception/sending on optional GROUP_ADDR/PORT
 .TP
 \fB-s\fR \fIADDR\fR
+Bind to local address. This allow you to specify the multicast source of the packets sent by your beacon.
 .TP
 \fB-d\fR \fIFILE\fR
+Dump periodic reports to dump.xml or specified file. This file may be latter processed by any XML compliant script. On a http server, you
+can process the dump to create a nice adjacency matrix.
 .TP
 \fB-I\fR \fINUMBER\fR
+Interval between refresh of the dump file. Defaults to 5 secs if not specified
 .TP
 \fB-l\fR \fILOCAL_ADDR\fR/\fIPORT\fR
+Listen for reports from other probes. This allow you to create a unicast server peer listening for others beacon present on multicast
+islands
 .TP
 \fB-W\fR \fItype$url\fR
+Specify a website to announce. type is one of lg, matrix, if type is not specified a generic url will be announced.
 .TP
 \fB-L\fR \fIprogram\fR
+Launch program after each dump. The first argument will be the dump filename.
 .TP
 \fB-4\fR
+Force IPv4 usage (Default is IPv6).
 .TP
 \fB-6\fR
+Force IPv6 usage
 .TP
 \fB-v\fR
+verbose mode (use several for more verbosity)
 .TP
 \fB-U\fR
+Dump periodic bandwidth usage reports to stdout
 .TP
 \fB-C\fR \fICC\fR
+Specify your two letter Country Code.
 .TP
 \fB-V\fR
+Outputs version information and leaves
 .SH BUGS
-Please report them to ...
+Please report them to Hugo Santos, the core developper of this project at <hsantos@av.it.pt>
 .SH HISTORY
-\fBdbeacon\fR is a join work from Hugo Santos, Sebastien Chaumonet and Mickael Hoerdt. It has been
+\fBdbeacon\fR is a join work from Hugo Santos, Sebastien Chaumontet and Mickael Hoerdt. It has been
 done in the early days of the m6bone, when nobodies know if it was ASM or SSM at the interdomain level ;).
