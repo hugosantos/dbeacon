@@ -11,6 +11,9 @@ use XML::Parser;
 use integer;
 use strict;
 
+my $default_hideinfo = 0;	# one of '0', '1'
+my $default_what = "both";	# one of 'both', 'asm'
+
 # change this filename to your dump file
 my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
 
@@ -30,8 +33,15 @@ if (not $attname) {
 	$attname = "ttl";
 }
 
-my $atthideinfo = $page->param('hideinfo');
-my $attwhat = $page->param('what') or "both";
+my $atthideinfo = $default_hideinfo;
+if (defined($page->param('hideinfo'))) {
+	$atthideinfo = $page->param('hideinfo');
+}
+
+my $attwhat = $default_what;
+if (defined($page->param('what'))) {
+	$attwhat = $page->param('what');
+}
 
 my $sessiongroup;
 my $ssm_sessiongroup;
@@ -47,6 +57,13 @@ $g = new Graph::Directed;
 $parser = new XML::Parser(Style => 'Tree');
 $parser->setHandlers(Start => \&start_handler);
 my $tree = $parser->parsefile($dump_file);
+
+sub beacon_name {
+	my ($d) = @_;
+	my $name = $g->get_vertex_attribute($a, "name");
+
+	return $name or "($d)";
+}
 
 start_document();
 
@@ -64,6 +81,7 @@ my $c;
 my $i = 1;
 my @problematic = ();
 my @warmingup = ();
+my @localnoreceive = ();
 
 my @V = $g->vertices();
 
@@ -79,6 +97,10 @@ foreach $c (@V) {
 		print "<td $what_td><b>S$i</b></td>";
 		$g->set_vertex_attribute($c, "id", $i);
 		$i++;
+
+		if (scalar($g->in_edges($c)) == 0) {
+			push (@localnoreceive, $c);
+		}
 	}
 }
 print "</tr>\n";
@@ -112,11 +134,23 @@ sub make_history_link {
 	}
 }
 
+sub make_matrix_cell {
+	my ($dst, $src, $type, $txt, $class) = @_;
+
+	if ($txt eq "") {
+		print "<td class=\"noinfo_$type\">-</td>";
+	} else {
+		print "<td class=\"adjacent_$type\">";
+		make_history_link($dst, $src, $type, $txt, $class);
+		print '</td>';
+	}
+}
+
 foreach $a (@V) {
 	my $id = $g->get_vertex_attribute($a, "id");
-	if ($id >= 1) {
+	if ($id >= 1 and scalar($g->in_edges($a)) > 0) {
 		print "<tr>";
-		print "<td align=\"right\" class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
+		print "<td align=\"right\" class=\"beacname\">" . beacon_name($a) . " <b>R$id</b></td>";
 		foreach $b (@V) {
 			if ($g->get_vertex_attribute($b, "id") >= 1) {
 				if ($b ne $a and $g->has_edge($b, $a)) {
@@ -131,26 +165,13 @@ foreach $a (@V) {
 							print "</td>";
 						}
 					} else {
-						my $tdclass = "adjacent";
 						my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
-						my $tdclasssm = "ssmadjacent";
 
 						if (($txt eq "") and ($txtssm eq "")) {
 							print "<td colspan=\"2\" class=\"noinfo\">N/A</td>";
 						} else {
-							if ($txt eq "") {
-								$txt = "-";
-								$tdclass = "noasminfo";
-							} elsif ($txtssm eq "") {
-								$txtssm = "-";
-								$tdclasssm = "nossminfo";
-							}
-							print "<td class=\"$tdclass\">";
-							make_history_link($b, $a, "asm", $txt, "historyurl");
-							print "</td>";
-							print "<td class=\"$tdclasssm\">";
-							make_history_link($b, $a, "ssm", $txtssm, "historyurl");
-							print "</td>";
+							make_matrix_cell($b, $a, "asm", $txt, "historyurl");
+							make_matrix_cell($b, $a, "ssm", $txtssm, "historyurl");
 						}
 					}
 				} else {
@@ -167,9 +188,24 @@ foreach $a (@V) {
 }
 print "</table>\n";
 
-print "<br />\n";
+if (scalar(@localnoreceive) > 0) {
+	print "<h4 style=\"margin-bottom: 0\">The following beacons are not being received locally</h4>\n";
+	print "<ul>\n";
+	foreach $a (@localnoreceive) {
+		my $id = $g->get_vertex_attribute($a, "id");
+		my $contact = $g->get_vertex_attribute($a, "contact");
+		print "<li><b>R$id</b> " . beacon_name($a);
+		if ($contact) {
+			print " ($contact)";
+		}
+		print "</li>\n";
+	}
+	print "</ul>\n";
+}
 
 if (not $atthideinfo) {
+	print "<br />\n";
+
 	print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
 	print "<tr><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
@@ -280,12 +316,14 @@ sub format_date {
 	}
 
 	my $res;
+	my $dosecs = 1;
 
 	if ($tm > 86400) {
 		my $days = $tm / 86400;
 		$res .= " $days";
 		$res .= "d";
 		$tm = $tm % 86400;
+		$dosecs = 0;
 	}
 
 	if ($tm > 3600) {
@@ -302,7 +340,7 @@ sub format_date {
 		$tm = $tm % 60;
 	}
 
-	if ($tm > 0) {
+	if ($dosecs and $tm > 0) {
 		$res .= " $tm";
 		$res .= "s";
 	}
@@ -405,7 +443,7 @@ table.adjr td {
 	padding: 3px;
 	border-bottom: 0.1em solid white;
 }
-table#adj td.fulladjacent, table#adj td.adjacent, table#adj td.ssmadjacent {
+table#adj td.fulladjacent, table#adj td.adjacent_asm, table#adj td.adjacent_ssm {
 	background-color: #96ef96;
 	width: 20px;
 }
@@ -416,7 +454,7 @@ table#adj td.blackhole {
 table#adj td.noinfo {
 	background-color: #ff0000;
 }
-table#adj td.noasminfo, table#adj td.nossminfo {
+table#adj td.noinfo_asm, table#adj td.noinfo_ssm {
 	background-color: #b6ffb6;
 	width: 20px;
 }
@@ -424,11 +462,11 @@ table#adj td.corner {
 	background-color: #dddddd;
 }
 
-table#adj td.adjacent {
+table#adj td.adjacent_asm {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.blackhole, table#adj td.noinfo, table#adj td.fulladjacent, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
+table#adj td.blackhole, table#adj td.noinfo, table#adj td.fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
 	border-right: 0.2em solid white;
 }
 
