@@ -72,6 +72,7 @@ enum {
 	GARBAGE_COLLECT_EVENT,
 	DUMP_EVENT,
 	DUMP_BW_EVENT,
+	DUMP_BIG_BW_EVENT,
 
 	SENDING_EVENT,
 	WILLSEND_EVENT,
@@ -116,8 +117,8 @@ struct beaconSource {
 	void refresh(uint32_t, uint64_t);
 	void update(uint32_t, uint64_t, uint64_t);
 
-	typedef map<beaconSourceAddr, beaconExternalStats> Sources;
-	Sources externalSources;
+	typedef map<beaconSourceAddr, beaconExternalStats> ExternalSources;
+	ExternalSources externalSources;
 
 	beaconExternalStats &getExternal(const in6_addr &, uint16_t, uint64_t);
 };
@@ -168,10 +169,13 @@ static int build_jprobe(uint8_t *, int, uint32_t, uint64_t);
 static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 
 static void do_dump();
-static void do_bw_dump();
+static void do_bw_dump(bool);
 
 static uint32_t bytesReceived = 0;
 static uint32_t bytesSent = 0;
+
+static uint64_t bigBytesReceived = 0;
+static uint64_t bigBytesSent = 0;
 
 static uint64_t get_timestamp();
 
@@ -393,8 +397,10 @@ int main(int argc, char **argv) {
 	if (dump)
 		insert_event(DUMP_EVENT, 5000);
 
-	if (dump_bw)
+	if (dump_bw) {
 		insert_event(DUMP_BW_EVENT, 10000);
+		insert_event(DUMP_BW_EVENT, 600000);
+	}
 
 	if (newProtocol)
 		send_report(false);
@@ -506,7 +512,8 @@ void handle_event() {
 		do_dump();
 		break;
 	case DUMP_BW_EVENT:
-		do_bw_dump();
+	case DUMP_BIG_BW_EVENT:
+		do_bw_dump(t.type == DUMP_BIG_BW_EVENT);
 		break;
 	}
 
@@ -536,6 +543,17 @@ void handle_gc() {
 			}
 		}
 		if (!remove) {
+			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
+			while (j != i->second.externalSources.end()) {
+				if ((now - j->second.lastlocalupdate) > 120000) {
+					beaconSource::ExternalSources::iterator k = j;
+					j++;
+					i->second.externalSources.erase(k);
+				} else {
+					j++;
+				}
+			}
+
 			i++;
 		} else {
 			Sources::iterator j = i;
@@ -552,11 +570,11 @@ void handle_gc() {
 			k++;
 			externalBeacons.erase(j);
 		} else {
-			for (externalBeacon::Sources::iterator m = k->second.sources.begin(); m != k->second.sources.end();) {
+			for (map<string, beaconExternalStats>::iterator m = k->second.jsources.begin(); m != k->second.jsources.end();) {
 				if ((now - m->second.lastlocalupdate) > 120000) {
-					externalBeacon::Sources::iterator n = m;
+					map<string, beaconExternalStats>::iterator n = m;
 					m++;
-					k->second.sources.erase(n);
+					k->second.jsources.erase(n);
 				} else {
 					m++;
 				}
@@ -879,7 +897,7 @@ void beaconSource::setName(const string &n) {
 beaconExternalStats &beaconSource::getExternal(const in6_addr &addr, uint16_t port, uint64_t ts) {
 	beaconSourceAddr baddr(addr, port);
 
-	Sources::iterator k = externalSources.find(baddr);
+	ExternalSources::iterator k = externalSources.find(baddr);
 	if (k == externalSources.end()) {
 		externalSources.insert(make_pair(baddr, beaconExternalStats()));
 		k = externalSources.find(baddr);
@@ -1300,7 +1318,7 @@ void do_dump() {
 			fprintf(fp, ">\n");
 			fprintf(fp, "\t\t<sources>\n");
 
-			for (beaconSource::Sources::const_iterator j = i->second.externalSources.begin();
+			for (beaconSource::ExternalSources::const_iterator j = i->second.externalSources.begin();
 					j != i->second.externalSources.end(); j++) {
 				fprintf(fp, "\t\t\t<source");
 				if (j->second.identified) {
@@ -1350,11 +1368,20 @@ void do_dump() {
 	fclose(fp);
 }
 
-void do_bw_dump() {
-	fprintf(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)\n",
-			bytesReceived, bytesReceived * 8 / 10000., bytesSent, bytesSent * 8 / 10000.);
-	bytesReceived = 0;
-	bytesSent = 0;
+void do_bw_dump(bool big) {
+	if (big) {
+		fprintf(stdout, "BW Usage for 600 secs: Received %llu bytes (%.2lf Kb/s) Sent %llu bytes (%.2lf Kb/s)\n",
+				bigBytesReceived, bigBytesReceived * 8 / (1000. * 600), bigBytesSent, bigBytesSent * 8 / (1000. * 600));
+		bigBytesReceived = 0;
+		bigBytesSent = 0;
+	} else {
+		fprintf(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)\n",
+				bytesReceived, bytesReceived * 8 / 10000., bytesSent, bytesSent * 8 / 10000.);
+		bigBytesReceived += bytesReceived;
+		bigBytesSent += bytesSent;
+		bytesReceived = 0;
+		bytesSent = 0;
+	}
 }
 
 int IPv6MulticastListen(int sock, struct in6_addr *grpaddr) {
