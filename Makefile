@@ -10,5 +10,5 @@ install: dbeacon
 	install -D dbeacon $(DESTDIR)$(PREFIX)/bin/dbeacon
 
 clean:
-	rm dbeacon
+	rm -f dbeacon
 
