@@ -20,6 +20,7 @@
 using namespace std;
 
 static const char *magicString = "beacon0600";
+static const int magicLen = 10;
 static char sessionName[256] = "";
 static char beaconName[256];
 static char probeName[256] = "";
@@ -60,6 +61,8 @@ struct beaconSource {
 	uint32_t lastseq;
 	uint64_t lasttimestamp;
 
+	int lastttl;
+
 	uint32_t packetcount, packetcountreal;
 	uint32_t pointer;
 
@@ -71,7 +74,7 @@ struct beaconSource {
 	uint32_t cacheseqnum[PACKETS_PERIOD+1];
 
 	void refresh(uint32_t, uint64_t);
-	void update(const in6_addr *, uint32_t, uint64_t, uint64_t);
+	void update(const in6_addr *, int ttl, uint32_t, uint64_t, uint64_t);
 };
 
 static map<string, beaconSource> sources;
@@ -90,8 +93,10 @@ map<string, externalBeacon> externalBeacons;
 
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
-static void handle_jprobe(int);
+static void handle_probe(int, content_type);
+static void handle_jprobe(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len);
 static void handle_jreport(int);
+static int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, externalBeacon &rpt);
 static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
@@ -103,7 +108,7 @@ static void do_dump();
 
 static uint64_t get_timestamp();
 
-static void updateStats(const char *, const in6_addr *, uint32_t, uint64_t, uint64_t);
+static inline void updateStats(const char *, const in6_addr *, int, uint32_t, uint64_t, uint64_t);
 
 static int SetupSocket(sockaddr_in6 *, bool);
 static int IPv6MulticastListen(int, struct in6_addr *);
@@ -383,16 +388,12 @@ void handle_gc() {
 	}
 }
 
-void handle_jprobe(int sock) {
-	int len, pointer;
+void handle_probe(int sock, content_type type) {
+	int len;
 	struct sockaddr_in6 from;
-	char name[256], tmp[64], *end;
-	uint32_t seqnum;
-	uint64_t timestamp;
 	struct msghdr msg;
 	struct iovec iov;
 	uint8_t ctlbuf[64];
-	uint64_t recvdts = 0;
 
 	msg.msg_name = (char *)&from;
 	msg.msg_namelen = sizeof(from);
@@ -409,59 +410,76 @@ void handle_jprobe(int sock) {
 	if (len < 0)
 		return;
 
+	uint64_t recvdts = 0;
+	int ttl = 0;
+
 	for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
 		if (hdr->cmsg_level == SOL_SOCKET && hdr->cmsg_type == SO_TIMESTAMP) {
 			timeval *tv = (timeval *)CMSG_DATA(hdr);
 			recvdts = tv->tv_sec;
 			recvdts *= 1000;
 			recvdts += tv->tv_usec / 1000;
+		} else if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
+			ttl = *(int *)CMSG_DATA(hdr);
 		}
 	}
 
 	if (!recvdts)
 		return;
 
+	if (type == JPROBE) {
+		handle_jprobe(&from, recvdts, ttl, buffer, len);
+	}
+}
+
+struct jbuffer {
+	jbuffer(uint8_t *, int);
+
+	uint8_t *buff;
+	int len, pointer;
+
+	bool eob() { return pointer >= len; }
+	uint8_t top() const { return buff[pointer]; }
+
+	bool skip_string();
+	bool read(void *, int);
+	bool read_string(string &);
+	bool read_long(uint32_t &);
+	bool read_longlong(uint64_t &);
+	bool read_float(float &);
+
+	bool write(const void *, int);
+	bool write_string(const string &);
+	bool write_long(uint32_t);
+	bool write_longlong(uint64_t);
+	bool write_float(float);
+	bool write_char(char);
+};
+
+void handle_jprobe(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len) {
+	jbuffer buf(buffer, len);
+
+	uint8_t tmp[magicLen];
+	if (!buf.read(tmp, sizeof(tmp)) || memcmp(tmp, magicString, magicLen))
+		return;
+
+	string name;
+	if (!buf.read_string(name))
+		return;
+
+	uint32_t seqnum;
+	if (!buf.read_long(seqnum))
+		return;
+
+	uint64_t timestamp;
+	if (!buf.read_longlong(timestamp))
+		return;
+
 	if (len < (int)strlen(magicString))
 		return;
 
-	if (memcmp(buffer, magicString, strlen(magicString)) != 0)
-		return;
-
-	pointer = strlen(magicString);
-
-	if (len < (pointer + buffer[pointer]))
-		return;
-
-	memcpy(name, buffer + pointer + 1, buffer[pointer]);
-	name[buffer[pointer]] = 0;
-
-	pointer += buffer[pointer] + 1;
-
-	if (len < (pointer + buffer[pointer]) || buffer[pointer] >= sizeof(tmp))
-		return;
-
-	memcpy(tmp, buffer + pointer + 1, buffer[pointer]);
-	tmp[buffer[pointer]] = 0;
-	pointer += buffer[pointer] + 1;
-
-	seqnum = strtoul(tmp, &end, 10);
-	if (*end)
-		return;
-
-	if (len < (pointer + buffer[pointer]) || buffer[pointer] >= sizeof(tmp))
-		return;
-
-	memcpy(tmp, buffer + pointer + 1, buffer[pointer]);
-	tmp[buffer[pointer]] = 0;
-	pointer += buffer[pointer] + 1;
-
-	if (sscanf(tmp, "%llu", &timestamp) != 1)
-		return;
-
-	updateStats(name, &from.sin6_addr, seqnum, timestamp, recvdts);
+	updateStats(name.c_str(), &from->sin6_addr, ttl, seqnum, timestamp, recvdts);
 }
-
-static int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, externalBeacon &rpt);
 
 void handle_jreport(int sock) {
 	sockaddr_in6 from;
@@ -483,29 +501,6 @@ void handle_jreport(int sock) {
 
 	externalBeacons[name] = beac;
 }
-
-struct jbuffer {
-	jbuffer(uint8_t *, int);
-
-	uint8_t *buff;
-	int len, pointer;
-
-	bool eob() { return pointer >= len; }
-	uint8_t top() const { return buff[pointer]; }
-
-	bool skip_string();
-	bool read_string(string &);
-	bool read_long(uint32_t &);
-	bool read_longlong(uint64_t &);
-	bool read_float(float &);
-
-	bool write(const void *, int);
-	bool write_string(const string &);
-	bool write_long(uint32_t);
-	bool write_longlong(uint64_t);
-	bool write_float(float);
-	bool write_char(char);
-};
 
 int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, externalBeacon &rpt) {
 	jbuffer buf(buffer, len);
@@ -547,7 +542,7 @@ int parse_jreport(uint8_t *buffer, int len, string &session, string &probe, exte
 
 void handle_mcast(int sock, content_type cnt) {
 	if (cnt == JPROBE) {
-		handle_jprobe(sock);
+		handle_probe(sock, JPROBE);
 	} else if (cnt == JREPORT) {
 		handle_jreport(sock);
 	}
@@ -590,6 +585,8 @@ void beaconSource::refresh(uint32_t seq, uint64_t now) {
 	lasttimestamp = 0;
 	lastevent = now;
 
+	lastttl = 0;
+
 	packetcount = packetcountreal = 0;
 	pointer = 0;
 
@@ -601,7 +598,7 @@ void beaconSource::refresh(uint32_t seq, uint64_t now) {
 
 template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; }
 
-void beaconSource::update(const in6_addr *from, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
+void beaconSource::update(const in6_addr *from, int ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 	int64_t diff = udiff(now, timestamp);
 
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
@@ -615,6 +612,7 @@ void beaconSource::update(const in6_addr *from, uint32_t seqnum, uint64_t timest
 
 	lasttimestamp = timestamp;
 	lastevent = now;
+	lastttl = ttl;
 
 	bool dup = false;
 
@@ -682,8 +680,8 @@ void beaconSource::update(const in6_addr *from, uint32_t seqnum, uint64_t timest
 	}
 }
 
-void updateStats(const char *name, const in6_addr *from, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
-	getSource(name, seqnum).update(from, seqnum, timestamp, now);
+void updateStats(const char *name, const in6_addr *from, int ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
+	getSource(name, seqnum).update(from, ttl, seqnum, timestamp, now);
 }
 
 int send_probe() {
@@ -817,6 +815,7 @@ void do_dump() {
 				fprintf(fp, "\t\t\t<source>\n");
 				fprintf(fp, "\t\t\t\t<name>%s</name>\n", i->first.c_str());
 				fprintf(fp, "\t\t\t\t<address>%s</address>\n", tmp);
+				fprintf(fp, "\t\t\t\t<ttl>%i</ttl>\n", i->second.lastttl);
 				fprintf(fp, "\t\t\t\t<loss>%.1f</loss>\n", i->second.avgloss);
 				fprintf(fp, "\t\t\t\t<delay>%.3f</delay>\n", i->second.avgdelay);
 				fprintf(fp, "\t\t\t\t<jitter>%.3f</jitter>\n", i->second.avgjitter);
@@ -861,7 +860,7 @@ int IPv6MulticastListen(int sock, struct in6_addr *grpaddr) {
 	return setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
 }
 
-int SetupSocket(sockaddr_in6 *addr, bool needTimeStamp) {
+int SetupSocket(sockaddr_in6 *addr, bool isProbe) {
 	int sock = socket(AF_INET6, SOCK_DGRAM, 0);
 	if (sock < 0) {
 		perror("Failed to create multicast socket");
@@ -876,9 +875,14 @@ int SetupSocket(sockaddr_in6 *addr, bool needTimeStamp) {
 
 	int on = 1;
 
-	if (needTimeStamp) {
+	if (isProbe) {
 		if (setsockopt(sock, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0) {
-			perror("setsockopt");
+			perror("setsockopt(SO_TIMESTAMP)");
+			return -1;
+		}
+
+		if (setsockopt(sock, IPPROTO_IPV6, IPV6_HOPLIMIT, &on, sizeof(on)) != 0) {
+			perror("setsockopt(IPV6_HOPLIMIT)");
 			return -1;
 		}
 	}
@@ -892,14 +896,14 @@ int SetupSocket(sockaddr_in6 *addr, bool needTimeStamp) {
 		on = 0;
 
 		if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
-			perror("setsockopt");
+			perror("setsockopt(IPV6_MULTICAST_LOOP)");
 			return -1;
 		}
 
 		int ttl = 255;
 
 		if (setsockopt(sock, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
-			perror("setsockopt");
+			perror("setsockopt(IPV6_MULTICAST_HOPS)");
 			return -1;
 		}
 
@@ -919,6 +923,14 @@ int SetupSocket(sockaddr_in6 *addr, bool needTimeStamp) {
 
 jbuffer::jbuffer(uint8_t *buffer, int maxlen)
 	: buff(buffer), len(maxlen), pointer(0) {}
+
+bool jbuffer::read(void *ptr, int ptrlen) {
+	if ((pointer + ptrlen) > len)
+		return false;
+	memcpy(ptr, buff + pointer, ptrlen);
+	pointer += ptrlen;
+	return true;
+}
 
 bool jbuffer::skip_string() {
 	string foo;
