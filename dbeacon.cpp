@@ -449,11 +449,11 @@ int main(int argc, char **argv) {
 
 void show_version() {
 	fprintf(stderr, "\n");
-	fprintf(stderr, "dbeacon - a Multicast Beacon ($Rev$)\n");
+	fprintf(stderr, "dbeacon - a Multicast Beacon %s\n", versionInfo);
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  Copyright (c) 2005 - Hugo Santos <hsantos@av.it.pt>\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "  http://artemis.av.it.pt/~hsantos/software/dbeacon.html\n");
+	fprintf(stderr, "  http://artemis.av.it.pt/~hsantos/dbeacon/\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;\n");
 	fprintf(stderr, "  o Ideas and testing by Sebastien Chaumontet;\n");
