@@ -1034,7 +1034,7 @@ void do_dump() {
 			fprintf(fp, " contact=\"%s\"", adminContact.c_str());
 		if (!twoLetterCC.empty())
 			fprintf(fp, " country=\"%s\"", twoLetterCC.c_str());
-		fprintf(fp, " age=\"%llu\" lastupdate=\"0\">\n", (now - startTime) / 1000);
+		fprintf(fp, " age=\"%llu\" lastupdate=\"0\" rxlocal=\"true\">\n", (now - startTime) / 1000);
 
 		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++) {
 			const char *typnam = j->first == T_WEBSITE_GENERIC ?
