@@ -31,6 +31,7 @@ our $dump_update_delay = 5;	# time between each normal dumps (used to detect out
 our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
 our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
+our $matrix_link_title = 0;
 
 do 'matrix.conf';
 
@@ -208,7 +209,11 @@ sub make_history_link {
 	my ($dst, $src, $type, $txt, $class) = @_;
 
 	if ($history_enabled) {
-		print '<a class="', $class, '" href="', make_history_url(build_name($dst), build_name($src), $type) . '">', $txt, '</a>';
+		my $dstname = build_name($dst);
+		my $srcname = build_name($src);
+		print '<a class="', $class, '" href="', make_history_url($dstname, $srcname, $type) . '"';
+		print ' title="', $srcname->[1], ' <- ', $dstname->[1], '"' if $matrix_link_title;
+		print '>', $txt, '</a>';
 	} else {
 		print $txt;
 	}
