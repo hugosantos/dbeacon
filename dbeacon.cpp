@@ -1,4 +1,8 @@
+#if __FreeBSD_version <= 500042
+#include <inttypes.h>
+#else
 #include <stdint.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -248,7 +252,7 @@ static uint64_t get_timestamp();
 static beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now);
 static void removeSource(const beaconSourceAddr &baddr, bool);
 
-static int SetupSocket(address *, bool, bool);
+static int SetupSocket(address *, bool, bool, bool);
 static int MulticastListen(int, address *);
 static int SSMJoin(int, const address *);
 static int SSMLeave(int, const address *);
@@ -525,7 +529,7 @@ int main(int argc, char **argv) {
 	address local;
 	local.ss_family = probeAddr.ss_family;
 
-	mcastSock = SetupSocket(&local, false, false);
+	mcastSock = SetupSocket(&local, false, false, false);
 	if (mcastSock < 0)
 		return -1;
 
@@ -544,7 +548,7 @@ int main(int argc, char **argv) {
 	}
 
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
-		int sock = SetupSocket(&i->first, i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
+		int sock = SetupSocket(&i->first, true, i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
 		mcastSocks.push_back(make_pair(sock, i->second));
@@ -1586,7 +1590,7 @@ int SSMLeave(int sock, const address *srcaddr) {
 	return SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, srcaddr);
 }
 
-int SetupSocket(address *addr, bool needTSHL, bool ssm) {
+int SetupSocket(address *addr, bool shouldbind, bool needTSHL, bool ssm) {
 	if (verbose) {
 		char tmp[64];
 		addr->print(tmp, sizeof(tmp));
@@ -1609,9 +1613,11 @@ int SetupSocket(address *addr, bool needTSHL, bool ssm) {
 		return -1;
 	}
 
-	if (bind(sock, (sockaddr *)addr, af_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in)) != 0) {
-		perror("Failed to bind multicast socket");
-		return -1;
+	if (shouldbind) {
+		if (bind(sock, (sockaddr *)addr, af_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in)) != 0) {
+			perror("Failed to bind multicast socket");
+			return -1;
+		}
 	}
 
 	if (needTSHL) {
