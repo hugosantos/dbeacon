@@ -9,7 +9,6 @@
 # by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël
 
 use CGI;
-use Graph::Directed;
 use XML::Parser;
 use RRDs;
 use POSIX qw(strftime);
@@ -35,16 +34,18 @@ do('matrix.conf');
 
 my $dbeacon = '<a href="http://artemis.av.it.pt/~hsantos/software/dbeacon.html">dbeacon</a>';
 
-my $g;
+use constant NEIGH => 0;
+use constant IN_EDGE => 1;
+use constant OUT_EDGE => 2;
+use constant NAME => 3;
+use constant CONTACT => 4;
+use constant COUNTRY => 5;
+use constant AGE => 6;
+use constant URL => 7;
+use constant LG => 8;
+use constant MATRIX => 9;
 
-# trying to speed things up by using hashtables instead of Graph's vertex attributes
-my %names;
-my %contacts;
-my %countries;
-my %urls;
-my %urls_lg;
-my %urls_matrix;
-my %beac_ages;
+my %adj;
 
 my $sessiongroup;
 my $ssm_sessiongroup;
@@ -104,12 +105,16 @@ if (defined($history_enabled) and $history_enabled and defined($page->param('img
 sub build_vertex_from_rrd {
 	my ($start, $step, $names, $data);
 
-	$g = new Graph::Directed;
-
 	foreach my $dstbeacon (get_beacons($historydir)) {
 		my ($dstname,$dstaddr) = get_name_from_host($dstbeacon);
-		$g->add_vertex($dstaddr);
-		$names{$dstaddr} = $dstname;
+
+		if (not defined($adj{$dstaddr})) {
+			$adj{$dstaddr}[IN_EDGE] = 0;
+			$adj{$dstaddr}[OUT_EDGE] = 0;
+		}
+
+		$adj{$dstaddr}[NAME] = $dstname;
+
 		foreach my $srcbeacon (get_beacons($historydir.'/'.$dstbeacon)) {
 			my ($srcname,$srcaddr,$asmorssm) = get_name_from_host($srcbeacon);
 
@@ -120,19 +125,33 @@ sub build_vertex_from_rrd {
 				next;
 			}
 
-			if (not $g->has_vertex($srcaddr)) {
-				$g->add_vertex($srcaddr);
-				$names{$srcaddr} = $srcname;
+			if (not defined($adj{$srcaddr})) {
+				$adj{$srcaddr}[IN_EDGE] = 0;
+				$adj{$srcaddr}[OUT_EDGE] = 0;
 			}
 
-			# $g->add_edge($srcaddr, $dstaddr);
+			if (defined($srcname)) {
+				$adj{$srcaddr}[NAME] = $srcname;
+			}
 
 			for (my $i = 0; $i < $#$names+1; $i++) {
 				if (defined($$data[0][$i])) {
 					if ($$names[$i] =~ /^(delay|jitter)$/) {
 						$$data[0][$i] *= 1000;
 					}
-					$g->set_edge_attribute($srcaddr, $dstaddr, $asmorssm . '_' . $$names[$i], $$data[0][$i]);
+
+					if (not defined($adj{$dstaddr}[NEIGH]{$srcaddr})) {
+						$adj{$dstaddr}[IN_EDGE] ++;
+						$adj{$srcaddr}[OUT_EDGE] ++;
+					}
+
+					my $index = 1;
+					if ($asmorssm eq 'ssm') {
+						$index = 2;
+					}
+
+					$adj{$dstaddr}[NEIGH]{$srcaddr}[0] ++;
+					$adj{$dstaddr}[NEIGH]{$srcaddr}[$index]{$$names[$i]} = $$data[0][$i];
 				}
 			}
 		}
@@ -154,8 +173,6 @@ sub full_url {
 sub parse_dump_file {
 	my ($dump) = @_;
 
-	$g = new Graph::Directed;
-
 	my $parser = new XML::Parser(Style => 'Tree');
 	$parser->setHandlers(Start => \&start_handler);
 	my $tree = $parser->parsefile($dump);
@@ -176,7 +193,7 @@ sub check_outdated_dump {
 sub beacon_name {
 	my ($d) = @_;
 
-	return $names{$d} or "($d)";
+	return $adj{$d}[NAME] or "($d)";
 }
 
 sub make_history_url {
@@ -194,7 +211,7 @@ sub make_history_url {
 sub build_name {
 	my ($a) = @_;
 
-	return [$a, $names{$a}];
+	return [$a, $adj{$a}[NAME]];
 }
 
 sub make_history_link {
@@ -269,45 +286,53 @@ sub start_handler {
 		$current_source = '';
 
 		if ($atts{'addr'} and $atts{'name'} and $atts{'age'} > 0) {
-			$g->add_vertex($current_beacon);
-			$names{$current_beacon} = $atts{'name'};
-			$contacts{$current_beacon} = $atts{'contact'};
-			$beac_ages{$current_beacon} = $atts{'age'};
+			$adj{$current_beacon}[NAME] = $atts{'name'};
+			$adj{$current_beacon}[CONTACT] = $atts{'contact'};
+			$adj{$current_beacon}[AGE] = $atts{'age'};
 			if (defined($atts{'country'})) {
-				$countries{$current_beacon} = $atts{'country'};
+				$adj{$current_beacon}[COUNTRY] = $atts{'country'};
 			}
 		}
 	} elsif ($tag eq 'asm' or $tag eq 'ssm') {
 		foreach my $att ('ttl', 'loss', 'delay', 'jitter') {
 			if (defined($atts{$att})) {
-				$g->set_edge_attribute($current_source, $current_beacon, $tag . '_' . $att, $atts{$att});
+				my $index = 1;
+				if ($tag eq 'ssm') {
+					$index = 2;
+				}
+
+				if (not defined($adj{$current_beacon}[NEIGH]{$current_source})) {
+					$adj{$current_beacon}[IN_EDGE] ++;
+					$adj{$current_source}[OUT_EDGE] ++;
+				}
+
+				$adj{$current_beacon}[NEIGH]{$current_source}[0] ++;
+				$adj{$current_beacon}[NEIGH]{$current_source}[$index]{$att} = $atts{$att};
 			}
 		}
 	} elsif ($tag eq 'source') {
 		$current_source = $atts{'addr'};
 
 		if (defined($atts{'name'}) and defined($atts{'addr'})) {
-			if (not $g->has_vertex($current_source)) {
-				$g->add_vertex($current_source);
-
-				$names{$current_source} = $atts{'name'};
-				$contacts{$current_source} = $atts{'contact'};
+			if (defined($atts{'name'})) {
+				$adj{$current_source}[NAME] = $atts{'name'};
+			}
+			if (defined($atts{'contact'})) {
+				$adj{$current_source}[CONTACT] = $atts{'contact'}
 			}
 
-			if (not $countries{$current_source} and defined($atts{'country'})) {
-				$countries{$current_source} = $atts{'country'};
+			if (not $adj{$current_source}[COUNTRY] and defined($atts{'country'})) {
+				$adj{$current_source}[COUNTRY] = $atts{'country'};
 			}
-
-			# $g->add_edge($current_source, $current_beacon);
 		}
 	} elsif ($tag eq 'website') {
 		if ($atts{'type'} ne '' and $atts{'url'} ne '') {
 			if ($atts{'type'} eq 'generic') {
-				$urls{$current_source or $current_beacon} = $atts{'url'};
+				$adj{$current_source or $current_beacon}[URL] = $atts{'url'};
 			} elsif ($atts{'type'} eq 'lg') {
-				$urls_lg{$current_source or $current_beacon} = $atts{'url'};
+				$adj{$current_source or $current_beacon}[LG] = $atts{'url'};
 			} elsif ($atts{'type'} eq 'matrix') {
-				$urls_matrix{$current_source or $current_beacon} = $atts{'url'};
+				$adj{$current_source or $current_beacon}[MATRIX] = $atts{'url'};
 			}
 		}
 	}
@@ -448,10 +473,10 @@ sub end_document {
 		my $render_end = [gettimeofday];
 		my $diff = tv_interval $load_start, $render_end;
 
-		print '<p style="margin: 0"><small>Took ', "$diff", ' seconds from load to end of render';
+		print '<p style="margin: 0"><small>Took ', (sprintf "%.3f", $diff), ' seconds from load to end of render';
 		if (defined($ended_parsing_dump)) {
 			my $dumpdiff = tv_interval $load_start, $ended_parsing_dump;
-			print ' (', "$dumpdiff", ' in parsing dump file)';
+			print ' (', (sprintf "%.3f", $dumpdiff), ' in parsing dump file)';
 		}
 		print '.</small></p>', "\n";
 	}
@@ -514,47 +539,42 @@ sub render_matrix {
 	my @warmingup = ();
 	my @localnoreceive = ();
 
-	my @V = $g->vertices();
-
-	my %in_edges;
-	my %out_edges;
 	my %ids;
 
 	print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
 	print '<tr><td>&nbsp;</td>';
-	foreach $c (@V) {
-		$in_edges{$c} = scalar($g->in_edges($c));
-		$out_edges{$c} = scalar($g->out_edges($c));
 
-		if (defined($beac_ages{$c}) and $beac_ages{$c} < 30) {
+	foreach $c (keys %adj) {
+		if (defined($adj{$c}[AGE]) and $adj{$c}[AGE] < 30) {
 			push (@warmingup, $c);
-		} elsif (not $in_edges{$c} and not $out_edges{$c}) {
+		} elsif (not $adj{$c}[IN_EDGE] and not $adj{$c}[OUT_EDGE]) {
 			push (@problematic, $c);
 		} else {
-			if ($out_edges{$c} > 0) {
+			if ($adj{$c}[OUT_EDGE] > 0) {
 				print '<td ', $what_td, '><b>S', $i, '</b></td>';
 			}
 
 			$ids{$c} = $i;
 			$i++;
 
-			if (not $in_edges{$c}) {
+			if (not $adj{$c}[IN_EDGE]) {
 				push (@localnoreceive, $c);
 			}
 		}
 	}
+
 	print "</tr>\n";
 
-	foreach $a (@V) {
+	foreach $a (keys %adj) {
 		my $id = $ids{$a};
-		if ($id >= 1 and $in_edges{$a} > 0) {
+		if ($id >= 1 and $adj{$a}[IN_EDGE] > 0) {
 			print '<tr>';
 			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $id, '</b></td>';
-			foreach $b (@V) {
-				if ($ids{$b} >= 1 and $out_edges{$b} > 0) {
-					if ($b ne $a and $g->has_edge($b, $a)) {
-						my $txt = $g->get_edge_attribute($b, $a, "asm_$attname");
-						my $txtssm = $g->get_edge_attribute($b, $a, "ssm_$attname");
+			foreach $b (keys %adj) {
+				if ($ids{$b} >= 1 and $adj{$b}[OUT_EDGE] > 0) {
+					if ($b ne $a and defined($adj{$a}[NEIGH]{$b})) {
+						my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
+						my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
 
 						if ($attname ne 'ttl') {
 							if (defined($txt)) {
@@ -586,8 +606,6 @@ sub render_matrix {
 								print '</td>';
 							}
 						} else {
-							my $txtssm = $g->get_edge_attribute($b, $a, "ssm_$attname");
-
 							if (not defined($txt) and not defined($txtssm)) {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
@@ -595,12 +613,10 @@ sub render_matrix {
 								make_matrix_cell($b, $a, "ssm", $txtssm, "historyurl");
 							}
 						}
+					} elsif ($a eq $b) {
+						print "<td $what_td class=\"corner\">&nbsp;</td>";
 					} else {
-						if ($a eq $b) {
-							print "<td $what_td class=\"corner\">&nbsp;</td>";
-						} else {
-							print "<td $what_td class=\"blackhole\">XX</td>";
-						}
+						print "<td $what_td class=\"blackhole\">XX</td>";
 					}
 				}
 			}
@@ -614,8 +630,8 @@ sub render_matrix {
 		print '<ul>', "\n";
 		foreach $a (@localnoreceive) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
-			if ($contacts{$a}) {
-				print ' (', $contacts{$a}, ')';
+			if ($adj{$a}[CONTACT]) {
+				print ' (', $adj{$a}[CONTACT], ')';
 			}
 			print '</li>', "\n";
 		}
@@ -627,8 +643,8 @@ sub render_matrix {
 		print '<ul>', "\n";
 		foreach $a (@warmingup) {
 			print '<li>', $a;
-			if ($names{$a}) {
-				print ' (', $names{$a}, ', ', $contacts{$a}, ')';
+			if ($adj{$a}[NAME]) {
+				print ' (', $adj{$a}[NAME], ', ', $adj{$a}[CONTACT], ')';
 			}
 			print '</li>', "\n";
 		}
@@ -641,13 +657,13 @@ sub render_matrix {
 		my $len = scalar(@problematic);
 		for (my $j = 0; $j < $len; $j++) {
 			my $prob = $problematic[$j];
-			my @neighs = $g->neighbours($prob);
+			my @neighs = keys %{$adj{$prob}[NEIGH]};
 
 			print '<li>', $prob;
-			if ($names{$prob}) {
-				print ' (', $names{$prob};
-				if ($contacts{$prob}) {
-					print ', ', $contacts{$prob};
+			if ($adj{$prob}[NAME]) {
+				print ' (', $adj{$prob}[NAME];
+				if ($adj{$prob}[CONTACT]) {
+					print ', ', $adj{$prob}[CONTACT];
 				}
 				print ')';
 			}
@@ -662,9 +678,9 @@ sub render_matrix {
 				print '<ul>Received from:<ul>', "\n";
 
 				for (my $l = 0; $l < $k; $l++) {
-					print '<li><span class="beacon">"', $neighs[$l];
-					if ($names{$neighs[$l]}) {
-						print ' (', $names{$neighs[$l]}, ')';
+					print '<li><span class="beacon">', $neighs[$l];
+					if ($adj{$neighs[$l]}[NAME]) {
+						print ' (', $adj{$neighs[$l]}[NAME], ')';
 					}
 					print '</span></li>', "\n";
 				}
@@ -685,42 +701,42 @@ sub render_matrix {
 		print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
 
 		print '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>', "\n";
-		foreach $a (@V) {
-			if ($ids{$a} >= 1) {
+		foreach $a (keys %adj) {
+			if ($ids{$a} > 0) {
 				print '<tr>', '<td align="right" class="beacname">';
-				if ($urls{$a}) {
-					print '<a class="beacon_url" href="', $urls{$a}, '">';
+				if ($adj{$a}[URL]) {
+					print '<a class="beacon_url" href="', $adj{$a}[URL], '">';
 				}
-				print $names{$a};
-				if ($urls{$a}) {
+				print $adj{$a}[NAME];
+				if ($adj{$a}[URL]) {
 					print '</a>';
 				}
 				print ' <b>R', $ids{$a}, '</b>', '</td>';
 
 				print '<td>';
-				if ($flag_url_format ne "" and $countries{$a}) {
+				if ($flag_url_format ne "" and $adj{$a}[COUNTRY]) {
 					print '<img src="';
-					printf $flag_url_format, lc $countries{$a};
-					print '" alt="', $countries{$a}, '" style="vertical-align: middle; border: 1px solid black" />';
+					printf $flag_url_format, lc $adj{$a}[COUNTRY];
+					print '" alt="', $adj{$a}[COUNTRY], '" style="vertical-align: middle; border: 1px solid black" />';
 				}
 				print '</td>';
 
-				print '<td class="age">', format_date($beac_ages{$a}), '</td>';
+				print '<td class="age">', format_date($adj{$a}[AGE]), '</td>';
 				# Removing port number from id and link toward RIPE whois db
 			        my $ip = $a;
 			        $ip =~ s/\/\d+$//;
 			        print '<td class="addr"><a href="', make_ripe_search_url($ip), '">', $ip, '</a></td>';
-				print '<td class="admincontact">', $contacts{$a}, '</td>';
+				print '<td class="admincontact">', ($adj{$a}[CONTACT] or '-'), '</td>';
 
 				my $urls;
-				if ($urls_lg{$a}) {
-					$urls .= " <a href=\"" . $urls_lg{$a} . "\">L</a>";
+				if ($adj{$a}[LG]) {
+					$urls .= " <a href=\"" . $adj{$a}[LG] . "\">L</a>";
 				}
-				if ($urls_matrix{$a}) {
-					$urls .= " <a href=\"" . $urls_matrix{$a} . "\">M</a>";
+				if ($adj{$a}[MATRIX]) {
+					$urls .= " <a href=\"" . $adj{$a}[MATRIX] . "\">M</a>";
 				}
 
-				print '<td class="urls">', ($urls or "-"), '</td>';
+				print '<td class="urls">', ($urls or '-'), '</td>';
 				print '</tr>', "\n";
 			}
 		}
@@ -752,15 +768,13 @@ sub store_data {
 	}
 	parse_dump_file(@_);
 
-	my @verts = $g->vertices();
-
-	foreach my $a (@verts) {
-		if ($names{$a}) {
-			foreach my $b (@verts) {
-				if ($a ne $b and $g->has_edge($b, $a)) {
-					if ($names{$b}) {
-						store_data_one($a, $names{$a}, $b, $names{$b}, "asm");
-						store_data_one($a, $names{$a}, $b, $names{$b}, "ssm");
+	foreach my $a (keys %adj) {
+		if ($adj{$a}[NAME]) {
+			foreach my $b (keys %adj) {
+				if ($a ne $b and defined($adj{$a}[NEIGH]{$b})) {
+					if ($adj{$b}[NAME]) {
+						store_data_one($a, $adj{$a}[NAME], $b, $adj{$b}[NAME], "asm");
+						store_data_one($a, $adj{$a}[NAME], $b, $adj{$b}[NAME], "ssm");
 					}
 				}
 			}
@@ -780,8 +794,13 @@ sub store_data_one {
 
 	my $good = 0;
 
+	my $index = 1;
+	if ($tag eq 'ssm') {
+		$index = 2;
+	}
+
 	foreach my $type ('ttl', 'loss', 'delay', 'jitter') {
-		$values{$type} = $g->get_edge_attribute($src, $dst, $tag . '_' . $type);
+		$values{$type} = $adj{$dst}[NEIGH]{$src}[$index]{$type};
 		if (defined($values{$type})) {
 			$good++;
 		}
