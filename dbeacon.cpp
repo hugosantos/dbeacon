@@ -394,6 +394,15 @@ int main(int argc, char **argv) {
 	bool dump = false;
 	bool force = false;
 
+	char tmp[256];
+	if (gethostname(tmp, sizeof(tmp)) != 0) {
+		perror("Failed to get hostname");
+		return -1;
+	}
+
+	strcpy(beaconName, tmp);
+	strcpy(probeName, tmp);
+
 	const char *intf = 0;
 
 	while (1) {
@@ -403,7 +412,6 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Already have a name.\n");
 				return -1;
 			}
-			char tmp[256];
 			if (gethostname(tmp, sizeof(tmp)) != 0) {
 				perror("Failed to get hostname");
 				return -1;
@@ -981,8 +989,11 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 				}
 
 				// trigger local SSM join
-				if (!addr.is_equal(beaconUnicastAddr))
-					getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts).adminContact = stats.contact;
+				if (!addr.is_equal(beaconUnicastAddr)) {
+					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts);
+					if (!stats.contact.empty())
+						t.adminContact = stats.contact;
+				}
 			} else if (hd[0] == T_WEBSITE_GENERIC || hd[0] == T_WEBSITE_LG || hd[0] == T_WEBSITE_MATRIX) {
 				string url;
 				if (check_string((char *)hd + 2, hd[1], url)) {
@@ -1531,6 +1542,7 @@ void dumpBigBwStats(int) {
 
 void sendLeaveReport(int) {
 	send_report(LEAVE_REPORT);
+	exit(0);
 }
 
 int MulticastListen(int sock, address *grpaddr) {
