@@ -1216,6 +1216,8 @@ bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t
 	b[18] = (uint8_t)(st.s.avgdup * 0xff);
 	b[19] = (uint8_t)(st.s.avgooo * 0xff);
 
+	ptr += 20;
+
 	return true;
 }
 
