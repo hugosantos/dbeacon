@@ -361,7 +361,7 @@ int main(int argc, char **argv) {
 
 		res = select(largestSock + 1, &readset, 0, 0, &eventm);
 
-		if (verbose > 3) {
+		if (verbose > 5) {
 			fprintf(stderr, "select(): res = %i\n", res);
 		}
 
@@ -555,7 +555,7 @@ void handle_event() {
 	timer t = *timers.begin();
 	timers.erase(timers.begin());
 
-	if (verbose > 1)
+	if (verbose > 3)
 		fprintf(stderr, "Event %i\n", t.type);
 
 	switch (t.type) {
@@ -708,7 +708,7 @@ void Stats::check_validity(uint64_t now) {
 
 beaconExternalStats::beaconExternalStats() : identified(false) {}
 
-beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now, bool rx_local) {
+beaconSource &getSource(const address &baddr, const char *name, uint64_t now, bool rx_local) {
 	Sources::iterator i = sources.find(baddr);
 	if (i != sources.end()) {
 		i->second.lastevent = now;
@@ -746,7 +746,7 @@ beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_
 	return src;
 }
 
-void removeSource(const beaconSourceAddr &baddr, bool timeout) {
+void removeSource(const address &baddr, bool timeout) {
 	Sources::iterator i = sources.find(baddr);
 	if (i != sources.end()) {
 		if (verbose) {

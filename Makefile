@@ -12,15 +12,21 @@ dbeacon: $(OBJS)
 
 dbeacon.o: dbeacon.cpp dbeacon.h address.h msocket.h protocol.h
 
+dbeacon.h: address.h
+
 address_posix.o: address_posix.cpp dbeacon.h address.h
 
 msocket_posix.o: msocket_posix.cpp dbeacon.h msocket.h
 
 msocket.h: address.h
 
+protocol.o: protocol.cpp dbeacon.h protocol.h
+
+protocol.h: address.h
+
 install: dbeacon
 	install -D dbeacon $(DESTDIR)$(PREFIX)/bin/dbeacon
 
 clean:
-	rm -f dbeacon
+	rm -f dbeacon $(OBJS)
 

@@ -47,7 +47,6 @@ extern const TTLType defaultTTL;
 extern int forceFamily;
 extern int mcastInterface;
 
-typedef address beaconSourceAddr;
 struct beaconExternalStats;
 
 struct Stats {
@@ -113,7 +112,7 @@ struct beaconSource {
 	void setName(const std::string &);
 	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
 
-	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
+	beaconExternalStats &getExternal(const address &, uint64_t);
 
 	bool rxlocal(uint64_t now) const;
 
@@ -121,7 +120,7 @@ struct beaconSource {
 	std::string adminContact;
 	std::string CC;
 
-	typedef std::map<beaconSourceAddr, beaconExternalStats> ExternalSources;
+	typedef std::map<address, beaconExternalStats> ExternalSources;
 	ExternalSources externalSources;
 
 	WebSites webSites;
@@ -129,15 +128,15 @@ struct beaconSource {
 	bool identified;
 };
 
-typedef std::map<beaconSourceAddr, beaconSource> Sources;
+typedef std::map<address, beaconSource> Sources;
 
 extern std::string beaconName, adminContact, twoLetterCC;
 extern Sources sources;
 extern WebSites webSites;
 extern address beaconUnicastAddr;
 
-beaconSource &getSource(const beaconSourceAddr &, const char *name, uint64_t now, bool rxlocal);
-void removeSource(const beaconSourceAddr &, bool);
+beaconSource &getSource(const address &, const char *name, uint64_t now, bool rxlocal);
+void removeSource(const address &, bool);
 
 extern uint64_t get_timestamp();
 

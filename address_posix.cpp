@@ -145,7 +145,7 @@ bool address::is_equal(const address &a) const {
 	return false;
 }
 
-bool address::compare(const address &a) const {
+int address::compare(const address &a) const {
 	return memcmp(&stor, &a.stor, sizeof(stor));
 }
 

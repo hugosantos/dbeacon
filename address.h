@@ -54,7 +54,7 @@ struct address {
 	bool is_unspecified() const;
 
 	bool is_equal(const address &) const;
-	bool compare(const address &) const;
+	int compare(const address &) const;
 
 	void set(const sockaddr *);
 

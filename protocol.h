@@ -24,6 +24,8 @@
 #ifndef _protocol_h_
 #define _protocol_h_
 
+#include "address.h"
+
 #define PROTO_VER 1
 
 // Protocol TLV types
