@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <sys/signal.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <net/if.h>
@@ -405,6 +406,11 @@ void usage() {
 void fixDumpFile() {
 }
 
+static void waitForMe(int) {
+	int whocares;
+	wait(&whocares);
+}
+
 int main(int argc, char **argv) {
 	int res;
 
@@ -596,6 +602,8 @@ int main(int argc, char **argv) {
 
 	signal(SIGUSR1, dumpBigBwStats);
 	signal(SIGINT, sendLeaveReport);
+
+	signal(SIGCLD, waitForMe); // bloody fork, we dont want to wait for thee
 
 	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
