@@ -28,6 +28,7 @@ if ($attname eq "") {
 my $sessiongroup;
 
 my $current_beacon;
+my $current_source;
 my %adjacency_matrix;
 my $parser;
 my $g;
@@ -65,12 +66,17 @@ table#adj td {
 }
 table#adj td.adjacent {
 	background-color: #96ef96;
+	width: 16pt;
 }
 table#adj td.blackhole {
 	background-color: #000000;
 }
 table#adj td.noinfo {
 	background-color: #ff0000;
+}
+table#adj td.nossminfo {
+	background-color: #b6ffb6;
+	width: 16pt;
 }
 table#adj td.corner {
 	background-color: #dddddd;
@@ -120,7 +126,7 @@ my @problematic = ();
 
 foreach $c (@V) {
 	if (scalar($g->edges($c)) ge 1) {
-		print "<td>\n";
+		print "<td colspan=\"2\">\n";
 		print "<b>S$i</b>";
 		print "</td>\n";
 		$i++;
@@ -139,21 +145,31 @@ foreach $a (@V) {
 		print "</td>";
 		foreach $b (@V) {
 			my $txt;
+			my $txtssm;
 			my $tdclass = "blackhole";
+			my $tdclasssm = "blackhole";
 			if ($g->has_edge($b, $a)) {
 				$txt = $g->get_edge_attribute($b, $a, $attname);
+				$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
 				if ($txt eq "") {
 					$txt = "N/A";
 					$tdclass = "noinfo";
 				} else {
 					$tdclass = "adjacent";
 				}
+				if ($txtssm eq "") {
+					$txtssm = "-";
+					$tdclasssm = "nossminfo";
+				} else {
+					$tdclasssm = "adjacent";
+				}
 			} else {
 				if ($a eq $b) {
 					$tdclass = "corner";
+					$tdclasssm = "corner";
 				}
 			}
-			print "<td class=\"$tdclass\">$txt</td>";
+			print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\">$txtssm</td>";
 		}
 		print "<tr>";
 		print "\n";
@@ -227,6 +243,37 @@ sub start_handler {
 			$g->set_vertex_attribute($fname, "addr", $faddr);
 			$g->set_vertex_attribute($fname, "age", $fage);
 		}
+	} elsif ($tag eq "ssm") {
+		my $fttl = -1;
+		my $floss = -1;
+		my $fdelay = -1;
+		my $fjitter = -1;
+		while (($name, $value) = each %atts) {
+			if ($name eq "ttl") {
+				$fttl = $value;
+			} elsif ($name eq "loss") {
+				$floss = $value;
+			} elsif ($name eq "delay") {
+				$fdelay = $value;
+			} elsif ($name eq "jitter") {
+				$fjitter = $value;
+			}
+		}
+
+		if ($current_source ne "") {
+			if ($fttl ge 0) {
+				$g->set_edge_attribute($current_source, $current_beacon, "ssm_ttl", $fttl);
+			}
+			if ($floss ge 0) {
+				$g->set_edge_attribute($current_source, $current_beacon, "ssm_loss", $floss);
+			}
+			if ($fdelay ge 0) {
+				$g->set_edge_attribute($current_source, $current_beacon, "ssm_delay", $fdelay);
+			}
+			if ($fjitter ge 0) {
+				$g->set_edge_attribute($current_source, $current_beacon, "ssm_jitter", $fjitter);
+			}
+		}
 	} elsif ($tag eq "source") {
 		my $fname;
 		my $fadmin;
@@ -254,6 +301,7 @@ sub start_handler {
 		}
 
 		if ($fname ne "") {
+			$current_source = $fname;
 			$g->add_vertex($fname);
 			$g->set_vertex_attribute($fname, "contact", $fadmin);
 			$g->set_vertex_attribute($fname, "addr", $faddr);
