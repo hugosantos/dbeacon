@@ -9,21 +9,29 @@
 # Originally by Sebastien Chaumontet
 # Lot of lines are comming from Hoerdt Micka<EB>l's matrix.pl
 
-# -------- Configurable part
-
-# Where dbeacon is generating its dump?
-my $dumpfile = "../../dump.xml";
-# to use with dbeacon -L
-#my $dumpfile = shift @ARGV;
-
-# In which directory rrd are stored
-my $historydir = "data";
-
-# --------- End of configurable part
-
 use strict;
 use XML::Parser;
 use RRDs;
+
+our $dumpfile;
+our $historydir;
+
+# to use with dbeacon -L
+#$dumpfile = shift @ARGV;
+
+# Load perl config script
+do("history.conf");
+
+# Assign default values
+if (!$dumpfile)
+{
+	$dumpfile = '../../dump.xml';
+}
+if (!$historydir)
+{
+	$historydir = 'data';
+}
+
 
 
 my $dstbeacon;

@@ -7,18 +7,22 @@
 #
 # Originally by Sebastien Chaumontet
 
-# -------- Configurable part
-
-# In which directory rrd are stored
-my $historydir = "data";
-
-# -------- End of configurable part
-
 use strict;
 use RRDs;
 use CGI;
 use Switch;
 use POSIX qw(strftime);
+
+our $historydir;
+
+# Load perl config script
+do("history.conf");
+
+# Assign default values
+if (!$historydir)
+{
+        $historydir = 'data';
+}
 
 my $page = new CGI;
 my $url = $page->script_name();
