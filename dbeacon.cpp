@@ -1103,8 +1103,8 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 		packetcountreal = 0;
 		pointer = 0;
 
-		if (verbose && s.avgloss < 1) {
-			cout << "Updating " << name << ": " << s.avgdelay << ", " << s.avgloss << ", " << s.avgooo << ", " << s.avgdup << endl;
+		if (verbose && st->avgloss < 1) {
+			cout << "Updating " << name << (ssm ? " (SSM)" : "") << ": " << st->avgdelay << ", " << st->avgloss << ", " << st->avgooo << ", " << st->avgdup << endl;
 		}
 	}
 }
