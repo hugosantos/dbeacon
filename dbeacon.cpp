@@ -19,6 +19,18 @@
 #include <list>
 #include <vector>
 
+// not everyone have this
+#ifndef MCAST_JOIN_SOURCE_GROUP
+#define MCAST_JOIN_SOURCE_GROUP 46
+#define MCAST_LEAVE_SOURCE_GROUP 46
+
+struct group_source_req {
+	uint32_t gsr_interface;
+	struct sockaddr_storage gsr_group;
+	struct sockaddr_storage gsr_source;
+};
+#endif
+
 using namespace std;
 
 /*
@@ -47,7 +59,8 @@ static int mcastInterface = 0;
 static string adminContact;
 static struct sockaddr_in6 probeAddr;
 static struct sockaddr_in6 beaconUnicastAddr;
-static int mcastSock;
+static struct sockaddr_in6 ssmProbeAddr;
+static int mcastSock, ssmMcastSock = 0;
 static int largestSock = 0;
 static fd_set readSet;
 static int verbose = 0;
@@ -62,6 +75,7 @@ enum content_type {
 	JPROBE,
 
 	NPROBE,
+	NSSMPROBE,
 	NREPORT
 };
 
@@ -90,6 +104,14 @@ typedef pair<in6_addr, uint16_t> beaconSourceAddr;
 
 struct beaconExternalStats;
 
+struct Stats {
+	Stats() : valid(false) {}
+
+	bool valid;
+	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
+	uint8_t rttl;
+};
+
 struct beaconSource {
 	beaconSource();
 
@@ -105,21 +127,20 @@ struct beaconSource {
 	uint32_t lastseq;
 	uint64_t lasttimestamp;
 
-	int lastttl;
+	int sttl;
 
 	uint32_t packetcount, packetcountreal;
 	uint32_t pointer;
 
 	int lastdelay, lastjitter, lastloss, lastdup, lastooo;
-	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
 
-	bool hasstats;
+	Stats s, s_ssm;
 
 	uint32_t cacheseqnum[PACKETS_PERIOD+1];
 
 	void setName(const string &);
 	void refresh(uint32_t, uint64_t);
-	void update(uint32_t, uint64_t, uint64_t);
+	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
 
 	typedef map<beaconSourceAddr, beaconExternalStats> ExternalSources;
 	ExternalSources externalSources;
@@ -132,14 +153,15 @@ typedef map<beaconSourceAddr, beaconSource> Sources;
 static Sources sources;
 
 struct beaconExternalStats {
-	beaconExternalStats() : identified(false), hasstats(false) {}
+	beaconExternalStats() : identified(false) {}
 
 	uint64_t timestamp;
 	uint64_t lastlocalupdate;
-	uint32_t age, ttl;
-	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
+	uint32_t age;
 
-	bool identified, hasstats;
+	Stats s;
+
+	bool identified;
 	string name, contact;
 };
 
@@ -160,7 +182,7 @@ static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
 static void handle_probe(int, content_type);
 static void handle_jprobe(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len);
-static void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len);
+static void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len, bool);
 static void handle_jreport(int);
 static int parse_jreport(uint8_t *buffer, int len, uint64_t, string &session, string &probe, externalBeacon &rpt);
 static void handle_mcast(int, content_type);
@@ -190,6 +212,9 @@ static inline void updateStats(const char *, const sockaddr_in6 *, int, uint32_t
 static int SetupSocket(sockaddr_in6 *, bool);
 static int IPv6MulticastListen(int, struct in6_addr *);
 
+static int IPv6SSMJoin(int, const struct in6_addr *);
+static int IPv6SSMLeave(int, const struct in6_addr *);
+
 static inline double Rand() {
 	return rand() / (double)RAND_MAX;
 }
@@ -214,6 +239,7 @@ void usage() {
 	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -M REDIST_ADDR/PORT    Redistribute and listen for reports in multicast addr\n");
+	fprintf(stderr, "  -S GROUP_ADDR/PORT     Enables SSM reception/sending on GROUP_ADDR\n");
 	fprintf(stderr, "  -d                     Dump reports to xml each 5 secs\n");
 	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
@@ -257,6 +283,9 @@ int main(int argc, char **argv) {
 	memset(&probeAddr, 0, sizeof(probeAddr));
 	probeAddr.sin6_family = AF_INET6;
 
+	memset(&ssmProbeAddr, 0, sizeof(ssmProbeAddr));
+	ssmProbeAddr.sin6_family = AF_INET6;
+
 	bool dump = false;
 	bool force = false;
 	bool dump_bw = false;
@@ -264,7 +293,7 @@ int main(int argc, char **argv) {
 	const char *intf = 0;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:b:r:M:l:L:dD:i:hvPfU");
+		res = getopt(argc, argv, "n:a:b:r:M:S:l:L:dD:i:hvPfU");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -312,6 +341,11 @@ int main(int argc, char **argv) {
 				mcastListen.push_back(make_pair(addr, JREPORT));
 			}
 			redist.push_back(addr);
+		} else if (res == 'S') {
+			if (!parse_addr_port(optarg, &ssmProbeAddr) || !IN6_IS_ADDR_MULTICAST(&ssmProbeAddr.sin6_addr)) {
+				fprintf(stderr, "Bad address format for SSM channel.\n");
+				return -1;
+			}
 		} else if (res == 'd' || res == 'D') {
 			dump = true;
 			if (res == 'D')
@@ -377,6 +411,10 @@ int main(int argc, char **argv) {
 			insert_event(MAPREPORT_EVENT, 30000);
 
 			redist.push_back(probeAddr);
+
+			if (!IN6_IS_ADDR_UNSPECIFIED(&ssmProbeAddr.sin6_addr)) {
+				mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
+			}
 		}
 
 		inet_ntop(AF_INET6, &probeAddr.sin6_addr, sessionName, sizeof(sessionName));
@@ -410,10 +448,12 @@ int main(int argc, char **argv) {
 	}
 
 	for (vector<pair<sockaddr_in6, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
-		int sock = SetupSocket(&i->first, i->second == JPROBE || i->second == NPROBE);
+		int sock = SetupSocket(&i->first, i->second == JPROBE || i->second == NPROBE || i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
 		mcastSocks.push_back(make_pair(sock, i->second));
+		if (i->second == NSSMPROBE)
+			ssmMcastSock = sock;
 	}
 
 	fprintf(stdout, "Local name is %s\n", probeName);
@@ -567,8 +607,8 @@ void handle_gc() {
 	while (i != sources.end()) {
 		bool remove = false;
 		if ((now - i->second.lastevent) > 60000) {
-			if (i->second.hasstats) {
-				i->second.hasstats = false;
+			if (i->second.s.valid) {
+				i->second.s.valid = false;
 				i->second.lastevent = now;
 			} else {
 				remove = true;
@@ -590,6 +630,11 @@ void handle_gc() {
 		} else {
 			Sources::iterator j = i;
 			i++;
+
+			if (ssmMcastSock) {
+				IPv6SSMLeave(ssmMcastSock, &j->first.first);
+			}
+
 			sources.erase(j);
 		}
 	}
@@ -661,7 +706,9 @@ void handle_probe(int sock, content_type type) {
 	if (type == JPROBE) {
 		handle_jprobe(&from, recvdts, ttl, buffer, len);
 	} else if (type == NPROBE) {
-		handle_nmsg(&from, recvdts, ttl, buffer, len);
+		handle_nmsg(&from, recvdts, ttl, buffer, len, false);
+	} else if (type == NSSMPROBE) {
+		handle_nmsg(&from, recvdts, ttl, buffer, len, true);
 	}
 }
 
@@ -728,10 +775,14 @@ static inline beaconSource &getSource(const in6_addr &addr, uint16_t port, const
 	src.creation = now;
 	src.lastevent = now;
 
+	if (ssmMcastSock) {
+		IPv6SSMJoin(ssmMcastSock, &addr);
+	}
+
 	return src;
 }
 
-void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, int len) {
+void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, int len, bool ssm) {
 	if (len < 4)
 		return;
 
@@ -745,15 +796,22 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 		if (len == 12) {
 			uint32_t seq = ntohl(*((uint32_t *)(buff + 4)));
 			uint32_t ts = ntohl(*((uint32_t *)(buff + 8)));
-			getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts).update(seq, ts, (uint32_t)recvdts);
+			getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts).update(ttl, seq, ts, (uint32_t)recvdts, ssm);
 		}
-	} else if (buff[3] == 1) {
+		return;
+	}
+
+	// We only accept probes via SSM
+	if (ssm)
+		return;
+
+	if (buff[3] == 1) {
 		if (len < 7 || (7 + buff[5]) > len || (7 + buff[5] + buff[6 + buff[5]]) > len)
 			return;
 
 		beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts);
 
-		src.lastttl = buff[4] - ttl;
+		src.sttl = buff[4];
 
 		string beacName((char *)buff + 6, buff[5]);
 
@@ -779,17 +837,17 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 
 			stats.timestamp = ntohl(*(uint32_t *)ptr);
 			stats.age = ntohl(*((((uint32_t *)ptr)+1)));
-			stats.ttl = ptr[8];
+			stats.s.rttl = ptr[8] + src.sttl;
 			tmp = ntohl(*(uint32_t *)(ptr + 9));
-			stats.avgdelay = *(float *)&tmp;
+			stats.s.avgdelay = *(float *)&tmp;
 			tmp = ntohl(*(uint32_t *)(ptr + 13));
-			stats.avgjitter = *(float *)&tmp;
+			stats.s.avgjitter = *(float *)&tmp;
 
-			stats.avgloss = ptr[17] / 255.;
-			stats.avgdup = ptr[18] / 255.;
-			stats.avgooo = ptr[19] / 255.;
+			stats.s.avgloss = ptr[17] / 255.;
+			stats.s.avgdup = ptr[18] / 255.;
+			stats.s.avgooo = ptr[19] / 255.;
 
-			stats.hasstats = true;
+			stats.s.valid = true;
 
 			ptr += 20;
 
@@ -878,18 +936,19 @@ int parse_jreport(uint8_t *buffer, int len, uint64_t recvdts, string &session, s
 			return -1;
 		if (!buf.read_longlong(stats.timestamp))
 			return -1;
-		if (!buf.read_float(stats.avgdelay))
+		if (!buf.read_float(stats.s.avgdelay))
 			return -1;
-		if (!buf.read_float(stats.avgjitter))
+		if (!buf.read_float(stats.s.avgjitter))
 			return -1;
-		if (!buf.read_float(stats.avgloss))
+		if (!buf.read_float(stats.s.avgloss))
 			return -1;
-		if (!buf.read_float(stats.avgooo))
+		if (!buf.read_float(stats.s.avgooo))
 			return -1;
-		if (!buf.read_float(stats.avgdup))
+		if (!buf.read_float(stats.s.avgdup))
 			return -1;
+		stats.s.rttl = 0;
+		stats.s.valid = true;
 		stats.age = 0;
-		stats.ttl = 0;
 
 		rpt.jsources[name] = stats;
 	}
@@ -950,20 +1009,19 @@ void beaconSource::refresh(uint32_t seq, uint64_t now) {
 	lasttimestamp = 0;
 	lastevent = now;
 
-	lastttl = 0;
+	sttl = -1;
 
 	packetcount = packetcountreal = 0;
 	pointer = 0;
 
 	lastdelay = lastjitter = lastloss = lastdup = lastooo = 0;
-	avgdelay = avgjitter = avgloss = avgdup = avgooo = 0;
-
-	hasstats = false;
+	s.avgdelay = s.avgjitter = s.avgloss = s.avgdup = s.avgooo = 0;
+	s.valid = false;
 }
 
 template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; }
 
-void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
+void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now, bool ssm) {
 	int64_t diff = udiff(now, timestamp);
 
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
@@ -991,6 +1049,10 @@ void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 		}
 	}
 
+	Stats *st = ssm ? &s_ssm: &s;
+
+	st->rttl = ttl;
+
 	if (dup) {
 		lastdup ++;
 	} else {
@@ -1004,7 +1066,7 @@ void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 		lastjitter = diff;
 		if (newjitter < 0)
 			newjitter = -newjitter;
-		avgjitter = 15/16. * avgjitter + 1/16. * newjitter;
+		st->avgjitter = 15/16. * st->avgjitter + 1/16. * newjitter;
 
 		if (expectseq == seqnum) {
 			packetcount ++;
@@ -1023,12 +1085,12 @@ void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 	}
 
 	if (packetcount >= PACKETS_PERIOD) {
-		avgdelay = lastdelay / (float)packetcountreal;
-		avgloss = lastloss / (float)packetcount;
-		avgooo = lastooo / (float)packetcount;
-		avgdup = lastdup / (float)packetcount;
+		st->avgdelay = lastdelay / (float)packetcountreal;
+		st->avgloss = lastloss / (float)packetcount;
+		st->avgooo = lastooo / (float)packetcount;
+		st->avgdup = lastdup / (float)packetcount;
 
-		hasstats = true;
+		st->valid = true;
 
 		lastdelay = 0;
 		lastloss = 0;
@@ -1038,8 +1100,8 @@ void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 		packetcountreal = 0;
 		pointer = 0;
 
-		if (verbose && avgloss < 1) {
-			cout << "Updating " << name << ": " << avgdelay << ", " << avgloss << ", " << avgooo << ", " << avgdup << endl;
+		if (verbose && s.avgloss < 1) {
+			cout << "Updating " << name << ": " << s.avgdelay << ", " << s.avgloss << ", " << s.avgooo << ", " << s.avgdup << endl;
 		}
 	}
 }
@@ -1048,9 +1110,9 @@ void updateStats(const char *name, const sockaddr_in6 *from, int ttl, uint32_t s
 	beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), name, now);
 
 	src.addr = from->sin6_addr;
-	src.lastttl = 127 - ttl; // we assume jbeacons use TTL 127, which is usually true
+	src.sttl = 127; // we assume jbeacons use TTL 127, which is usually true
 
-	src.update(seqnum, timestamp, now);
+	src.update(ttl, seqnum, timestamp, now, false);
 }
 
 int send_jprobe() {
@@ -1076,6 +1138,11 @@ int send_nprobe() {
 	len = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
 	if (len > 0)
 		bytesSent += len;
+	if (ssmMcastSock) {
+		int len2 = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&ssmProbeAddr, sizeof(ssmProbeAddr));
+		if (len2 > 0)
+			bytesSent += len2;
+	}
 	return len;
 }
 
@@ -1110,7 +1177,7 @@ int build_nreport(uint8_t *buff, int maxlen) {
 	uint64_t now = get_timestamp();
 
 	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-		if (!i->second.hasstats || !i->second.identified)
+		if (!i->second.s.valid || !i->second.identified)
 			continue;
 
 		int plen = 4 + 4 + 1 + 4 * 2 + 3;
@@ -1124,15 +1191,15 @@ int build_nreport(uint8_t *buff, int maxlen) {
 
 		*((uint32_t *)ptr) = htonl((uint32_t)i->second.lasttimestamp);
 		*((uint32_t *)(ptr + 4)) = htonl((uint32_t)((now - i->second.creation) / 1000));
-		ptr[8] = i->second.lastttl;
+		ptr[8] = i->second.sttl - i->second.s.rttl;
 
 		uint32_t *stats = (uint32_t *)(ptr + 9);
-		stats[0] = htonl(*((uint32_t *)&i->second.avgdelay));
-		stats[1] = htonl(*((uint32_t *)&i->second.avgjitter));
+		stats[0] = htonl(*((uint32_t *)&i->second.s.avgdelay));
+		stats[1] = htonl(*((uint32_t *)&i->second.s.avgjitter));
 
-		ptr[17] = (uint8_t)(i->second.avgloss * 0xff);
-		ptr[18] = (uint8_t)(i->second.avgdup * 0xff);
-		ptr[19] = (uint8_t)(i->second.avgooo * 0xff);
+		ptr[17] = (uint8_t)(i->second.s.avgloss * 0xff);
+		ptr[18] = (uint8_t)(i->second.s.avgdup * 0xff);
+		ptr[19] = (uint8_t)(i->second.s.avgooo * 0xff);
 
 		ptr += plen;
 		len += 18 + plen;
@@ -1205,21 +1272,21 @@ int build_jreport(uint8_t *buffer, int maxlen) {
 		return -1;
 
 	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-		if (!i->second.hasstats)
+		if (!i->second.s.valid)
 			continue;
 		if (!buf.write_string(i->second.name))
 			return -1;
 		if (!buf.write_longlong(i->second.lasttimestamp))
 			return -1;
-		if (!buf.write_float(i->second.avgdelay)) // 0
+		if (!buf.write_float(i->second.s.avgdelay)) // 0
 			return -1;
-		if (!buf.write_float(i->second.avgjitter)) // 1
+		if (!buf.write_float(i->second.s.avgjitter)) // 1
 			return -1;
-		if (!buf.write_float(i->second.avgloss)) // 2
+		if (!buf.write_float(i->second.s.avgloss)) // 2
 			return -1;
-		if (!buf.write_float(i->second.avgooo)) // 3
+		if (!buf.write_float(i->second.s.avgooo)) // 3
 			return -1;
-		if (!buf.write_float(i->second.avgdup)) // 3
+		if (!buf.write_float(i->second.s.avgdup)) // 3
 			return -1;
 	}
 
@@ -1301,6 +1368,16 @@ int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 	return 4 + 4 + 4;
 }
 
+void dumpStats(FILE *fp, const Stats &s, int sttl) {
+	if (sttl)
+		fprintf(fp, " ttl=\"%i\"\n", sttl - s.rttl);
+	fprintf(fp, " loss=\"%.1f\"", s.avgloss);
+	fprintf(fp, " delay=\"%.3f\"", s.avgdelay);
+	fprintf(fp, " jitter=\"%.3f\"", s.avgjitter);
+	fprintf(fp, " ooo=\"%.3f\"", s.avgooo);
+	fprintf(fp, " dup=\"%.3f\"", s.avgdup);
+}
+
 void do_dump() {
 	FILE *fp = fopen(dumpFile.c_str(), "w");
 	if (!fp)
@@ -1319,21 +1396,24 @@ void do_dump() {
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-			if (i->second.hasstats && i->second.identified) {
+			if (i->second.s.valid && i->second.identified) {
 				inet_ntop(AF_INET6, &i->first.first, tmp, sizeof(tmp));
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 				fprintf(fp, " addr=\"%s/%d\"", tmp, i->first.second);
-				fprintf(fp, " ttl=\"%i\"\n", i->second.lastttl);
 				fprintf(fp, "\t\t\t\tage=\"%llu\"", (now - i->second.creation) / 1000);
-				fprintf(fp, " loss=\"%.1f\"", i->second.avgloss);
-				fprintf(fp, " delay=\"%.3f\"", i->second.avgdelay);
-				fprintf(fp, " jitter=\"%.3f\"", i->second.avgjitter);
-				fprintf(fp, " ooo=\"%.3f\"", i->second.avgooo);
-				fprintf(fp, " dup=\"%.3f\"", i->second.avgdup);
-				fprintf(fp, " />\n");
+				dumpStats(fp, i->second.s, i->second.sttl);
+				if (i->second.s_ssm.valid) {
+					fprintf(fp, ">\n");
+					
+					fprintf(fp, "<ssm");
+					dumpStats(fp, i->second.s_ssm, i->second.sttl);
+					fprintf(fp, " /></source>\n");
+				} else {
+					fprintf(fp, " />\n");
+				}
 			}
 		}
 
@@ -1367,14 +1447,9 @@ void do_dump() {
 				}
 				inet_ntop(AF_INET6, &j->first.first, tmp, sizeof(tmp));
 				fprintf(fp, " addr=\"%s/%d\"", tmp, j->first.second);
-				if (j->second.hasstats) {
-					fprintf(fp, " ttl=\"%u\"\n", j->second.ttl);
+				if (j->second.s.valid) {
 					fprintf(fp, "\t\t\t\tage=\"%u\"", j->second.age);
-					fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
-					fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
-					fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
-					fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
-					fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
+					dumpStats(fp, j->second.s, i->second.sttl);
 				}
 				fprintf(fp, " />\n");
 			}
@@ -1392,11 +1467,7 @@ void do_dump() {
 					j != i->second.jsources.end(); j++) {
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", j->first.c_str());
-				fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
-				fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
-				fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
-				fprintf(fp, " ooo=\"%.3f\"", j->second.avgooo);
-				fprintf(fp, " dup=\"%.3f\"", j->second.avgdup);
+				dumpStats(fp, j->second.s, 0);
 				fprintf(fp, " />\n");
 			}
 
@@ -1441,6 +1512,27 @@ int IPv6MulticastListen(int sock, struct in6_addr *grpaddr) {
 	memcpy(&mreq.ipv6mr_multiaddr, grpaddr, sizeof(struct in6_addr));
 
 	return setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
+}
+
+static int IPv6SSMJoinLeave(int sock, int type, const struct in6_addr *srcaddr) {
+	struct group_source_req req;
+	memset(&req, 0, sizeof(req));
+
+	req.gsr_interface = mcastInterface;
+
+	*((sockaddr_in6 *)&req.gsr_group) = ssmProbeAddr;
+	((sockaddr_in6 *)&req.gsr_source)->sin6_family = AF_INET6;
+	((sockaddr_in6 *)&req.gsr_source)->sin6_addr = *srcaddr;
+
+	return setsockopt(sock, IPPROTO_IPV6, type, &req, sizeof(req));
+}
+
+int IPv6SSMJoin(int sock, const struct in6_addr *srcaddr) {
+	return IPv6SSMJoinLeave(sock, MCAST_JOIN_SOURCE_GROUP, srcaddr);
+}
+
+int IPv6SSMLeave(int sock, const struct in6_addr *srcaddr) {
+	return IPv6SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, srcaddr);
 }
 
 int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
