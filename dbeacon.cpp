@@ -30,98 +30,27 @@
 #include <list>
 #include <vector>
 
-// FreeBSD doesn't define IP_RECVTTL. This value is wrong but at least it compiles for IPv6
-#ifndef IP_RECVTTL
-#define IP_RECVTTL 12
-#endif
-
-#ifdef __sun__
-#define TTLType		uint8_t
-#else
-#define TTLType		int
-#endif
-
-#if __linux__ || (__FreeBSD_version > 500042)
-
-#if !defined(MCAST_JOIN_GROUP)
-#define MCAST_JOIN_GROUP 42
-struct group_req {
-	uint32_t gr_interface;
-	struct sockaddr_storage gr_group;
-};
-#endif
-
-#if defined(MCAST_JOIN_GROUP) && !defined(MCAST_JOIN_SOURCE_GROUP)
-#define MCAST_JOIN_SOURCE_GROUP 46
-#define MCAST_LEAVE_SOURCE_GROUP 47
-struct group_source_req {
-	uint32_t gsr_interface;
-	struct sockaddr_storage gsr_group;
-	struct sockaddr_storage gsr_source;
-};
-#endif
-
-#endif
+#include "dbeacon.h"
+#include "address.h"
+#include "msocket.h"
+#include "protocol.h"
 
 using namespace std;
 
 #define NEW_BEAC_PCOUNT	10
-#define NEW_BEAC_VER	1
 
 static const char *versionInfo = "0.2 ($Rev$)";
 
 static const char *defaultIPv6SSMChannel = "ff3e::beac";
 static const char *defaultIPv4SSMChannel = "232.2.3.2";
-static const char *defaultPort = "10000";
-static const TTLType defaultTTL = 127;
+const char *defaultPort = "10000";
+const TTLType defaultTTL = 127;
 static const char *defaultDumpFile = "dump.xml";
-
-struct address : sockaddr_storage {
-	address();
-
-	sockaddr_in *v4() { return (sockaddr_in *)this; }
-	sockaddr_in6 *v6() { return (sockaddr_in6 *)this; }
-	const sockaddr_in *v4() const { return (const sockaddr_in *)this; }
-	const sockaddr_in6 *v6() const { return (const sockaddr_in6 *)this; }
-
-	static int family(const char *);
-
-	int optlevel() const;
-	int sockaddr_len() const;
-
-	bool parse(const char *, bool multicast = true, bool addport = true);
-
-	bool is_multicast() const;
-	bool is_unspecified() const;
-
-	bool is_equal(const address &) const;
-
-	void set(const sockaddr *);
-
-	void print(char *, size_t, bool port = true) const;
-};
 
 enum content_type {
 	NPROBE,
 	NSSMPROBE,
 	NREPORT
-};
-
-// Protocol TLV types
-enum {
-	T_BEAC_NAME = 'n',
-	T_ADMIN_CONTACT = 'a',
-	T_SOURCE_INFO_IPv4 = 'i',
-	T_SOURCE_INFO = 'I',
-	T_ASM_STATS = 'A',
-	T_SSM_STATS = 'S',
-
-	T_WEBSITE_GENERIC = 'G',
-	T_WEBSITE_MATRIX = 'M',
-	T_WEBSITE_LG = 'L',
-	T_CC = 'C',
-
-	T_LEAVE = 'Q'
 };
 
 // Timer Events
@@ -137,123 +66,34 @@ enum {
 	SSM_SENDING_EVENT,
 	WILLSEND_SSM_EVENT,
 
+	// Report types
 	REPORT_EVENT = 'R',
 	SSM_REPORT_EVENT,
 	MAP_REPORT_EVENT,
 	WEBSITE_REPORT_EVENT
 };
 
-// Report types
-enum {
-	// This must match the above value
-	STATS_REPORT = 'R',
-	SSM_REPORT,
-	MAP_REPORT,
-	WEBSITE_REPORT,
-	LEAVE_REPORT
-};
+static uint32_t timeFact(int val, bool random = false);
 
-typedef address beaconSourceAddr;
-struct beaconExternalStats;
+bool beaconSource::rxlocal(uint64_t now) const { return (now - lastlocalevent) < timeFact(6); }
 
-#define PACKETS_PERIOD 40
-#define PACKETS_VERY_OLD 150
+string beaconName, adminContact, twoLetterCC;
+Sources sources;
+WebSites webSites;
+address beaconUnicastAddr;
+int verbose = 0;
 
-struct Stats {
-	Stats();
-
-	uint64_t timestamp, lastupdate;
-	float avgdelay, avgjitter, avgloss, avgdup, avgooo;
-	bool valid;
-	uint8_t rttl;
-
-	void check_validity(uint64_t);
-};
-
-struct beaconExternalStats {
-	beaconExternalStats() : identified(false) {}
-
-	uint64_t lastupdate;
-	uint32_t age;
-
-	Stats ASM, SSM;
-
-	bool identified;
-	string name, contact;
-};
-
-struct beaconMcastState {
-	beaconMcastState();
-
-	uint32_t lastseq;
-
-	uint32_t packetcount, packetcountreal;
-	uint32_t pointer;
-
-	int lastdelay, lastjitter, lastloss, lastdup, lastooo;
-
-	Stats s;
-
-	uint32_t cacheseqnum[PACKETS_PERIOD+1];
-
-	void refresh(uint32_t, uint64_t);
-	void update(uint8_t, uint32_t, uint64_t, uint64_t);
-};
-
-typedef std::map<int, string> WebSites;
-
-struct beaconSource {
-	beaconSource();
-
-	address addr;
-
-	uint64_t creation;
-
-	int sttl;
-
-	uint64_t lastevent;
-	uint64_t lastlocalevent;
-
-	beaconMcastState ASM, SSM;
-
-	void setName(const string &);
-	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
-
-	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
-
-	bool rxlocal(uint64_t now) const { return lastlocalevent > (now - 30000); }
-
-	string name;
-	string adminContact;
-	string CC;
-
-	typedef std::map<beaconSourceAddr, beaconExternalStats> ExternalSources;
-	ExternalSources externalSources;
-
-	WebSites webSites;
-
-	bool identified;
-};
-
-typedef std::map<beaconSourceAddr, beaconSource> Sources;
-
-static Sources sources;
+int mcastInterface = 0;
 
 static char sessionName[256];
-static string beaconName;
-static string twoLetterCC;
-static int mcastInterface = 0;
-static string adminContact;
 static address probeAddr;
 static const char *probeAddrLiteral = 0;
-static address beaconUnicastAddr;
 static const char *probeSSMAddrLiteral = 0;
 static bool useSSM = false;
 static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
 static int largestSock = 0;
 static fd_set readSet;
-static int verbose = 0;
 static bool dumpBwReport = false;
 static string launchSomething;
 
@@ -265,8 +105,6 @@ static const char *dumpFile = 0;
 
 static vector<pair<address, content_type> > mcastListen;
 static vector<pair<int, content_type> > mcastSocks;
-
-static WebSites webSites;
 
 static vector<address> redist;
 
@@ -283,149 +121,24 @@ static uint64_t lastDumpDumpBwTS = 0;
 
 static int dumpInterval = 5;
 static const char *multicastInterface = 0;
-static int forceFamily = AF_UNSPEC;
+int forceFamily = AF_UNSPEC;
 
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
 static void handle_probe(int, content_type);
-static void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buffer, int len, bool);
 static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
 static int send_probe();
 static int send_ssm_probe();
 static int send_report(int);
-static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 
 static void do_dump();
 static void do_bw_dump(bool);
 static void dumpBigBwStats(int);
 static void sendLeaveReport(int);
 
-static uint64_t get_timestamp();
-
-static beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now, bool);
-static void removeSource(const beaconSourceAddr &baddr, bool);
-
-static int SetupSocket(const address &, bool, bool, bool);
-static int MulticastListen(int, const address &);
-static int SSMJoin(int, const address *);
-static int SSMLeave(int, const address *);
-
-address::address() {
-	memset(this, 0, sizeof(*this));
-}
-
-int address::optlevel() const {
-	return ss_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
-}
-
-int address::sockaddr_len() const {
-	return ss_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
-}
-
-int address::family(const char *addr) {
-	if (strchr(addr, ':') != NULL)
-		return AF_INET6;
-	else if (strchr(addr, '.') != NULL)
-		return AF_INET;
-	return -1;
-}
-
-bool address::parse(const char *str, bool multicast, bool addport) {
-	char tmp[128];
-	strncpy(tmp, str, sizeof(tmp));
-
-	char *port = strchr(tmp, '/');
-	if (port) {
-		*port = 0;
-		port ++;
-	} else if (addport) {
-		port = (char *)defaultPort;
-	}
-
-	int cres;
-	addrinfo hint, *res;
-	memset(&hint, 0, sizeof(hint));
-
-	hint.ai_family = forceFamily;
-	hint.ai_socktype = SOCK_DGRAM;
-
-	if ((cres = getaddrinfo(tmp, port, &hint, &res)) != 0) {
-		fprintf(stderr, "getaddrinfo failed: %s\n", gai_strerror(cres));
-		return false;
-	}
-
-	for (; res; res = res->ai_next) {
-		set(res->ai_addr);
-		if (multicast) {
-			if (is_multicast())
-				break;
-		} else if (!is_unspecified())
-			break;
-	}
-
-	if (!res) {
-		fprintf(stderr, "No usable records for %s\n", tmp);
-		return false;
-	}
-
-	return true;
-}
-
-bool address::is_multicast() const {
-	if (ss_family == AF_INET6)
-		return IN6_IS_ADDR_MULTICAST(&v6()->sin6_addr);
-	else if (ss_family == AF_INET)
-		return IN_CLASSD(htonl(v4()->sin_addr.s_addr));
-	return false;
-}
-
-bool address::is_unspecified() const {
-	if (ss_family == AF_INET6)
-		return IN6_IS_ADDR_UNSPECIFIED(&v6()->sin6_addr);
-	else if (ss_family == AF_INET)
-		return v4()->sin_addr.s_addr == 0;
-	return true;
-}
-
-void address::print(char *str, size_t len, bool printport) const {
-	uint16_t port;
-
-	if (ss_family == AF_INET6) {
-		inet_ntop(AF_INET6, &v6()->sin6_addr, str, len);
-		port = ntohs(v6()->sin6_port);
-	} else if (ss_family == AF_INET) {
-		inet_ntop(AF_INET, &v4()->sin_addr, str, len);
-		port = ntohs(v4()->sin_port);
-	} else {
-		return;
-	}
-
-	if (printport)
-		snprintf(str + strlen(str), len - strlen(str), "/%u", port);
-}
-
-bool address::is_equal(const address &a) const {
-	if (ss_family != a.ss_family)
-		return false;
-	if (ss_family == AF_INET6)
-		return memcmp(&v6()->sin6_addr, &a.v6()->sin6_addr, sizeof(in6_addr)) == 0;
-	else if (ss_family == AF_INET)
-		return v4()->sin_addr.s_addr == a.v4()->sin_addr.s_addr;
-	return false;
-}
-
-void address::set(const sockaddr *sa) {
-	ss_family = sa->sa_family;
-	if (ss_family == AF_INET6) {
-		v6()->sin6_addr = ((const sockaddr_in6 *)sa)->sin6_addr;
-		v6()->sin6_port = ((const sockaddr_in6 *)sa)->sin6_port;
-	} else {
-		v4()->sin_addr = ((const sockaddr_in *)sa)->sin_addr;
-		v4()->sin_port = ((const sockaddr_in *)sa)->sin_port;
-	}
-}
+static int SetupSocketAndFDSet(const address &, bool, bool);
 
 static inline double Rand() {
 	return rand() / (double)RAND_MAX;
@@ -433,10 +146,6 @@ static inline double Rand() {
 
 static inline double Exprnd(double mean) {
 	return -mean * log(1 - Rand());
-}
-
-static inline bool operator < (const address &a1, const address &a2) {
-	return memcmp(&a1, &a2, sizeof(address)) < 0;
 }
 
 static const int bufferLen = 2048;
@@ -540,7 +249,7 @@ int main(int argc, char **argv) {
 				int family = forceFamily;
 
 				if (family == AF_UNSPEC) {
-					family = probeAddr.ss_family;
+					family = probeAddr.family();
 				}
 				if (family == AF_INET) {
 					probeSSMAddrLiteral = defaultIPv4SSMChannel;
@@ -568,29 +277,32 @@ int main(int argc, char **argv) {
 	FD_ZERO(&readSet);
 
 	address local;
-	local.ss_family = probeAddr.ss_family;
+	local.set_family(probeAddr.family());
 
-	mcastSock = SetupSocket(local, false, false, false);
+	mcastSock = SetupSocketAndFDSet(local, false, false);
 	if (mcastSock < 0)
 		return -1;
 
 	// connect the socket to probeAddr, so the source address can be determined
 
-	socklen_t addrlen = probeAddr.sockaddr_len();
+	socklen_t addrlen = probeAddr.addrlen();
 
 	if (beaconUnicastAddr.is_unspecified()) {
-		int tmpSock = socket(probeAddr.ss_family, SOCK_DGRAM, 0);
+		int tmpSock = socket(probeAddr.family(), SOCK_DGRAM, 0);
 		if (tmpSock < 0) {
 			perror("Failed to create socket to discover local addr");
 			return -1;
 		}
 
-		if (connect(tmpSock, (sockaddr *)&probeAddr, addrlen) != 0) {
+		if (connect(tmpSock, probeAddr.saddr(), addrlen) != 0) {
 			perror("Failed to connect multicast socket");
 			return -1;
 		}
 
-		if (getsockname(tmpSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
+		beaconUnicastAddr.set_family(probeAddr.family());
+		addrlen = beaconUnicastAddr.addrlen();
+
+		if (getsockname(tmpSock, beaconUnicastAddr.saddr(), &addrlen) != 0) {
 			perror("getsockname");
 			return -1;
 		}
@@ -598,18 +310,13 @@ int main(int argc, char **argv) {
 		close(tmpSock);
 	}
 
-	if (bind(mcastSock, (sockaddr *)&beaconUnicastAddr, addrlen) != 0) {
+	if (bind(mcastSock, beaconUnicastAddr.saddr(), beaconUnicastAddr.addrlen()) != 0) {
 		perror("Failed to bind local socket");
 		return -1;
 	}
 
-	if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
-		perror("getsockname");
-		return -1;
-	}
-
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
-		int sock = SetupSocket(i->first, true, i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
+		int sock = SetupSocketAndFDSet(i->first, true, i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
 		mcastSocks.push_back(make_pair(sock, i->second));
@@ -840,6 +547,10 @@ void insert_event(uint32_t type, uint32_t interval) {
 static int send_count = 0;
 static int send_ssm_count = 0;
 
+uint32_t timeFact(int val, bool random) {
+	return (uint32_t) (random ? ceil(Exprnd(beacInt) * 1000) : (beacInt * val * 1000));
+}
+
 void handle_event() {
 	timer t = *timers.begin();
 	timers.erase(timers.begin());
@@ -881,32 +592,20 @@ void handle_event() {
 		insert_event(SSM_SENDING_EVENT, 100);
 		send_ssm_count = 0;
 	} else if (t.type == SENDING_EVENT && send_count == NEW_BEAC_PCOUNT) {
-		insert_event(WILLSEND_EVENT, (uint32_t)ceil(Exprnd(beacInt) * 1000));
+		insert_event(WILLSEND_EVENT, timeFact(1, true));
 	} else if (t.type == SSM_SENDING_EVENT && send_ssm_count == NEW_BEAC_PCOUNT) {
-		insert_event(WILLSEND_SSM_EVENT, (uint32_t)ceil(Exprnd(beacInt) * 1000));
+		insert_event(WILLSEND_SSM_EVENT, timeFact(1, true));
 	} else if (t.type == REPORT_EVENT) {
-		insert_event(REPORT_EVENT, (uint32_t)ceil(2 * beacInt * 1000));
+		insert_event(REPORT_EVENT, timeFact(2));
 	} else if (t.type == SSM_REPORT_EVENT) {
-		insert_event(SSM_REPORT_EVENT, (uint32_t)ceil(3 * beacInt * 1000));
+		insert_event(SSM_REPORT_EVENT, timeFact(3));
 	} else if (t.type == MAP_REPORT_EVENT) {
-		insert_event(MAP_REPORT_EVENT, (uint32_t)ceil(6 * beacInt * 1000));
+		insert_event(MAP_REPORT_EVENT, timeFact(6));
 	} else if (t.type == WEBSITE_REPORT_EVENT) {
-		insert_event(WEBSITE_REPORT_EVENT, (uint32_t)ceil(24 * beacInt * 1000));
+		insert_event(WEBSITE_REPORT_EVENT, timeFact(24));
 	} else {
 		insert_sorted_event(t);
 	}
-}
-
-Stats::Stats() {
-	valid = false;
-	timestamp = lastupdate = 0;
-	avgdelay = avgjitter = avgloss = avgdup = avgooo = 0;
-	rttl = 0;
-}
-
-void Stats::check_validity(uint64_t now) {
-	if ((now - lastupdate) > 30000)
-		valid = false;
 }
 
 void handle_gc() {
@@ -916,7 +615,7 @@ void handle_gc() {
 
 	while (i != sources.end()) {
 		bool remove = false;
-		if ((now - i->second.lastevent) > 30000) {
+		if ((now - i->second.lastevent) > timeFact(6)) {
 			remove = true;
 		}
 		if (!remove) {
@@ -925,7 +624,7 @@ void handle_gc() {
 
 			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
 			while (j != i->second.externalSources.end()) {
-				if ((now - j->second.lastupdate) > 30000) {
+				if ((now - j->second.lastupdate) > timeFact(6)) {
 					beaconSource::ExternalSources::iterator k = j;
 					j++;
 					i->second.externalSources.erase(k);
@@ -948,24 +647,12 @@ void handle_gc() {
 }
 
 void handle_probe(int sock, content_type type) {
-	int len;
 	address from;
-	struct msghdr msg;
-	struct iovec iov;
-	uint8_t ctlbuf[64];
 
-	msg.msg_name = (char *)&from;
-	msg.msg_namelen = sizeof(from);
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
-	msg.msg_control = (char *)ctlbuf;
-	msg.msg_controllen = sizeof(ctlbuf);
-	msg.msg_flags = 0;
+	uint64_t recvdts;
+	int ttl;
 
-	iov.iov_base = (char *)buffer;
-	iov.iov_len = bufferLen;
-
-	len = recvmsg(sock, &msg, 0);
+	int len = RecvMsg(sock, from, buffer, bufferLen, ttl, recvdts);
 	if (len < 0)
 		return;
 
@@ -980,37 +667,46 @@ void handle_probe(int sock, content_type type) {
 
 	bytesReceived += len;
 
-	uint64_t recvdts = 0;
-	int ttl = 0;
-
-	if (msg.msg_controllen > 0) {
-		for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
-			if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
-				ttl = *(int *)CMSG_DATA(hdr);
-			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
-				ttl = *(uint8_t *)CMSG_DATA(hdr);
-			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_TTL) {
-				ttl = *(int *)CMSG_DATA(hdr);
-#ifdef SO_TIMESTAMP
-			} else if (hdr->cmsg_level == SOL_SOCKET && hdr->cmsg_type == SO_TIMESTAMP) {
-				timeval *tv = (timeval *)CMSG_DATA(hdr);
-				recvdts = tv->tv_sec;
-				recvdts *= 1000;
-				recvdts += tv->tv_usec / 1000;
-#endif
-			}
-		}
-	}
-
-	if (!recvdts) {
-		recvdts = get_timestamp();
-	}
-
 	if (type != NPROBE && type != NSSMPROBE)
 		return;
 
-	handle_nmsg(&from, recvdts, ttl, buffer, len, type == NSSMPROBE);
+	handle_nmsg(from, recvdts, ttl, buffer, len, type == NSSMPROBE);
 }
+
+
+void handle_mcast(int sock, content_type cnt) {
+	if (cnt == NPROBE || cnt == NSSMPROBE) {
+		handle_probe(sock, cnt);
+	}
+}
+
+uint64_t get_timestamp() {
+	struct timeval tv;
+	uint64_t timestamp;
+
+	if (gettimeofday(&tv, 0) != 0)
+		return 0;
+
+	timestamp = tv.tv_sec;
+	timestamp *= 1000;
+	timestamp += tv.tv_usec / 1000;
+
+	return timestamp;
+}
+
+Stats::Stats() {
+	valid = false;
+	timestamp = lastupdate = 0;
+	avgdelay = avgjitter = avgloss = avgdup = avgooo = 0;
+	rttl = 0;
+}
+
+void Stats::check_validity(uint64_t now) {
+	if ((now - lastupdate) > timeFact(6))
+		valid = false;
+}
+
+beaconExternalStats::beaconExternalStats() : identified(false) {}
 
 beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now, bool rx_local) {
 	Sources::iterator i = sources.find(baddr);
@@ -1044,7 +740,7 @@ beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_
 		src.lastlocalevent = now;
 
 	if (ssmMcastSock) {
-		SSMJoin(ssmMcastSock, &baddr);
+		SSMJoin(ssmMcastSock, ssmProbeAddr, baddr);
 	}
 
 	return src;
@@ -1068,198 +764,15 @@ void removeSource(const beaconSourceAddr &baddr, bool timeout) {
 		sources.erase(i);
 
 		if (ssmMcastSock) {
-			SSMLeave(ssmMcastSock, &baddr);
+			SSMLeave(ssmMcastSock, ssmProbeAddr, baddr);
 		}
 	}
-}
-
-static inline uint8_t *tlv_begin(uint8_t *hd, int &len) {
-	if (len < 2 || hd[1] > len)
-		return 0;
-	return hd;
-}
-
-static inline uint8_t *tlv_next(uint8_t *hd, int &len) {
-	len -= hd[1] + 2;
-	return tlv_begin(hd + hd[1] + 2, len);
-}
-
-static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
-	if (tlv[1] != 20)
-		return false;
-
-	uint32_t tmp;
-
-	memcpy(&tmp, tlv + 2, sizeof(tmp));
-	st.timestamp = ntohl(tmp);
-	memcpy(&tmp, tlv + 6, sizeof(tmp));
-	extb.age = tmp;
-
-	// st.timestamp = ntohl(*(uint32_t *)(tlv + 2));
-	// extb.age = ntohl(*(uint32_t *)(tlv + 6));
-
-	st.rttl = tlv[10];
-
-	memcpy(&tmp, tlv + 11, sizeof(tmp));
-	tmp = ntohl(tmp);
-
-	// tmp = ntohl(*(uint32_t *)(tlv + 11));
-	st.avgdelay = *(float *)&tmp;
-
-	memcpy(&tmp, tlv + 15, sizeof(tmp));
-	tmp = ntohl(tmp);
-
-	// tmp = ntohl(*(uint32_t *)(tlv + 15));
-	st.avgjitter = *(float *)&tmp;
-
-	st.avgloss = tlv[19] / 255.;
-	st.avgdup = tlv[20] / 255.;
-	st.avgooo = tlv[21] / 255.;
-
-	st.valid = true;
-
-	return true;
-}
-
-static inline bool check_string(char *hd, int len, string &result) {
-	for (int i = 0; i < len; i++) {
-		if (hd[i] <= 0)
-			return false;
-	}
-	result = string(hd, len);
-	return true;
-}
-
-void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int len, bool ssm) {
-	if (len < 4)
-		return;
-
-	if (ntohs(*((uint16_t *)buff)) != 0xbeac)
-		return;
-
-	if (buff[2] != NEW_BEAC_VER)
-		return;
-
-	if (buff[3] == 0) {
-		if (len == 12) {
-			uint32_t seq = ntohl(*((uint32_t *)(buff + 4)));
-			uint32_t ts = ntohl(*((uint32_t *)(buff + 8)));
-			getSource(*from, 0, recvdts, true).update(ttl, seq, ts, recvdts, ssm);
-		}
-		return;
-	} else if (buff[3] == 1) {
-		if (len < 5)
-			return;
-
-		beaconSource &src = getSource(*from, 0, recvdts, true);
-
-		src.sttl = buff[4];
-
-		len -= 5;
-
-		for (uint8_t *hd = tlv_begin(buff + 5, len); hd; hd = tlv_next(hd, len)) {
-			if (verbose > 4) {
-				char tmp[64];
-				from->print(tmp, sizeof(tmp));
-				fprintf(stderr, "Parsing TLV (%i, %i) for %s [len is now %i]\n", (int)hd[0], (int)hd[1], tmp, len);
-			}
-
-			if (hd[0] == T_BEAC_NAME) {
-				string name;
-				if (check_string((char *)hd + 2, hd[1], name))
-					src.setName(name);
-			} else if (hd[0] == T_ADMIN_CONTACT) {
-				check_string((char *)hd + 2, hd[1], src.adminContact);
-			} else if (hd[0] == T_SOURCE_INFO || hd[0] == T_SOURCE_INFO_IPv4) {
-				int blen = hd[0] == T_SOURCE_INFO ? 18 : 6;
-
-				if (hd[1] < blen)
-					continue;
-
-				address addr;
-
-				if (hd[0] == T_SOURCE_INFO) {
-					sockaddr_in6 *a6 = (sockaddr_in6 *)&addr;
-
-					a6->sin6_family = AF_INET6;
-
-					memcpy(&a6->sin6_addr, hd + 2, sizeof(in6_addr));
-					memcpy(&a6->sin6_port, hd + 18, sizeof(uint16_t));
-				} else {
-					sockaddr_in *a4 = (sockaddr_in *)&addr;
-
-					a4->sin_family = AF_INET;
-
-					memcpy(&a4->sin_addr, hd + 2, sizeof(in_addr));
-					memcpy(&a4->sin_port, hd + 6, sizeof(uint16_t));
-				}
-
-				beaconExternalStats &stats = src.getExternal(addr, recvdts);
-
-				int plen = hd[1] - blen;
-				for (uint8_t *pd = tlv_begin(hd + 2 + blen, plen); pd; pd = tlv_next(pd, plen)) {
-					if (pd[0] == T_BEAC_NAME) {
-						if (check_string((char *)pd + 2, pd[1], stats.name)) {
-							stats.identified = !stats.name.empty();
-						}
-					} else if (pd[0] == T_ADMIN_CONTACT) {
-						check_string((char *)pd + 2, pd[1], stats.contact);
-					} else if (pd[0] == T_ASM_STATS || pd[0] == T_SSM_STATS) {
-						Stats *st = (pd[0] == T_ASM_STATS ? &stats.ASM : &stats.SSM);
-
-						if (!read_tlv_stats(pd, stats, *st))
-							break;
-						st->lastupdate = recvdts;
-					}
-				}
-
-				// trigger local SSM join
-				if (!addr.is_equal(beaconUnicastAddr)) {
-					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts, false);
-					if (t.adminContact.empty())
-						t.adminContact = stats.contact;
-				}
-			} else if (hd[0] == T_WEBSITE_GENERIC || hd[0] == T_WEBSITE_LG || hd[0] == T_WEBSITE_MATRIX) {
-				string url;
-				if (check_string((char *)hd + 2, hd[1], url)) {
-					src.webSites[hd[0]] = url;
-				}
-			} else if (hd[0] == T_CC) {
-				if (hd[1] == 2) {
-					src.CC = string((char *)hd + 2, 2);
-				}
-			} else if (hd[0] == T_LEAVE) {
-				removeSource(*from, false);
-				break;
-			}
-		}
-	}
-}
-
-void handle_mcast(int sock, content_type cnt) {
-	if (cnt == NPROBE || cnt == NSSMPROBE) {
-		handle_probe(sock, cnt);
-	}
-}
-
-static inline uint64_t get_timestamp() {
-	struct timeval tv;
-	uint64_t timestamp;
-
-	if (gettimeofday(&tv, 0) != 0)
-		return 0;
-
-	timestamp = tv.tv_sec;
-	timestamp *= 1000;
-	timestamp += tv.tv_usec / 1000;
-
-	return timestamp;
 }
 
 beaconSource::beaconSource()
 	: identified(false) {
 	sttl = 0;
-	lastlocalevent = (uint64_t)-1;
+	lastlocalevent = 0;
 }
 
 void beaconSource::setName(const string &n) {
@@ -1402,13 +915,13 @@ void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, 
 	}
 }
 
-static int send_nprobe(const sockaddr *addr, socklen_t addrlen, uint32_t &seq) {
+static int send_nprobe(const address &addr, uint32_t &seq) {
 	int len;
 
-	len = build_nprobe(buffer, bufferLen, seq, get_timestamp());
+	len = build_probe(buffer, bufferLen, seq, get_timestamp());
 	seq++;
 
-	len = sendto(mcastSock, buffer, len, 0, addr, addrlen);
+	len = sendto(mcastSock, buffer, len, 0, addr.saddr(), addr.addrlen());
 	if (len > 0)
 		bytesSent += len;
 	return len;
@@ -1417,182 +930,26 @@ static int send_nprobe(const sockaddr *addr, socklen_t addrlen, uint32_t &seq) {
 int send_probe() {
 	static uint32_t seq = rand();
 
-	return send_nprobe((sockaddr *)&probeAddr, probeAddr.sockaddr_len(), seq);
+	return send_nprobe(probeAddr, seq);
 }
 
 int send_ssm_probe() {
 	static uint32_t seq = rand();
 
-	return send_nprobe((sockaddr *)&ssmProbeAddr, ssmProbeAddr.sockaddr_len(), seq);
-}
-
-static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer, uint8_t type, const char *str) {
-	int len = strlen(str);
-	if ((pointer + 2 + len) > maxlen)
-		return false;
-	buf[pointer + 0] = type;
-	buf[pointer + 1] = len;
-	memcpy(buf + pointer + 2, str, len);
-	pointer += len + 2;
-	return true;
-}
-
-bool write_tlv_start(uint8_t *buff, int maxlen, int &ptr, uint8_t type, int len) {
-	if ((ptr + len + 2) > maxlen)
-		return false;
-
-	buff[ptr + 0] = type;
-	buff[ptr + 1] = len;
-
-	ptr += 2;
-
-	return true;
-}
-
-bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t age, int sttl, const beaconMcastState &st) {
-	if (!write_tlv_start(buff, maxlen, ptr, type, 20))
-		return false;
-
-	uint8_t *b = buff + ptr;
-
-	uint32_t val;
-
-	val = htonl((uint32_t)st.s.timestamp);
-	memcpy(b + 0, &val, sizeof(val));
-	val = htonl(age);
-	memcpy(b + 4, &val, sizeof(val));
-
-	// *((uint32_t *)(b + 0)) = htonl((uint32_t)st.s.timestamp);
-	// *((uint32_t *)(b + 4)) = htonl(age);
-
-	b[8] = (sttl ? sttl : defaultTTL) - st.s.rttl;
-
-	uint32_t *stats = (uint32_t *)(b + 9);
-
-	val = htonl(*((uint32_t *)&st.s.avgdelay));
-	memcpy(stats + 0, &val, sizeof(val));
-	val = htonl(*((uint32_t *)&st.s.avgjitter));
-	memcpy(stats + 1, &val, sizeof(val));
-
-	// stats[0] = htonl(*((uint32_t *)&st.s.avgdelay));
-	// stats[1] = htonl(*((uint32_t *)&st.s.avgjitter));
-
-	b[17] = (uint8_t)(st.s.avgloss * 0xff);
-	b[18] = (uint8_t)(st.s.avgdup * 0xff);
-	b[19] = (uint8_t)(st.s.avgooo * 0xff);
-
-	ptr += 20;
-
-	return true;
-}
-
-int build_nreport(uint8_t *buff, int maxlen, int type, bool publishsources) {
-	if (maxlen < 4)
-		return -1;
-
-	// 0-2 magic
-	*((uint16_t *)buff) = htons(0xbeac);
-
-	// 3 version
-	buff[2] = NEW_BEAC_VER;
-
-	// 4 packet type
-	buff[3] = 1; // Report
-
-	buff[4] = defaultTTL; // Original Hop Limit
-
-	int ptr = 5;
-
-	if (!write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, beaconName.c_str()))
-		return -1;
-	if (!write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, adminContact.c_str()))
-		return -1;
-
-	if (type == WEBSITE_REPORT) {
-		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
-			if (!write_tlv_string(buff, maxlen, ptr, j->first, j->second.c_str()))
-				return -1;
-		if (!twoLetterCC.empty()) {
-			if (!write_tlv_string(buff, maxlen, ptr, T_CC, twoLetterCC.c_str()))
-				return -1;
-		}
-		return ptr;
-	} else if (type == LEAVE_REPORT) {
-		if (!write_tlv_start(buff, maxlen, ptr, T_LEAVE, 0))
-			return -1;
-		return ptr;
-	}
-
-	if (publishsources) {
-		uint64_t now = get_timestamp();
-
-		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-			if (!i->second.identified)
-				continue;
-
-			if (!i->second.ASM.s.valid && !i->second.SSM.s.valid)
-				continue;
-
-			int len = 18;
-
-			if (i->first.ss_family == AF_INET)
-				len = 6;
-
-			if (type == MAP_REPORT) {
-				int namelen = i->second.name.size();
-				int contactlen = i->second.adminContact.size();
-				len += 2 + namelen + 2 + contactlen;
-			} else {
-				len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
-			}
-
-			if (!write_tlv_start(buff, maxlen, ptr, i->first.ss_family == AF_INET6 ? T_SOURCE_INFO : T_SOURCE_INFO_IPv4, len))
-				break;
-
-			if (i->first.ss_family == AF_INET6) {
-				const sockaddr_in6 *addr = i->first.v6();
-
-				memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
-				memcpy(buff + ptr + 16, &addr->sin6_port, sizeof(uint16_t));
-
-				ptr += 18;
-			} else {
-				const sockaddr_in *addr = i->first.v4();
-
-				memcpy(buff + ptr, &addr->sin_addr, sizeof(in_addr));
-				memcpy(buff + ptr + 4, &addr->sin_port, sizeof(uint16_t));
-
-				ptr += 6;
-			}
-
-			if (type == MAP_REPORT) {
-				write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
-				write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
-			} else {
-				uint32_t age = (now - i->second.creation) / 1000;
-
-				if (i->second.ASM.s.valid)
-					write_tlv_stats(buff, maxlen, ptr, T_ASM_STATS, age, i->second.sttl, i->second.ASM);
-				if (i->second.SSM.s.valid)
-					write_tlv_stats(buff, maxlen, ptr, T_SSM_STATS, age, i->second.sttl, i->second.SSM);
-			}
-		}
-	}
-
-	return ptr;
+	return send_nprobe(ssmProbeAddr, seq);
 }
 
 int send_report(int type) {
 	int len;
 
-	len = build_nreport(buffer, bufferLen, type == SSM_REPORT ? STATS_REPORT : type, type != SSM_REPORT);
+	len = build_report(buffer, bufferLen, type == SSM_REPORT ? STATS_REPORT : type, type != SSM_REPORT);
 	if (len < 0)
 		return len;
 
 	int res;
 
 	if (type == SSM_REPORT) {
-		if ((res = sendto(mcastSock, buffer, len, 0, (sockaddr *)&ssmProbeAddr, ssmProbeAddr.sockaddr_len())) < 0) {
+		if ((res = sendto(mcastSock, buffer, len, 0, ssmProbeAddr.saddr(), ssmProbeAddr.addrlen())) < 0) {
 			cerr << "Failed to send SSM report: " << strerror(errno) << endl;
 		} else {
 			bytesSent += res;
@@ -1608,7 +965,7 @@ int send_report(int type) {
 				cerr << "Sending Report to " << tmp << endl;
 			}
 
-			if ((res = sendto(mcastSock, buffer, len, 0, (sockaddr *)to, to->sockaddr_len())) < 0) {
+			if ((res = sendto(mcastSock, buffer, len, 0, to->saddr(), to->addrlen())) < 0) {
 				cerr << "Failed to send report to " << tmp << ": " << strerror(errno) << endl;
 			} else {
 				bytesSent += res;
@@ -1617,25 +974,6 @@ int send_report(int type) {
 	}
 
 	return 0;
-}
-
-int build_nprobe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
-	if (maxlen < (int)(4 + 4 + 4))
-		return -1;
-
-	// 0-2 magic
-	*((uint16_t *)buff) = htons(0xbeac);
-
-	// 3 version
-	buff[2] = NEW_BEAC_VER;
-
-	// 4 packet type
-	buff[3] = 0; // Probe
-
-	*((uint32_t *)(buff + 4)) = htonl(sn);
-	*((uint32_t *)(buff + 8)) = htonl((uint32_t)ts);
-
-	return 4 + 4 + 4;
 }
 
 void dumpStats(FILE *fp, const char *tag, const Stats &s, uint64_t now, int sttl, bool diff) {
@@ -1842,133 +1180,15 @@ void sendLeaveReport(int) {
 	exit(0);
 }
 
-int MulticastListen(int sock, const address &grpaddr) {
-#ifdef MCAST_JOIN_GROUP
-	struct group_req grp;
+int SetupSocketAndFDSet(const address &addr, bool shouldbind, bool ssm) {
+	int sock = SetupSocket(addr, shouldbind, ssm);
 
-	memset(&grp, 0, sizeof(grp));
-	grp.gr_interface = mcastInterface;
-	grp.gr_group = grpaddr;
+	if (sock > 0) {
+		if (sock > largestSock)
+			largestSock = sock;
 
-	return setsockopt(sock, grpaddr.optlevel(), MCAST_JOIN_GROUP, &grp, sizeof(grp));
-#else
-	if (grpaddr.ss_family == AF_INET6) {
-		ipv6_mreq mreq;
-		mreq.ipv6mr_interface = mcastInterface;
-		mreq.ipv6mr_multiaddr = grpaddr.v6()->sin6_addr;
-
-		return setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
-	} else {
-		ip_mreq mreq;
-		memset(&mreq, 0, sizeof(mreq));
-		// Specifying the interface doesn't work, there's ip_mreqn in linux..
-		// but what about other OSs? -hugo
-		mreq.imr_multiaddr = grpaddr.v4()->sin_addr;
-
-		return setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+		FD_SET(sock, &readSet);
 	}
-#endif
-}
-
-#ifdef MCAST_JOIN_SOURCE_GROUP
-static int SSMJoinLeave(int sock, int type, const address *srcaddr) {
-	struct group_source_req req;
-	memset(&req, 0, sizeof(req));
-
-	req.gsr_interface = mcastInterface;
-
-	req.gsr_group = ssmProbeAddr;
-	req.gsr_source = *srcaddr;
-
-	return setsockopt(sock, srcaddr->optlevel(), type, &req, sizeof(req));
-}
-
-int SSMJoin(int sock, const address *srcaddr) {
-	return SSMJoinLeave(sock, MCAST_JOIN_SOURCE_GROUP, srcaddr);
-}
-
-int SSMLeave(int sock, const address *srcaddr) {
-	return SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, srcaddr);
-}
-
-#else
-
-int SSMJoin(int sock, const address *srcaddr) {
-	errno = ENOPROTOOPT;
-	return -1;
-}
-
-int SSMLeave(int sock, const address *srcaddr) {
-	errno = ENOPROTOOPT;
-	return -1;
-}
-
-#endif
-
-int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
-	if (verbose) {
-		char tmp[64];
-		addr.print(tmp, sizeof(tmp));
-		fprintf(stderr, "SetupSocket(%s)\n", tmp);
-	}
-
-	int af_family = addr.ss_family;
-	int level = addr.optlevel();
-
-	int sock = socket(af_family, SOCK_DGRAM, 0);
-	if (sock < 0) {
-		perror("Failed to create multicast socket");
-		return -1;
-	}
-
-	int on = 1;
-
-	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
-		perror("setsockopt");
-		return -1;
-	}
-
-	if (shouldbind) {
-		if (bind(sock, (const sockaddr *)&addr, addr.sockaddr_len()) != 0) {
-			perror("Failed to bind multicast socket");
-			return -1;
-		}
-	}
-
-	if (needTSHL) {
-#ifdef SO_TIMESTAMP
-		if (setsockopt(sock, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0) {
-			perror("setsockopt(SO_TIMESTAMP)");
-			return -1;
-		}
-#endif
-
-		if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_HOPLIMIT : IP_RECVTTL, &on, sizeof(on)) != 0) {
-			perror("receiving hop limit/ttl setsockopt()");
-			return -1;
-		}
-	}
-
-	TTLType ttl = defaultTTL;
-
-	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_HOPS : IP_MULTICAST_TTL, &ttl, sizeof(ttl)) != 0) {
-		perror(level == IPPROTO_IPV6 ?
-			"setsockopt(IPV6_MULTICAST_HOPS)"
-			: "setsockopt(IP_MULTICAST_TTL)");
-		return -1;
-	}
-
-	if (!ssm && addr.is_multicast()) {
-		if (MulticastListen(sock, addr) != 0) {
-			perror("Failed to join multicast group");
-			return -1;
-		}
-	}
-
-	if (sock > largestSock)
-		largestSock = sock;
-
-	FD_SET(sock, &readSet);
 
 	return sock;
 }
