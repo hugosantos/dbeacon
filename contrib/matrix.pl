@@ -26,6 +26,7 @@ our $default_what = "ssmorasm";	# one of 'ssmorasm', 'both', 'asm'
 our $history_enabled = 1;
 our $css_file;
 our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
+our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
 
 do("matrix.conf");
 
@@ -107,11 +108,11 @@ sub build_vertex_from_rrd {
 
 			($start,$step,$names,$data) = RRDs::fetch(build_rrd_file_path($historydir,  $dstbeacon, $srcbeacon, $asmorssm), 'AVERAGE',
 				 '-s',$page->param('at'),'-e',$page->param('at'));
-			
+
 			if (RRDs::error) {
 				next;
 			}
-			
+
 			my $prefix ="";
 			if ($asmorssm eq "ssm") {
 				$prefix="ssm_";
@@ -264,6 +265,7 @@ sub start_handler {
 				$g->set_vertex_attribute($current_beacon, "name", $atts{"name"});
 				$g->set_vertex_attribute($current_beacon, "contact", $atts{"contact"});
 				$g->set_vertex_attribute($current_beacon, "age", $atts{"age"});
+				$g->set_vertex_attribute($current_beacon, "country", $atts{"country"});
 			}
 		}
 	} elsif ($tag eq "asm") {
@@ -283,6 +285,7 @@ sub start_handler {
 
 				$g->set_vertex_attribute($current_source, "name", $atts{"name"});
 				$g->set_vertex_attribute($current_source, "contact", $atts{"contact"});
+				$g->set_vertex_attribute($current_source, "country", $atts{"country"});
 			}
 
 			$g->add_edge($current_source, $current_beacon);
@@ -332,7 +335,7 @@ sub build_header {
 
 		print '<form name="timenavigator">';
 		print 'Time navigation: ';
-		print '<script language="javascript"> 
+		print '<script language="javascript">
 			function move(way) {
 				selectedvalue = document.timenavigator.offset.options[document.timenavigator.offset.selectedIndex].value;
 				newdate = '.$at.' + selectedvalue * way;
@@ -340,7 +343,7 @@ sub build_header {
 				location.href=url;
 			}</script>';
 
-		print '<a href="javascript:move(-1)"><small>Move backward</small> &lt;</a>'; 
+		print '<a href="javascript:move(-1)"><small>Move backward</small> &lt;</a>';
 
 		#print '<select name="offset" onChange="location = this.options[this.selectedIndex].value;">'."\n";
 		print '<select name="offset">'."\n";
@@ -599,7 +602,7 @@ sub render_matrix {
 
 		print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
-		print "<tr><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
+		print "<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
 		foreach $a (@V) {
 			my $id = $g->get_vertex_attribute($a, "id");
 			if ($id >= 1) {
@@ -613,8 +616,16 @@ sub render_matrix {
 					print "</a>";
 				}
 				print " <b>R$id</b>";
-				# print "<img src=\"http://www.sixxs.net/gfx/countries/jp.gif\" style=\"vertical-align: middle; margin-left: 0.4em; border: 1px solid black\" />";
 				print "</td>";
+
+				print "<td>";
+				if ($flag_url_format ne "" and $g->get_vertex_attribute($a, "country") ne "") {
+					print "<img src=\"";
+					printf $flag_url_format, lc $g->get_vertex_attribute($a, "country");
+					print "\" style=\"vertical-align: middle; border: 1px solid black\" />";
+				}
+				print "</td>";
+
 				print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
 				# Removing port number from id and link toward RIPE whois db
 			        my $ip = $a;

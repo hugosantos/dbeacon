@@ -114,6 +114,7 @@ enum {
 	T_WEBSITE_GENERIC = 'G',
 	T_WEBSITE_MATRIX = 'M',
 	T_WEBSITE_LG = 'L',
+	T_CC = 'C',
 
 	T_LEAVE = 'Q'
 };
@@ -217,6 +218,7 @@ struct beaconSource {
 	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
 
 	WebSites webSites;
+	string CC;
 };
 
 typedef std::map<beaconSourceAddr, beaconSource> Sources;
@@ -225,6 +227,7 @@ static Sources sources;
 
 static char sessionName[256];
 static string beaconName;
+static string twoLetterCC;
 static int mcastInterface = 0;
 static string adminContact;
 static address probeAddr;
@@ -438,6 +441,7 @@ void usage() {
 	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
 	fprintf(stderr, "  -l LOCAL_ADDR[/PORT]   Listen for reports from other probes\n");
 	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
+	fprintf(stderr, "  -C CC                  Specify your two letter Country Code\n");
 	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename\n");
 	fprintf(stderr, "  -4                     Force IPv4 usage\n");
 	fprintf(stderr, "  -6                     Force IPv6 usage\n");
@@ -662,7 +666,7 @@ void show_version() {
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::s:d::I:l:L:W:vUhf46V");
+		res = getopt(argc, argv, "n:a:i:b:r:S::s:d::I:l:L:W:C:vUhf46V");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -718,6 +722,12 @@ int parse_arguments(int argc, char **argv) {
 				optarg += 7;
 			}
 			webSites[type] = optarg;
+		} else if (res == 'C') {
+			if (strlen(optarg) != 2) {
+				fprintf(stderr, "Bad country code.\n");
+				return -1;
+			}
+			twoLetterCC = optarg;
 		} else if (res == 'i') {
 			multicastInterface = optarg;
 		} else if (res == 'h') {
@@ -1162,6 +1172,10 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 				if (check_string((char *)hd + 2, hd[1], url)) {
 					src.webSites[hd[0]] = url;
 				}
+			} else if (hd[0] == T_CC) {
+				if (hd[1] == 2) {
+					src.CC = string((char *)hd + 2, 2);
+				}
 			} else if (hd[0] == T_LEAVE) {
 				removeSource(*from, false);
 				break;
@@ -1427,6 +1441,10 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
 			if (!write_tlv_string(buff, maxlen, ptr, j->first, j->second.c_str()))
 				return -1;
+		if (!twoLetterCC.empty()) {
+			if (!write_tlv_string(buff, maxlen, ptr, T_CC, twoLetterCC.c_str()))
+				return -1;
+		}
 		return ptr;
 	} else if (type == LEAVE_REPORT) {
 		if (!write_tlv_start(buff, maxlen, ptr, T_LEAVE, 0))
@@ -1594,6 +1612,8 @@ void do_dump() {
 		fprintf(fp, "\t<beacon name=\"%s\" addr=\"%s\"", beaconName.c_str(), tmp);
 		if (!adminContact.empty())
 			fprintf(fp, " contact=\"%s\"", adminContact.c_str());
+		if (!twoLetterCC.empty())
+			fprintf(fp, " country=\"%s\"", twoLetterCC.c_str());
 		fprintf(fp, " age=\"%llu\" lastupdate=\"0\">\n", (now - startTime) / 1000);
 
 		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++) {
@@ -1612,6 +1632,10 @@ void do_dump() {
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 			}
+
+			if (!i->second.CC.empty())
+				fprintf(fp, " country=\"%s\"", i->second.CC.c_str());
+
 			fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 			fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
 
