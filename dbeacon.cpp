@@ -358,9 +358,12 @@ void handle_event() {
 void handle_gc() {
 	map<string, beaconSource>::iterator i = sources.begin();
 
+	uint64_t now = get_timestamp();
+	
 	while (i != sources.end()) {
 		if (i->second.hasstats) {
-			i->second.hasstats = false;
+			if ((now - i->second.lasttimestamp) > 60000)
+				i->second.hasstats = false;
 			i++;
 		} else {
 			map<string, beaconSource>::iterator j = i;
