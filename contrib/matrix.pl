@@ -44,94 +44,13 @@ $parser = new XML::Parser(Style => 'Tree');
 $parser->setHandlers(Start => \&start_handler);
 my $tree = $parser->parsefile($dump_file);
 
-print "<?xml version=\"1.0\"?>\n";
-print "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
-print "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
+start_document();
 
-print "<head>
-\t<meta http-equiv=\"refresh\" content=\"60\" />
-\t<style type=\"text/css\">
-body {
-	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 100%;
-}
-
-table.adjr {
-	text-align: center;
-}
-table.adjr td.beacname {
-	text-align: right;
-}
-table.adjr td {
-	padding: 3px;
-	border-bottom: 0.1em solid white;
-}
-table#adj td.adjacent, table#adj td.ssmadjacent {
-	background-color: #96ef96;
-	width: 20px;
-}
-
-table#adj td.blackhole {
-	background-color: #000000;
-}
-table#adj td.noinfo {
-	background-color: #ff0000;
-}
-table#adj td.noasminfo, table#adj td.nossminfo {
-	background-color: #b6ffb6;
-	width: 20px;
-}
-table#adj td.corner {
-	background-color: #dddddd;
-}
-
-table#adj td.adjacent {
-	border-right: 0.075em solid white;
-}
-
-table#adj td.blackhole, table#adj td.noinfo, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
-	border-right: 0.2em solid white;
-}
-
-table#adjname td.addr, table#adjname td.admincontact, table#adjname td.age, table#adjname td.urls {
-	background-color: #eeeeee;
-	border-right: 0.2em solid white;
-}
-table#adjname td.age {
-	font-size: 80%;
-}
-
-.addr, .admincontact {
-	font-family: Monospace;
-}
-
-.beacon {
-	font-style: italic;
-}
-\t</style>
-</head>\n";
-
-print "<body>\n";
-
-print "<h1>IPv6 Multicast Beacon</h1>\n";
-
-my $now = localtime();
-
-print "<h4>Current Server time is $now</h4>\n";
-
-print "<h4>Current stats for $sessiongroup";
+print "<br /><b>Current stats for</b> <code>$sessiongroup</code>";
 if ($ssm_sessiongroup) {
-	print " (SSM: $ssm_sessiongroup)";
+	print " (SSM: <code>$ssm_sessiongroup</code>)";
 }
-print "</h4>\n";
-
-switch ($attname)
-{
-  case "loss"	{ print "<h4>Current view is Loss in %</h4>\n" }
-  case "delay"	{ print "<h4>Current view is Delay in ms</h4>\n" }
-  case "jitter"	{ print "<h4>Current view is Jitter in ms</h4>\n" }
-  else		{ $attname = "ttl"; print "<h4>Current view is TTL in number of hops</h4>\n" }
-}
+print "<br /><br />\n";
 
 my $url = $page->script_name();
 my $hideatt;
@@ -140,26 +59,37 @@ if ($atthideinfo) {
 	$hideatt = "hideinfo=1&";
 }
 
-my @options = ("ttl", "loss", "delay", "jitter");
-my @options_name = ("TTL", "Loss", "Delay", "Jitter");
+my @view = ("ttl", "loss", "delay", "jitter");
+my @view_name = ("TTL", "Loss", "Delay", "Jitter");
+my @view_type = ("hop count", "percentage", "ms", "ms");
 
-my $options_len = scalar(@options);
+my $view_len = scalar(@view);
 my $i;
 
-print "<p><b>Parameters:</b>";
-for ($i = 0; $i < $options_len; $i++) {
-	my $att = $options[$i];
-	my $attname = $options_name[$i];
-	print " [<a href=\"$url?$hideatt" . "att=$att\">$attname</a>]";
-}
+print "<span style=\"float: left\"><b>View</b>&nbsp;<small>";
 
 if (not $atthideinfo) {
-	print " [<a href=\"$url?hideinfo=1&att=$attname\">Hide Source Info</a>]";
+	print "(<a href=\"$url?hideinfo=1&att=$attname\">Hide Source Info</a>)";
 } else {
-	print " [<a href=\"$url?hideinfo=0&att=$attname\">Show Source Info</a>]";
+	print "(<a href=\"$url?hideinfo=0&att=$attname\">Show Source Info</a>)";
 }
+print "</small>:</span>";
 
-print "</p>\n";
+print "<ul id=\"view\" style=\"float: left\">\n";
+for ($i = 0; $i < $view_len; $i++) {
+	my $att = $view[$i];
+	my $attn = $view_name[$i];
+	print "<li>";
+	if ($attname eq $att) {
+		print "<span class=\"currentview\">$attn</span>";
+	} else {
+		print "<a href=\"$url?$hideatt" . "att=$att\">$attn</a>";
+	}
+	print " <small>(" . $view_type[$i] . ")</small></li>\n";
+}
+print "</ul>\n";
+
+print "<br /><br />\n";
 
 print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adj\">\n";
 
@@ -321,11 +251,7 @@ if ($ssm_sessiongroup) {
 }
 print " -a CONTACT</code></p>\n";
 
-print "<hr />\n";
-print "<small>matrix.pl - a tool for dynamic viewing of dbeacon information. by Hugo Santos and Hoerdt Mickaël</small>\n";
-
-print "</body>\n";
-print "</html>\n";
+end_document();
 
 sub format_date {
 	my $tm = shift;
@@ -436,3 +362,102 @@ sub parse_stats {
 	}
 }
 
+sub start_document {
+	print "<?xml version=\"1.0\"?>\n";
+	print "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
+	print "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
+
+	print "<head>
+\t<meta http-equiv=\"refresh\" content=\"60\" />
+\t<style type=\"text/css\">
+body {
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: 100%;
+}
+
+table.adjr {
+	text-align: center;
+}
+table.adjr td.beacname {
+	text-align: right;
+}
+table.adjr td {
+	padding: 3px;
+	border-bottom: 0.1em solid white;
+}
+table#adj td.adjacent, table#adj td.ssmadjacent {
+	background-color: #96ef96;
+	width: 20px;
+}
+
+table#adj td.blackhole {
+	background-color: #000000;
+}
+table#adj td.noinfo {
+	background-color: #ff0000;
+}
+table#adj td.noasminfo, table#adj td.nossminfo {
+	background-color: #b6ffb6;
+	width: 20px;
+}
+table#adj td.corner {
+	background-color: #dddddd;
+}
+
+table#adj td.adjacent {
+	border-right: 0.075em solid white;
+}
+
+table#adj td.blackhole, table#adj td.noinfo, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
+	border-right: 0.2em solid white;
+}
+
+table#adjname td.addr, table#adjname td.admincontact, table#adjname td.age, table#adjname td.urls {
+	background-color: #eeeeee;
+	border-right: 0.2em solid white;
+}
+table#adjname td.age {
+	font-size: 80%;
+}
+
+.addr, .admincontact {
+	font-family: Monospace;
+}
+
+.beacon {
+	font-style: italic;
+}
+
+ul#view {
+	margin: 0;
+	padding: 0;
+}
+
+ul#view li {
+	display: inline;
+	padding: 0;
+	padding-left: 5px;
+	margin: 0;
+}
+
+#view .currentview {
+	border-bottom: 1px dotted black;
+}
+
+\t</style>
+</head>\n";
+
+	print "<body>\n";
+
+	print "<h1 style=\"margin: 0\">IPv6 Multicast Beacon</h1>\n";
+
+	print "<small>Current server time is " . localtime() . "</small><br />\n";
+}
+
+sub end_document {
+	print "<hr />\n";
+	print "<small>matrix.pl - a tool for dynamic viewing of dbeacon information. by Hugo Santos and Hoerdt Mickaël</small>\n";
+
+	print "</body>\n";
+	print "</html>\n";
+}
