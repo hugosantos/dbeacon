@@ -604,6 +604,7 @@ sub render_matrix {
 	}
 
 	if (not $atthideinfo) {
+		print "<p></p>\n";
 		print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
 		print "<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
