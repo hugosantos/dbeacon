@@ -111,6 +111,7 @@ static address probeAddr;
 static const char *probeAddrLiteral = 0;
 static const char *probeSSMAddrLiteral = 0;
 static bool useSSM = false;
+static bool listenForSSM = false;
 static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
 static int largestSock = 0;
@@ -283,7 +284,12 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Bad address format for SSM channel.\n");
 				return -1;
 			} else if (!ssmProbeAddr.is_unspecified()) {
-				mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
+				insert_event(SSM_SENDING_EVENT, 100);
+				insert_event(SSM_REPORT_EVENT, 15000);
+
+				if (listenForSSM) {
+					mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
+				}
 			}
 		}
 	} else {
@@ -351,8 +357,6 @@ int main(int argc, char **argv) {
 		mcastSocks.push_back(make_pair(sock, i->second));
 		if (i->second == NSSMPROBE) {
 			ssmMcastSock = sock;
-			insert_event(SSM_SENDING_EVENT, 100);
-			insert_event(SSM_REPORT_EVENT, 15000);
 		}
 	}
 
@@ -431,7 +435,7 @@ void show_version() {
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::s:d::I:l:L:W:C:vUhf46V");
+		res = getopt(argc, argv, "n:a:i:b:r:S::Os:d::I:l:L:W:C:vUhf46V");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -457,6 +461,10 @@ int parse_arguments(int argc, char **argv) {
 				probeSSMAddrLiteral = optarg;
 			}
 			useSSM = true;
+			listenForSSM = true;
+		} else if (res == 'O') {
+			useSSM = true;
+			listenForSSM = false;
 		} else if (res == 's') {
 			if (!beaconUnicastAddr.parse(optarg, false, false)) {
 				fprintf(stderr, "Bad address format.\n");
