@@ -529,7 +529,7 @@ struct timer {
 static list<timer> timers;
 
 void next_event(timeval *eventm) {
-	int64_t diff = get_timestamp() - (int64_t)timers.begin()->target;
+	int64_t diff = timers.begin()->target - (int64_t)get_timestamp();
 
 	if (diff <= 0) {
 		diff = 1;
@@ -540,7 +540,7 @@ void next_event(timeval *eventm) {
 }
 
 void insert_sorted_event(timer &t) {
-	t.target = get_timestamp() + t.interval * 1000;
+	t.target = get_timestamp() + t.interval;
 
 	list<timer>::iterator i = timers.begin();
 
