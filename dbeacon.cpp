@@ -34,6 +34,28 @@
 #define IP_RECVTTL 12
 #endif
 
+#if __linux__ || (__FreeBSD_version > 500042)
+
+#if !defined(MCAST_JOIN_GROUP)
+#define MCAST_JOIN_GROUP 42
+struct group_req {
+	uint32_t gr_interface;
+	struct sockaddr_storage gr_group;
+};
+#endif
+
+#if defined(MCAST_JOIN_GROUP) && !defined(MCAST_JOIN_SOURCE_GROUP)
+#define MCAST_JOIN_SOURCE_GROUP 46
+#define MCAST_LEAVE_SOURCE_GROUP 47
+struct group_source_req {
+	uint32_t gsr_interface;
+	struct sockaddr_storage gsr_group;
+	struct sockaddr_storage gsr_source;
+};
+#endif
+
+#endif
+
 using namespace std;
 
 #define NEW_BEAC_PCOUNT	10
