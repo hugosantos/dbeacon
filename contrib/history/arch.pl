@@ -86,7 +86,9 @@ sub start_handler
 		}
 		if ($values{'ttl'} and $values{'loss'} and $values{'delay'} and $values{'jitter'})
 		{
-			storedata($dstbeacon,$srcbeacon,$tag,%values);
+			if ($srcbeacon and $dstbeacon) {
+				storedata($dstbeacon,$srcbeacon,$tag,%values);
+			}
 		}
 	}
 }
