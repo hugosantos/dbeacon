@@ -1061,15 +1061,20 @@ int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
 	if (sock < 0) {
 		perror("Failed to create multicast socket");
 		return -1;
-	map<string, externalBeacon> externalBeacons;
 	}
+	
+	int on = 1;
+
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
+		perror("setsockopt");
+		return -1;
+	}
+
 
 	if (bind(sock, (struct sockaddr *)addr, sizeof(*addr)) != 0) {
 		perror("Failed to bind multicast socket");
 		return -1;
 	}
-
-	int on = 1;
 
 	if (needTSHL) {
 		if (setsockopt(sock, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0) {
@@ -1081,11 +1086,6 @@ int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
 			perror("setsockopt(IPV6_HOPLIMIT)");
 			return -1;
 		}
-	}
-
-	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
-		perror("setsockopt");
-		return -1;
 	}
 
 	if (IN6_IS_ADDR_MULTICAST(&addr->sin6_addr)) {
