@@ -268,7 +268,7 @@ sub graphgen {
 		push (@args, 'AREA:Avg#CC0000:Avg');
 		push (@args, 'GPRINT:Avg:AVERAGE:'.$unit);
 		push (@args, 'AREA:Min#990000:Min');
-		push (@args, 'GPRINT:Min:AVERAGE:'.$unit);
+		push (@args, 'GPRINT:Min:MIN:'.$unit);
 	} else {
 		push (@args, 'AREA:Avg#CC0000:Avg');
 		push (@args, 'GPRINT:Avg:AVERAGE:'.$unit);
