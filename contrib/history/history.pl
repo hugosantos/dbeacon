@@ -29,6 +29,10 @@ my $url = $page->script_name();
 my $dst = $page->param('dst');
 my $src = $page->param('src');
 my $type = $page->param('type');
+my $age = '-1d';
+if (defined($page->param('age'))) {
+	$age = $page->param('age');
+}
 
 sub full_url0 {
 	return "$url?dst=$dst&src=$src";
@@ -217,15 +221,10 @@ sub do_list_beacs {
 sub graphthumb {
 	my ($type) = shift @_;
 	print "<a href=\"" . full_url0() . "&type=$type\">";
-	print "<img border=\"0\" src=\"" . full_url0() . "&type=$type&img=true&thumb=true\" /></a><br />";
+	print "<img border=\"0\" src=\"" . full_url0() . "&type=$type&img=true&thumb=true&age=$age\" /></a><br />";
 }
 
 sub graphgen {
-	my $age = "-1d";
-	if (defined($page->param('age'))) {
-		$age = $page->param('age');
-	}
-
 	my $title;
 	my $ytitle;
 	my $unit;
