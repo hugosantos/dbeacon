@@ -1286,7 +1286,7 @@ void do_dump() {
 	fprintf(fp, "<beacons>\n");
 
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
-		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", probeName, sessionName);
+		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", (newProtocol ? beaconName : probeName), sessionName);
 		fprintf(fp, "\t\t<sources>\n");
 
 		uint64_t now = get_timestamp();
