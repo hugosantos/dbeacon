@@ -621,6 +621,8 @@ sub render_matrix {
 				}
 			} elsif ($a eq $b) {
 				print '<td ', $what_td, ' class="corner">&nbsp;</td>';
+			} elsif ($full_matrix and $adj{$a}[RX_LOCAL] ne 'true') {
+				print '<td ', $what_td, ' class="noreport">N/R</td>';
 			} else {
 				print '<td ', $what_td, ' class="blackhole">XX</td>';
 			}
@@ -1235,9 +1237,14 @@ table#adj td.nossm_fulladjacent {
 	width: 20px;
 }
 
+table#adj td.noreport {
+	background-color: #ccc;
+}
+
 table#adj td.blackhole {
 	background-color: #000000;
 }
+
 table#adj td.noinfo_asm, table#adj td.noinfo_ssm {
 	background-color: #b6ffb6;
 	width: 20px;
@@ -1250,7 +1257,7 @@ table#adj td.adjacent_asm {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.blackhole, table#adj td.fulladjacent, table#adj td.nossm_fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
+table#adj td.noreport, td.blackhole, table#adj td.fulladjacent, table#adj td.nossm_fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
 	border-right: 0.2em solid white;
 }
 
