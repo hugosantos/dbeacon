@@ -264,7 +264,7 @@ sub start_handler {
 
 		$current_beacon = $faddr;
 
-		if ($fname ne "") {
+		if (($fname ne "") and ($fage > 0)) {
 			$g->add_vertex($faddr);
 			$g->set_vertex_attribute($faddr, "name", $fname);
 			$g->set_vertex_attribute($faddr, "contact", $fadmin);
@@ -330,10 +330,11 @@ sub start_handler {
 
 		if ($fname ne "") {
 			$current_source = $faddr;
-			$g->add_vertex($faddr);
-			$g->set_vertex_attribute($faddr, "name", $fname);
-			$g->set_vertex_attribute($faddr, "contact", $fadmin);
-			$g->set_vertex_attribute($faddr, "addr", $faddr);
+			if ($g->add_vertex($faddr)) {
+				$g->set_vertex_attribute($faddr, "name", $fname);
+				$g->set_vertex_attribute($faddr, "contact", $fadmin);
+				$g->set_vertex_attribute($faddr, "addr", $faddr);
+			}
 
 			$g->add_edge($faddr, $current_beacon);
 			if ($fttl ge 0) {
