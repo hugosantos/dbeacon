@@ -447,7 +447,7 @@ extern char *optarg;
 void usage() {
 	fprintf(stderr, "Usage: dbeacon [OPTIONS...]\n\n");
 	fprintf(stderr, "  -n NAME                Specifies the beacon name\n");
-	fprintf(stderr, "  -a MAIL                Supply administration contact (new protocol only)\n");
+	fprintf(stderr, "  -a MAIL                Supply administration contact\n");
 	fprintf(stderr, "  -i INTFNAME            Use INTFNAME instead of the default interface for multicast\n");
 	fprintf(stderr, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR[/PORT]  Redistribute reports to the supplied host/port. Multiple may be supplied\n");
