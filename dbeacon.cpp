@@ -69,6 +69,7 @@ static const char *defaultIPv6SSMChannel = "ff3e::beac";
 static const char *defaultIPv4SSMChannel = "232.2.3.2";
 static const char *defaultPort = "10000";
 static const TTLType defaultTTL = 127;
+static const char *defaultDumpFile = "dump.xml";
 
 struct address : sockaddr_storage {
 	address();
@@ -126,6 +127,9 @@ enum {
 
 	SENDING_EVENT,
 	WILLSEND_EVENT,
+
+	SSM_SENDING_EVENT,
+	WILLSEND_SSM_EVENT,
 
 	REPORT_EVENT = 'R',
 	MAP_REPORT_EVENT,
@@ -239,7 +243,7 @@ static double beacInt = 5.;
 
 static uint64_t startTime = 0;
 
-static string dumpFile = "dump.xml";
+static const char *dumpFile = 0;
 
 static vector<pair<address, content_type> > mcastListen;
 static vector<pair<int, content_type> > mcastSocks;
@@ -259,7 +263,6 @@ static uint64_t dumpBytesReceived = 0;
 static uint64_t dumpBytesSent = 0;
 static uint64_t lastDumpDumpBwTS = 0;
 
-static bool dump = false;
 static int dumpInterval = 5;
 static const char *multicastInterface = 0;
 static int forceVersion = 0;
@@ -271,7 +274,8 @@ static void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buffe
 static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
-static int send_nprobe();
+static int send_probe();
+static int send_ssm_probe();
 static int send_report(int);
 static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 
@@ -426,20 +430,20 @@ void usage() {
 	fprintf(stderr, "  -n NAME                Specifies the beacon name\n");
 	fprintf(stderr, "  -a MAIL                Supply administration contact (new protocol only)\n");
 	fprintf(stderr, "  -i INTFNAME            Use INTFNAME instead of the default interface for multicast\n");
-	fprintf(stderr, "  -b BEACON_ADDR/PORT    Multicast group address to send probes to\n");
-	fprintf(stderr, "  -r REDIST_ADDR/PORT    Redistribute reports to the supplied host/port. Multiple may be supplied\n");
-	fprintf(stderr, "  -S [GROUP_ADDR/PORT]   Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
+	fprintf(stderr, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
+	fprintf(stderr, "  -r REDIST_ADDR[/PORT]  Redistribute reports to the supplied host/port. Multiple may be supplied\n");
+	fprintf(stderr, "  -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
 	fprintf(stderr, "  -s ADDR                Bind to local address\n");
-	fprintf(stderr, "  -d                     Dump reports to xml each 5 secs\n");
-	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
+	fprintf(stderr, "  -d [FILE]              Dump periodic reports to dump.xml or specified file\n");
 	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
-	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
+	fprintf(stderr, "  -l LOCAL_ADDR[/PORT]   Listen for reports from other probes\n");
 	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
 	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename\n");
 	fprintf(stderr, "  -4                     Force IPv4 usage\n");
 	fprintf(stderr, "  -6                     Force IPv6 usage\n");
 	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
 	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
+	fprintf(stderr, "  -V                     Outputs version information and leaves\n");
 	fprintf(stderr, "\n");
 }
 
@@ -490,10 +494,6 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "Bad address format for SSM channel.\n");
 			return -1;
 		}
-	} else if (forceVersion == 6 || forceVersion == 0) {
-		ssmProbeAddr.parse(defaultIPv6SSMChannel, true);
-	} else if (forceVersion == 4) {
-		ssmProbeAddr.parse(defaultIPv4SSMChannel, true);
 	}
 
 	if (probeAddrLiteral) {
@@ -523,6 +523,7 @@ int main(int argc, char **argv) {
 		redist.push_back(probeAddr);
 
 		if (!ssmProbeAddr.is_unspecified()) {
+			insert_event(SSM_SENDING_EVENT, 100);
 			mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
 		}
 	} else {
@@ -594,7 +595,7 @@ int main(int argc, char **argv) {
 	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
-	if (dump)
+	if (dumpFile)
 		insert_event(DUMP_EVENT, dumpInterval * 1000);
 
 	insert_event(DUMP_BW_EVENT, 10000);
@@ -644,7 +645,7 @@ int main(int argc, char **argv) {
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::s:dD:I:l:L:W:vUhf46");
+		res = getopt(argc, argv, "n:a:i:b:r:S::s:d::I:l:L:W:vUhf46");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -666,20 +667,14 @@ int parse_arguments(int argc, char **argv) {
 			}
 			redist.push_back(addr);
 		} else if (res == 'S') {
-			probeSSMAddrLiteral = optarg;
-			if (!ssmProbeAddr.parse(optarg ? optarg : defaultIPv6SSMChannel, true)) {
-				fprintf(stderr, "Bad address format for SSM channel.\n");
-				return -1;
-			}
+			probeSSMAddrLiteral = optarg ? optarg : (forceVersion == 4 ? defaultIPv4SSMChannel : defaultIPv6SSMChannel);
 		} else if (res == 's') {
 			if (!beaconUnicastAddr.parse(optarg, false, false)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
-		} else if (res == 'd' || res == 'D') {
-			dump = true;
-			if (res == 'D')
-				dumpFile = optarg;
+		} else if (res == 'd') {
+			dumpFile = optarg ? optarg : defaultDumpFile;
 		} else if (res == 'I') {
 			char *end;
 			dumpInterval = strtoul(optarg, &end, 10);
@@ -783,6 +778,7 @@ void insert_event(uint32_t type, uint32_t interval) {
 }
 
 static int send_count = 0;
+static int send_ssm_count = 0;
 
 void handle_event() {
 	timer t = *timers.begin();
@@ -793,8 +789,12 @@ void handle_event() {
 
 	switch (t.type) {
 	case SENDING_EVENT:
-		send_nprobe();
+		send_probe();
 		send_count ++;
+		break;
+	case SSM_SENDING_EVENT:
+		send_ssm_probe();
+		send_ssm_count++;
 		break;
 	case REPORT_EVENT:
 	case MAP_REPORT_EVENT:
@@ -816,8 +816,13 @@ void handle_event() {
 	if (t.type == WILLSEND_EVENT) {
 		insert_event(SENDING_EVENT, 100);
 		send_count = 0;
+	} else if (t.type == WILLSEND_SSM_EVENT) {
+		insert_event(SSM_SENDING_EVENT, 100);
+		send_ssm_count = 0;
 	} else if (t.type == SENDING_EVENT && send_count == NEW_BEAC_PCOUNT) {
 		insert_event(WILLSEND_EVENT, (uint32_t)ceil(Exprnd(beacInt) * 1000));
+	} else if (t.type == SSM_SENDING_EVENT && send_ssm_count == NEW_BEAC_PCOUNT) {
+		insert_event(WILLSEND_SSM_EVENT, (uint32_t)ceil(Exprnd(beacInt) * 1000));
 	} else if (t.type == REPORT_EVENT) {
 		insert_event(REPORT_EVENT, (uint32_t)ceil(2 * beacInt * 1000));
 	} else if (t.type == MAP_REPORT_EVENT) {
@@ -1303,22 +1308,28 @@ void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, 
 	}
 }
 
-int send_nprobe() {
-	static uint32_t seq = rand();
+static int send_nprobe(int sock, uint32_t &seq) {
 	int len;
 
 	len = build_nprobe(buffer, sizeof(buffer), seq, get_timestamp());
 	seq++;
 
-	len = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
+	len = sendto(sock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
 	if (len > 0)
 		bytesSent += len;
-	if (ssmMcastSock) {
-		int len2 = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&ssmProbeAddr, sizeof(ssmProbeAddr));
-		if (len2 > 0)
-			bytesSent += len2;
-	}
 	return len;
+}
+
+int send_probe() {
+	static uint32_t seq = rand();
+
+	return send_nprobe(mcastSock, seq);
+}
+
+int send_ssm_probe() {
+	static uint32_t seq = rand();
+
+	return send_nprobe(ssmMcastSock, seq);
 }
 
 static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer, uint8_t type, const char *str) {
@@ -1638,7 +1649,7 @@ void do_dump() {
 
 	fclose(fp);
 
-	rename(tmpf.c_str(), dumpFile.c_str());
+	rename(tmpf.c_str(), dumpFile);
 
 	if (!launchSomething.empty())
 		doLaunchSomething();
@@ -1647,7 +1658,7 @@ void do_dump() {
 void doLaunchSomething() {
 	pid_t p = fork();
 	if (p == 0) {
-		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile.c_str());
+		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile);
 	}
 }
 
