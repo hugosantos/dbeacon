@@ -970,6 +970,8 @@ beaconExternalStats &beaconSource::getExternal(const sockaddr_storage &baddr, ui
 		externalSources.insert(make_pair(baddr, beaconExternalStats()));
 		k = externalSources.find(baddr);
 
+		k->second.age = 0;
+
 		char tmp[64];
 		print_inaddr(&baddr, tmp, sizeof(tmp), true);
 
@@ -980,7 +982,6 @@ beaconExternalStats &beaconSource::getExternal(const sockaddr_storage &baddr, ui
 	beaconExternalStats &stats = k->second;
 
 	stats.lastupdate = ts;
-	stats.age = 0;
 
 	return stats;
 }
