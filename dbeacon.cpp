@@ -368,6 +368,8 @@ int main(int argc, char **argv) {
 		for (vector<address>::const_iterator i = ssmBootstrap.begin(); i != ssmBootstrap.end(); i++) {
 			getSource(*i, 0, now, false);
 		}
+	} else if (!ssmBootstrap.empty()) {
+		fprintf(stderr, "Tried to bootstrap using SSM when SSM is not enabled.\n");
 	}
 
 	signal(SIGUSR1, dumpBigBwStats);
