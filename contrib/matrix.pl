@@ -605,6 +605,17 @@ sub render_matrix {
 	}
 	print '</table>', "\n";
 
+	if (scalar(@repnosources) > 0) {
+		print '<h4 style="margin-bottom: 0">Beacons that report no received sources</h4>', "\n";
+		print '<ul>', "\n";
+		foreach $a (@repnosources) {
+			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+			print ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
+			print '</li>', "\n";
+		}
+		print '</ul>', "\n";
+	}
+
 	if (scalar(@lowrx) > 0) {
 		print '<h4 style="margin-bottom: 0">Beacons that only receive a small number of other beacons</h4>', "\n";
 		print '<ul>', "\n";
@@ -627,17 +638,6 @@ sub render_matrix {
 
 			print '</ul></ul>';
 
-			print '</li>', "\n";
-		}
-		print '</ul>', "\n";
-	}
-
-	if (scalar(@repnosources) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons that report no received sources</h4>', "\n";
-		print '<ul>', "\n";
-		foreach $a (@repnosources) {
-			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
-			print ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
 			print '</li>', "\n";
 		}
 		print '</ul>', "\n";
