@@ -643,10 +643,26 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
+void show_version() {
+	fprintf(stderr, "\n");
+	fprintf(stderr, "dbeacon - a Multicast Beacon ($Rev$)\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  Copyright (c) 2005 - Hugo Santos <hsantos@av.it.pt>\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  http://artemis.av.it.pt/~hsantos/software/dbeacon.html\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "  o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;\n");
+	fprintf(stderr, "  o Ideas and testing by Sebastien Chaumontet;\n");
+	fprintf(stderr, "  o Bernhard Schmidt provided valuable resources and helped during testing.\n");
+	fprintf(stderr, "\n");
+
+	exit(1);
+}
+
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::s:d::I:l:L:W:vUhf46");
+		res = getopt(argc, argv, "n:a:i:b:r:S::s:d::I:l:L:W:vUhf46V");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -715,6 +731,8 @@ int parse_arguments(int argc, char **argv) {
 			forceVersion = 4;
 		} else if (res == '6') {
 			forceVersion = 6;
+		} else if (res == 'V') {
+			show_version();
 		} else if (res == -1) {
 			break;
 		}
