@@ -26,6 +26,8 @@
 
 #include "address.h"
 
+void MulticastStartup();
+
 int MulticastListen(int sock, const address &);
 int SSMJoin(int sock, const address &, const address &);
 int SSMLeave(int sock, const address &, const address &);

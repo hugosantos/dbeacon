@@ -34,25 +34,36 @@
 #include <sys/time.h>
 #include <netdb.h>
 
-#if __linux__ || (__FreeBSD_version > 500042)
+int _McastListenNewAPI(int sock, const address &grpaddr);
+int _McastListenOldAPI(int sock, const address &grpaddr);
+
+static int (*_McastListen)(int, const address &) = _McastListenOldAPI;
 
 #if !defined(MCAST_JOIN_GROUP)
+
 #define MCAST_JOIN_GROUP 42
+#define MCAST_JOIN_SOURCE_GROUP 46
+#define MCAST_LEAVE_SOURCE_GROUP 47
+#define MCAST_FILTER	48
+
 struct group_req {
 	uint32_t gr_interface;
 	struct sockaddr_storage gr_group;
 };
-#endif
 
-#if defined(MCAST_JOIN_GROUP) && !defined(MCAST_JOIN_SOURCE_GROUP)
-#define MCAST_JOIN_SOURCE_GROUP 46
-#define MCAST_LEAVE_SOURCE_GROUP 47
 struct group_source_req {
 	uint32_t gsr_interface;
 	struct sockaddr_storage gsr_group;
 	struct sockaddr_storage gsr_source;
 };
-#endif
+
+struct group_filter {
+	uint32_t gf_interface;
+	struct sockaddr_storage gf_group;
+	uint32_t gf_fmode;
+	uint32_t gf_numsrc;
+	struct sockaddr_storage gf_slist[1];
+};
 
 #endif
 
@@ -66,8 +77,28 @@ static bool set_address(sockaddr_storage &t, const address &addr) {
 	return true;
 }
 
-int MulticastListen(int sock, const address &grpaddr) {
-#ifdef MCAST_JOIN_GROUP
+void MulticastStartup() {
+	int sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock > 0) {
+		group_filter flt;
+		memset(&flt, 0, sizeof(flt));
+		socklen_t fltlen = sizeof(flt);
+
+		// Check if OS supports MCAST_FILTER
+
+		if (getsockopt(sock, IPPROTO_IP, MCAST_FILTER, &flt, &fltlen) != ENOPROTOOPT) {
+			if (verbose) {
+				fprintf(stderr, "Using new Multicast Filter API\n");
+			}
+
+			_McastListen = _McastListenNewAPI;
+		}
+
+		close(sock);
+	}
+}
+
+int _McastListenNewAPI(int sock, const address &grpaddr) {
 	struct group_req grp;
 
 	memset(&grp, 0, sizeof(grp));
@@ -76,7 +107,9 @@ int MulticastListen(int sock, const address &grpaddr) {
 	set_address(grp.gr_group, grpaddr);
 
 	return setsockopt(sock, grpaddr.optlevel(), MCAST_JOIN_GROUP, &grp, sizeof(grp));
-#else
+}
+
+int _McastListenOldAPI(int sock, const address &grpaddr) {
 	if (grpaddr.family() == AF_INET6) {
 		ipv6_mreq mreq;
 		mreq.ipv6mr_interface = mcastInterface;
@@ -92,10 +125,12 @@ int MulticastListen(int sock, const address &grpaddr) {
 
 		return setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
 	}
-#endif
 }
 
-#ifdef MCAST_JOIN_SOURCE_GROUP
+int MulticastListen(int sock, const address &grpaddr) {
+	return (*_McastListen)(sock, grpaddr);
+}
+
 static int SSMJoinLeave(int sock, int type, const address &grpaddr, const address &srcaddr) {
 	struct group_source_req req;
 	memset(&req, 0, sizeof(req));
@@ -115,20 +150,6 @@ int SSMJoin(int sock, const address &grpaddr, const address &srcaddr) {
 int SSMLeave(int sock, const address &grpaddr, const address &srcaddr) {
 	return SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, grpaddr, srcaddr);
 }
-
-#else
-
-int SSMJoin(int sock, const address &grpaddr, const address &srcaddr) {
-	errno = ENOPROTOOPT;
-	return -1;
-}
-
-int SSMLeave(int sock, const address &grpaddr, const address &srcaddr) {
-	errno = ENOPROTOOPT;
-	return -1;
-}
-
-#endif
 
 int SetupSocket(const address &addr, bool shouldbind, bool ssm) {
 	int af_family = addr.family();

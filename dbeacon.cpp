@@ -228,6 +228,8 @@ int main(int argc, char **argv) {
 	if (res < 0)
 		return res;
 
+	MulticastStartup();
+
 	if (beaconName.empty()) {
 		fprintf(stderr, "No name supplied.\n");
 		return -1;
