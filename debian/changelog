@@ -1,3 +1,9 @@
+dbeacon (0.3) unstable; urgency=low
+
+  * Bumped version
+
+ -- Hugo Santos <hugo@innerghost.net>  Tue,  5 Apr 2005 01:39:52 +0100
+
 dbeacon (0.1-1) unstable; urgency=low
 
   * Initial Release.

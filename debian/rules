@@ -37,6 +37,10 @@ install: build
 	$(MAKE) install
 
 	dh_installdocs $(CURDIR)/README
+	dh_installdocs $(CURDIR)/docs/FAQ
+	dh_installdocs $(CURDIR)/docs/FAQ.html
+
+	dh_installman $(CURDIR)/docs/dbeacon.1
 
 # Build architecture-independent files here.
 binary-indep: build install
