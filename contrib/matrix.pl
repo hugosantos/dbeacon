@@ -44,14 +44,13 @@ $parser = new XML::Parser(Style => 'Tree');
 $parser->setHandlers(Start => \&start_handler);
 my $tree = $parser->parsefile($dump_file);
 
-print "<html>\n";
+print "<?xml version=\"1.0\"?>\n";
+print "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
+print "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
 
-print "
-<head>
-
-<meta http-equiv=\"refresh\" content=\"60\" />
-
-<style type=\"text/css\">
+print "<head>
+\t<meta http-equiv=\"refresh\" content=\"60\" />
+\t<style type=\"text/css\">
 body {
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: 100%;
@@ -109,10 +108,8 @@ table#adjname td.age {
 .beacon {
 	font-style: italic;
 }
-
-</style>
-</head>
-";
+\t</style>
+</head>\n";
 
 print "<body>\n";
 
@@ -166,8 +163,6 @@ print "</p>\n";
 
 print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adj\">\n";
 
-print "<tr>";
-print "<td></td>";
 my $c;
 $i = 1;
 my @problematic = ();
@@ -175,19 +170,17 @@ my @warmingup = ();
 
 my @V = $g->vertices();
 
+print "<tr><td>&nbsp;</td>";
 foreach $c (@V) {
-	my $goodedge = $g->get_vertex_attribute($c, "goodedge");
 	my $age = $g->get_vertex_attribute($c, "age");
 
 	if (($age ne "") and ($age < 30)) {
 		push (@warmingup, $c);
-	} elsif (not $goodedge) {
+	} elsif (not $g->get_vertex_attribute($c, "goodedge")) {
 		push (@problematic, $c);
 	} else {
 		print "<td colspan=\"2\"><b>S$i</b></td>";
-
 		$g->set_vertex_attribute($c, "id", $i);
-
 		$i++;
 	}
 }
@@ -197,13 +190,9 @@ foreach $a (@V) {
 	my $id = $g->get_vertex_attribute($a, "id");
 	if ($id >= 1) {
 		print "<tr>";
-		print "<td class=\"beacname\">";
-		my $name = $g->get_vertex_attribute($a, "name");
-		print "$name <b>R$id</b>";
-		print "</td>";
+		print "<td class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
 		foreach $b (@V) {
-			$id = $g->get_vertex_attribute($b, "id");
-			if ($id >= 1) {
+			if ($g->get_vertex_attribute($b, "id") >= 1) {
 				if ($b ne $a and $g->has_edge($b, $a)) {
 					my $txt;
 					my $txtssm;
@@ -240,48 +229,34 @@ print "</table>\n";
 print "<br />\n";
 
 if (not $atthideinfo) {
-print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
+	print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
-print "<tr><td></td><td><b>Age</b></td><td><b>Source Address/Port</b></td><td><b>Admin Contact</b></td><td><b>W</b></td></tr>";
-foreach $a (@V) {
-	my $id = $g->get_vertex_attribute($a, "id");
-	if ($id >= 1) {
-		print "<tr>";
-		print "<td class=\"beacname\">";
-		my $name = $g->get_vertex_attribute($a, "name");
-		my $contact = $g->get_vertex_attribute($a, "contact");
-		my $age = $g->get_vertex_attribute($a, "age");
-		if (not $age) {
-			$age = "-";
-		} else {
-			$age = format_date($age);
-		}
-		print "$name <b>R$id</b>";
-		print "</td>";
-		print "<td class=\"age\">$age</td><td class=\"addr\">$a</td><td class=\"admincontact\">$contact</td>";
+	print "<tr><td></td><td><b>Age</b></td><td><b>Source Address/Port</b></td><td><b>Admin Contact</b></td><td><b>W</b></td></tr>\n";
+	foreach $a (@V) {
+		my $id = $g->get_vertex_attribute($a, "id");
+		if ($id >= 1) {
+			print "<tr>";
+			print "<td class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
+			print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
+			print "<td class=\"addr\">$a</td>";
+			print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";
 
-		my $urls;
-		if ($g->has_vertex_attribute($a, "url_generic")) {
-			$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">W</a>";
-		}
-		if ($g->has_vertex_attribute($a, "url_lg")) {
-			$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_lg") . "\">L</a>";
-		}
-		if ($g->has_vertex_attribute($a, "url_matrix")) {
-			$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_matrix") . "\">M</a>";
-		}
+			my $urls;
+			if ($g->has_vertex_attribute($a, "url_generic")) {
+				$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">W</a>";
+			}
+			if ($g->has_vertex_attribute($a, "url_lg")) {
+				$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_lg") . "\">L</a>";
+			}
+			if ($g->has_vertex_attribute($a, "url_matrix")) {
+				$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_matrix") . "\">M</a>";
+			}
 
-		if ($urls eq "") {
-			$urls = "-";
+			print "<td class=\"urls\">" . ($urls or "-") . "</td>";
+			print "</tr>\n";
 		}
-
-		print "<td class=\"urls\">$urls</td>";
-		print "</tr>\n";
 	}
-}
-print "</table>\n";
-
-print "<br />\n";
+	print "</table>\n<br />\n";
 }
 
 if (scalar(@warmingup) > 0) {
@@ -305,15 +280,12 @@ if (scalar(@problematic) ne 0) {
 	my $len = scalar(@problematic);
 	for (my $j = 0; $j < $len; $j++) {
 		my $prob = $problematic[$j];
-
 		my $name = $g->get_vertex_attribute($prob, "name");
-		my $admin = $g->get_vertex_attribute($prob, "contact");
-
 		my @neighs = $g->neighbours($prob);
 
 		print "<li>$prob";
 		if ($name) {
-			print " ($name, $admin)";
+			print " ($name, " . $g->get_vertex_attribute($prob, "contact") . ")";
 		}
 
 		my $ned = scalar(@neighs);
@@ -322,20 +294,19 @@ if (scalar(@problematic) ne 0) {
 			$k = 3;
 		}
 
-		print "<ul>Received from:<ul>";
+		print "<ul>Received from:<ul>\n";
 
 		for (my $l = 0; $l < $k; $l++) {
-			my $addr = $neighs[$l];
-			$name = $g->get_vertex_attribute($addr, "name");
-			print "<li><span class=\"beacon\">$addr";
+			$name = $g->get_vertex_attribute($neighs[$l], "name");
+			print "<li><span class=\"beacon\">" . $neighs[$l];
 			if ($name) {
 				print " ($name)";
 			}
-			print "</span></li>";
+			print "</span></li>\n";
 		}
 
 		if ($k < $ned) {
-			print "<li>and others</li>";
+			print "<li>and others</li>\n";
 		}
 
 		print "</ul></ul></li>\n";
@@ -353,11 +324,16 @@ print " -a CONTACT</code></p>\n";
 print "<hr />\n";
 print "<small>matrix.pl - a tool for dynamic viewing of dbeacon information. by Hugo Santos and Hoerdt Mickaël</small>\n";
 
-print "</body>";
-print "</html>";
+print "</body>\n";
+print "</html>\n";
 
 sub format_date {
 	my $tm = shift;
+
+	if (not $tm) {
+		return "-";
+	}
+
 	my $res;
 
 	if ($tm > 86400) {
