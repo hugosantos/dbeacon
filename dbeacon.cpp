@@ -477,7 +477,7 @@ int parse_arguments(int argc, char **argv) {
 			listenForSSM = false;
 		} else if (res == 'B') {
 			address addr;
-			if (!addr.parse(optarg)) {
+			if (!addr.parse(optarg, false)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
