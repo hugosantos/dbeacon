@@ -17,14 +17,14 @@ ul.qgroup {
 	list-style: none;
 }
 
-ul.qgroup > li {
+li.qst {
 	background-color: #ddf;
-	border: 3px solid black;
+	border: 2px solid black;
 	margin-bottom: 1em;
 	padding: 1em;
 }
 
-ul.qgroup > li > p {
+li.qst > p {
 	margin: 1em 0 0 0;
 }
 
@@ -50,7 +50,7 @@ code.block {
 
 <ul class="qgroup">
 
-<li>
+<li class="qst">
 	<span class="question">What does 'dbeacon' mean?</span>
 	<p>
 	'dbeacon' stands for Distributed Beacon. This named was adopted since
@@ -58,7 +58,7 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Why should i run 'dbeacon'?</span>
 	<p>
 	'dbeacon' might be useful if you are deploying intra or inter-domain multicast
@@ -67,12 +67,12 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Why doesn't dbeacon use RTP/RTCP?</span>
 	<p><i>TODO</i></p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">What is ASM? and SSM?</span>
 	<p>
 	ASM and SSM are two multicast models. ASM stands for Any Source
@@ -82,26 +82,26 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Do i need to be 'root' to run dbeacon?</span>
 	<p>
 	No, dbeacon is able (and should be) run as a simple user.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Can i deploy several dbeacons in the same host?</span>
 	<p>
 	Yes, you may run as many dbeacons as your OS has resources for.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Where should i deploy dbeacon in my network?</span>
 	<p><i>TODO</i></p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">How can i make my flag show up in the matrix page?</span>
 	<p>
 	To make your flag show up in the matrix page, specify your Two Letter Country
@@ -112,7 +112,7 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">I read the usage of 'ntpd' is recommended, why is that?</span>
 	<p>
 	'dbeacon' relies on the several beacon hosts to have their clocks properly
@@ -121,36 +121,38 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">How do i setup the history feature?</span>
 	<p><i>TODO</i></p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">How much disk space is required for the history feature?</span>
 	<p><i>TODO</i></p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">May i run a matrix page without history support?</span>
 	<p>
 	Yes, the history feature may be disabled via <code>matrix.conf</code>.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<a name="nosources" />
 	<span class="question">My beacon is in the '<i>Beacons that report no
 	received sources</i>' list.  What does it mean and how can i fix it?</span>
 	<p>
 	This means that while some (or all) beacons are able to receive your
 	multicast packets, your beacon isn't receiving any other sources. This
-	is due to a broken multicast setup, you should investigate your routers
-	for problems or contact your network administrator.
+	is due to a broken multicast setup, the current dbeacon relies on ASM
+	for source discovery and it might be broken in your network. You should
+	investigate your routers for problems (connectivity or configuration)
+	or contact your network administrator.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">How much bandwidth will dbeacon consume?</span>
 	<p>
 	It depends on the current number of beacons in the group. Due to
@@ -160,14 +162,14 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Is IPv4 supported?</span>
 	<p>
 	Yes, for ASM and SSM.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Is my Operating System supported?</span>
 	<p>
 	It depends on what Operating System you run. At this moment dbeacon is
@@ -177,14 +179,14 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Where can i find a dbeacon Debian package?</span>
 	<p>
 	Check dbeacon's website.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">What debian packages do i need to install in order to setup a matrix?</span>
 	<p>
 	Besides a web server (such as <code>apache</code>) you need <code>perl</code> and
@@ -193,7 +195,7 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">How do i setup my Apache to run a matrix page?</span>
 	<p>
 	Just add the following line to your apache configuration:
@@ -203,13 +205,13 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<a name="views" />
 	<span class="question">What do 'TTL', 'Loss', 'Delay' and 'Jitter' in the matrix page mean?</span>
 	<p><i>TODO</i></p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Why are some matrix cells painted in a lighter green than others?</span>
 	<p>
 	When in 'SSM or ASM' view (the default one), a bright green cell means that
@@ -218,21 +220,21 @@ code.block {
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">How does dbeacon's protocol work?</span>
 	<p>
 	For a detailed explanation on dbeacon's protocol read the included PROTOCOL file.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">I didn't found a response in the FAQ, what should I do?</span>
 	<p>
 	Either join #m6bone in the irc.freenode.net network or mail one of the developers.
 	</p>
 </li>
 
-<li>
+<li class="qst">
 	<span class="question">Where can i find more information about multicast?</span>
 	<p>
 	You may find information about the IPv6 Multicast Backbone in
@@ -247,7 +249,7 @@ code.block {
 	<li>http://www.renater.fr/Video/IPv6/Multicast-Oct2003/P/</li>
 	<li>http://www.my6.net.my/presentation_paper/HidetsuguConference.pdf</li>
 	<li>http://www.cs.tut.fi/kurssit/83390/materials/SSM-Sorin.pdf</li>
-	<li> http://www.cs.tut.fi/kurssit/83390/materials/ipv6-multicast-and-anycast.pdf</li>
+	<li>http://www.cs.tut.fi/kurssit/83390/materials/ipv6-multicast-and-anycast.pdf</li>
 	<li>http://www.terena.nl/tech/task-forces/tf-ngn/presentations/tf-ngn14/20040510_JD_M6Bone.pdf</li>
 	<li>http://ipmon.sprint.com/pubs_trs/tutorials/Source-Specific-Multicast.pdf</li>
 	<li>ftp://ftpeng.cisco.com/ipmulticast/ssm/SSM-4dev/index.html</li>
@@ -255,13 +257,14 @@ code.block {
 	<li>http://www.cisco.com/univercd/cc/td/doc/product/software/ios121/121newft/121t/121t3/dtssm.htm</li>
 	<li>ftp://ftpeng.cisco.com/ipmulticast/ssm/index.html</li>
 	<li>ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/Multicast_Deployment_Made_Easy.pdf</li>
-	<li> ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/IP_Multicast_Configuration_Guide.pdf</li>
+	<li>ftp://ftp-eng.cisco.com/ipmulticast/whitepapers/IP_Multicast_Configuration_Guide.pdf</li>
 	<li>http://www.m6bone.net/IMG/pdf/cisco-guide.pdf</li>
 	<li>http://www.cisco.com/ca/events/pdfs/Interdomain_IPMulticast.pdf</li>
 	<li>http://www.hep.ucl.ac.uk/~ytl/multi-cast/</li>
 	<li>http://www.aarnet.edu.au/engineering/guides/multicast/rno-implementation.html</li>
 	<li>http://www.abilene.iu.edu/mccook.html</li>
 	<li>http://archive.dante.net/nep/GEANT-MULTICAST/stepbystep.html</li>
+	<li>http://www.ipv6style.jp/en/tech/20041014/index.shtml</li>
 	</ul>
 </li>
 
