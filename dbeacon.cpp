@@ -28,6 +28,10 @@
 #include <list>
 #include <vector>
 
+#ifndef IP_RECVTTL
+#define IP_RECVTTL 12
+#endif
+
 // not everyone have this
 #ifndef MCAST_JOIN_SOURCE_GROUP
 #define MCAST_JOIN_SOURCE_GROUP 46
