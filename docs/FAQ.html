@@ -237,7 +237,16 @@ code.block {
 <li class="qst">
 	<a name="views" />
 	<span class="question">What do 'TTL', 'Loss', 'Delay' and 'Jitter' in the matrix page mean?</span>
-	<p><i>TODO</i></p>
+	<p>
+	These are various values gathered by the multicast beacon. The TTL is
+	derived from the Time to live value (Hop count) of the packets and
+	represents the number of multicast routers separating two sources in the
+	matrix. The Loss represents the mean percentage of loss of packets
+	between two sources. The Delay is a distance between two sources
+	too, but exprimed in seconds, it represents the time for a packet to
+	travel from one source to another in the matrix. Jitter represents the
+	additionnal interarrival time between each packets.
+	</p>
 </li>
 
 <li class="qst">
