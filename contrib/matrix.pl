@@ -177,8 +177,12 @@ sub parse_dump_file {
 	$ended_parsing_dump = [gettimeofday];
 }
 
+sub last_dump_update {
+	return (stat($dumpfile))[9];
+}
+
 sub check_outdated_dump {
-	my $last_update_time = (stat($dumpfile))[9];
+	my $last_update_time = last_dump_update;
 
 	if ($last_update_time + ($dump_update_delay * 2) < time) {
 		return $last_update_time;
@@ -339,7 +343,7 @@ sub start_document {
 }
 
 sub build_header {
-	my ($attname, $atthideinfo, $attwhat, $full_matrix, $start, $step) = @_;
+	my ($attname, $atthideinfo, $attwhat, $full_matrix, $show_lastupdate, $start, $step) = @_;
 
 	if (defined $step) { # From history
 		print "<p><b>Snapshot stats at " . localtime($start) . "</b> ($step seconds average)</p>\n";
@@ -378,8 +382,11 @@ sub build_header {
 		print '</p></form>';
 
 	} else {
+		my $last_update = last_dump_update;
+
 		print '<p><b>Current stats for</b> <code>', $sessiongroup, '</code>';
 		print ' (SSM: <code>', $ssm_sessiongroup, '</code>)' if $ssm_sessiongroup;
+		print ' <small>[Last update: ', format_date(time - $last_update), ' ago]</small>' if $show_lastupdate;
 
 		my $last_update_time = check_outdated_dump;
 		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n" if $last_update_time;
@@ -498,6 +505,7 @@ sub render_matrix {
 	my $atthideinfo = $page->param('hideinfo');
 	my $attwhat = $page->param('what');
 	my $full_matrix = $page->param('full');
+	my $show_lastupdate = $page->param('showlastupdate');
 
 	$attname ||= 'ttl';
 	$atthideinfo ||= $default_hideinfo;
@@ -520,7 +528,7 @@ sub render_matrix {
 
 	start_document($addinfo);
 
-	build_header($attname, $atthideinfo, $attwhat, $full_matrix, $start, $step);
+	build_header($attname, $atthideinfo, $attwhat, $full_matrix, $show_lastupdate, $start, $step);
 
 	my $c;
 	my $i = 1;
