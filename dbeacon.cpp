@@ -174,7 +174,6 @@ bool address::is_equal(const address &a) const {
 
 static char sessionName[256] = "";
 static char beaconName[256];
-static char probeName[256] = "";
 static int mcastInterface = 0;
 static string adminContact;
 static address probeAddr;
@@ -401,27 +400,16 @@ int main(int argc, char **argv) {
 	}
 
 	strcpy(beaconName, tmp);
-	strcpy(probeName, tmp);
 
 	const char *intf = 0;
 
 	while (1) {
 		res = getopt(argc, argv, "n:a:b:r:S:l:L:dD:i:W:hvfU");
 		if (res == 'n') {
-			if (strlen(probeName) > 0) {
-				fprintf(stderr, "Already have a name.\n");
-				return -1;
-			}
-			if (gethostname(tmp, sizeof(tmp)) != 0) {
-				perror("Failed to get hostname");
-				return -1;
-			}
-			if ((strlen(optarg) + strlen(tmp)) > 254) {
+			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
 				return -1;
 			}
-			snprintf(probeName, sizeof(probeName), "%s@%s", optarg, tmp);
-
 			strcpy(beaconName, optarg);
 		} else if (res == 'a') {
 			if (!strchr(optarg, '@')) {
@@ -500,7 +488,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (strlen(probeName) == 0) {
+	if (strlen(beaconName) == 0) {
 		fprintf(stderr, "No name supplied.\n");
 		return -1;
 	}
@@ -526,7 +514,7 @@ int main(int argc, char **argv) {
 			mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
 		}
 	} else {
-		strcpy(sessionName, probeName);
+		strcpy(sessionName, beaconName);
 	}
 
 	FD_ZERO(&readSet);
@@ -561,7 +549,7 @@ int main(int argc, char **argv) {
 			ssmMcastSock = sock;
 	}
 
-	fprintf(stdout, "Local name is %s\n", probeName);
+	fprintf(stdout, "Local name is %s\n", beaconName);
 
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
@@ -719,6 +707,8 @@ void Stats::check_validity(uint64_t now) {
 		valid = false;
 }
 
+static void removeSource(const beaconSourceAddr &baddr);
+
 void handle_gc() {
 	Sources::iterator i = sources.begin();
 
@@ -752,11 +742,7 @@ void handle_gc() {
 			Sources::iterator j = i;
 			i++;
 
-			if (ssmMcastSock) {
-				SSMLeave(ssmMcastSock, &j->first);
-			}
-
-			sources.erase(j);
+			removeSource(j->first);
 		}
 	}
 }
@@ -852,9 +838,21 @@ static inline beaconSource &getSource(const beaconSourceAddr &baddr, const char 
 	return src;
 }
 
-static void removeSource(const beaconSourceAddr &baddr) {
+void removeSource(const beaconSourceAddr &baddr) {
 	Sources::iterator i = sources.find(baddr);
 	if (i != sources.end()) {
+		if (verbose) {
+			char tmp[64];
+
+			baddr.print(tmp, sizeof(tmp));
+
+			if (i->second.identified) {
+				fprintf(stderr, "Removing source %s [%s]\n", tmp, i->second.name.c_str());
+			} else {
+				fprintf(stderr, "Removing source %s\n", tmp);
+			}
+		}
+
 		sources.erase(i);
 
 		if (ssmMcastSock) {
@@ -991,7 +989,7 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 				// trigger local SSM join
 				if (!addr.is_equal(beaconUnicastAddr)) {
 					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts);
-					if (!stats.contact.empty())
+					if (t.adminContact.empty())
 						t.adminContact = stats.contact;
 				}
 			} else if (hd[0] == T_WEBSITE_GENERIC || hd[0] == T_WEBSITE_LG || hd[0] == T_WEBSITE_MATRIX) {
