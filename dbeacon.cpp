@@ -868,7 +868,7 @@ static inline uint8_t *tlv_begin(uint8_t *hd, int &len) {
 }
 
 static inline uint8_t *tlv_next(uint8_t *hd, int &len) {
-	len -= hd[1];
+	len -= hd[1] + 2;
 	return tlv_begin(hd + hd[1] + 2, len);
 }
 
@@ -937,6 +937,12 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 		len -= 5;
 
 		for (uint8_t *hd = tlv_begin(buff + 5, len); hd; hd = tlv_next(hd, len)) {
+			if (verbose > 4) {
+				char tmp[64];
+				from->print(tmp, sizeof(tmp));
+				fprintf(stderr, "Parsing TLV (%i, %i) for %s [len is now %i]\n", (int)hd[0], (int)hd[1], tmp, len);
+			}
+
 			if (hd[0] == T_BEAC_NAME) {
 				string name;
 				if (check_string((char *)hd + 2, hd[1], name))
@@ -1193,8 +1199,8 @@ bool write_tlv_start(uint8_t *buff, int maxlen, int &ptr, uint8_t type, int len)
 	if ((ptr + len + 2) > maxlen)
 		return false;
 
-	buff[ptr] = type;
-	buff[ptr+1] = len;
+	buff[ptr + 0] = type;
+	buff[ptr + 1] = len;
 
 	ptr += 2;
 
