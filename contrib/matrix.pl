@@ -32,6 +32,7 @@ our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
 our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
 our $matrix_link_title = 0;
+our $default_full_matrix = 0;
 
 do 'matrix.conf';
 
@@ -332,7 +333,7 @@ sub start_document {
 }
 
 sub build_header {
-	my ($attname, $atthideinfo, $attwhat, $start, $step) = @_;
+	my ($attname, $atthideinfo, $attwhat, $full_matrix, $start, $step) = @_;
 
 	if (defined $step) { # From history
 		print "<p><b>Snapshot stats at " . localtime($start) . "</b> ($step seconds average)</p>\n";
@@ -384,6 +385,7 @@ sub build_header {
 	$hideatt = 'hideinfo=1&amp;' if $atthideinfo;
 
 	my $whatatt = "what=$attwhat&amp;";
+	my $fullatt = "full=$full_matrix&amp;";
 
 	my @view = qw(ttl loss delay jitter);
 	my @view_name = ('TTL', 'Loss', 'Delay', 'Jitter');
@@ -398,20 +400,22 @@ sub build_header {
 	$at ||= '';
 
 	if (not $atthideinfo) {
-		print "<a href=\"$url?hideinfo=1&amp;$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
+		print "<a href=\"$url?hideinfo=1&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
 	} else {
-		print "<a href=\"$url?hideinfo=0&amp;$whatatt&amp;att=$attname&amp;at=$at\">Show Source Info</a>";
+		print "<a href=\"$url?hideinfo=0&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Show Source Info</a>";
 	}
 
+	print ", <a href=\"$url?$hideatt&amp;$whatatt&amp;att=$attname&amp;at=$at&amp;full=" . (!$full_matrix) . '">' . ($full_matrix ? 'Condensed' : 'Full') . '</a>';
+
 	if ($attwhat eq "asm") {
-		print ", <a href=\"$url?$hideatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		print ", <a href=\"$url?$hideatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+		print ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		print ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
 	} elsif ($attwhat eq "ssmorasm") {
-		print ", <a href=\"$url?$hideatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		print ", <a href=\"$url?$hideatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+		print ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		print ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	} else {
-		print ", <a href=\"$url?$hideatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
-		print ", <a href=\"$url?$hideatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+		print ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+		print ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	}
 
 	print ')</small>:</span></p>';
@@ -424,7 +428,7 @@ sub build_header {
 		if ($attname eq $att) {
 			print '<span class="viewitem" id="currentview">', $attn, '</span>';
 		} else {
-			print "<a class=\"viewitem\" href=\"$url?$hideatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
+			print "<a class=\"viewitem\" href=\"$url?$hideatt$fullatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
 		}
 		print ' <small>(', $view_type[$i], ')</small></li>', "\n";
 	}
@@ -467,10 +471,12 @@ sub render_matrix {
 	my $attname = $page->param('att');
 	my $atthideinfo = $page->param('hideinfo');
 	my $attwhat = $page->param('what');
+	my $full_matrix = $page->param('full');
 
 	$attname ||= 'ttl';
 	$atthideinfo ||= $default_hideinfo;
 	$attwhat ||= $default_what;
+	$full_matrix ||= $default_full_matrix;
 
 	my $what_td = "colspan=\"2\"";
 
@@ -488,7 +494,7 @@ sub render_matrix {
 
 	start_document($addinfo);
 
-	build_header($attname, $atthideinfo, $attwhat, $start, $step);
+	build_header($attname, $atthideinfo, $attwhat, $full_matrix, $start, $step);
 
 	my $c;
 	my $i = 1;
@@ -497,6 +503,7 @@ sub render_matrix {
 	my @localnoreceive = ();
 	my @lowrx = ();
 	my @rx = ();
+	my @tx = ();
 
 	my %ids;
 
@@ -521,12 +528,19 @@ sub render_matrix {
 			$ids{$c} = $i;
 			$i++;
 
-			if (not $adj{$c}[IN_EDGE]) {
-				push (@localnoreceive, $c);
-			} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) < 0.1 and $adj{$c}[IN_EDGE] < 6) {
-				push (@lowrx, $c);
+			if (not $full_matrix) {
+				if (not $adj{$c}[IN_EDGE]) {
+					push (@localnoreceive, $c);
+				} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) < 0.1 and $adj{$c}[IN_EDGE] < 6) {
+					push (@lowrx, $c);
+				} else {
+					push (@rx, $c);
+				}
+
+				push (@tx, $c) if $adj{$c}[OUT_EDGE] > 0;
 			} else {
 				push (@rx, $c);
+				push (@tx, $c);
 			}
 		}
 	}
@@ -536,50 +550,48 @@ sub render_matrix {
 	foreach $a (@rx) {
 		print '<tr>';
 		print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
-		foreach $b (@sortedkeys) {
-			if ($ids{$b} > 0 and $adj{$b}[OUT_EDGE] > 0) {
-				if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
-					my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
-					my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
+		foreach $b (@tx) {
+			if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
+				my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
+				my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
 
-					if ($attname ne 'ttl') {
-						$txt = sprintf "%.1f", $txt if defined $txt;
-						$txtssm = sprintf "%.1f", $txtssm if defined $txtssm;
-					}
-
-					if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
-						my $whattype = 'asm';
-						my $cssclass = 'fulladjacent';
-						if ($attwhat eq 'ssmorasm') {
-							if (defined $txtssm) {
-								$txt = $txtssm;
-								$whattype = 'ssm';
-							} elsif (defined $txt) {
-								$cssclass = 'nossm_fulladjacent';
-								$txt = "<i>$txt</i>";
-							}
-						}
-
-						if (not defined $txt) {
-							print '<td ', $what_td, ' class="blackhole">XX</td>';
-						} else {
-							print '<td class="', $cssclass, '">';
-							make_history_link($b, $a, $whattype, $txt, 'historyurl');
-							print '</td>';
-						}
-					} else {
-						if (not defined $txt and not defined $txtssm) {
-							print '<td ', $what_td, ' class="blackhole">XX</td>';
-						} else {
-							make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
-							make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
-						}
-					}
-				} elsif ($a eq $b) {
-					print '<td ', $what_td, ' class="corner">&nbsp;</td>';
-				} else {
-					print '<td ', $what_td, ' class="blackhole">XX</td>';
+				if ($attname ne 'ttl') {
+					$txt = sprintf "%.1f", $txt if defined $txt;
+					$txtssm = sprintf "%.1f", $txtssm if defined $txtssm;
 				}
+
+				if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
+					my $whattype = 'asm';
+					my $cssclass = 'fulladjacent';
+					if ($attwhat eq 'ssmorasm') {
+						if (defined $txtssm) {
+							$txt = $txtssm;
+							$whattype = 'ssm';
+						} elsif (defined $txt) {
+							$cssclass = 'nossm_fulladjacent';
+							$txt = "<i>$txt</i>";
+						}
+					}
+
+					if (not defined $txt) {
+						print '<td ', $what_td, ' class="blackhole">XX</td>';
+					} else {
+						print '<td class="', $cssclass, '">';
+						make_history_link($b, $a, $whattype, $txt, 'historyurl');
+						print '</td>';
+					}
+				} else {
+					if (not defined $txt and not defined $txtssm) {
+						print '<td ', $what_td, ' class="blackhole">XX</td>';
+					} else {
+						make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
+						make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
+					}
+				}
+			} elsif ($a eq $b) {
+				print '<td ', $what_td, ' class="corner">&nbsp;</td>';
+			} else {
+				print '<td ', $what_td, ' class="blackhole">XX</td>';
 			}
 		}
 		print '</tr>', "\n";
