@@ -76,18 +76,9 @@ sub start_handler
 	}
 	elsif ($tag eq "asm" or $tag eq "ssm")
 	{
-		my %values;
-		foreach my $valuetype ('ttl','loss','delay','jitter')
-		{
-			if (defined($atts{$valuetype}))
-			{
-				$values{$valuetype} = $atts{$valuetype};
-			}
-		}
-		if (defined($values{'ttl'}) and defined($values{'loss'}) and defined($values{'delay'}) and defined($values{'jitter'}))
-		{
+		if (defined($atts{'ttl'}) and defined($atts{'loss'}) and defined($atts{'delay'}) and defined($atts{'jitter'})) {
 			if ($srcbeacon and $dstbeacon) {
-				storedata($dstbeacon,$srcbeacon,$tag,%values);
+				storedata($dstbeacon,$srcbeacon,$tag,%atts);
 			}
 		}
 	}
