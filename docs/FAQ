@@ -91,6 +91,14 @@ These are some of the Frequently Asked Questions.
   'libxml-parser-perl'. If you wish to use the history feature you must also
   install 'librrds-perl'.
 
+- How do i setup my Apache to run a matrix page?
+
+  Just add the following line to your apache configuration:
+
+    ScriptAlias /matrix/ /path/to/matrix.pl
+
+- What do 'TTL', 'Loss', 'Delay' and 'Jitter' in the matrix page mean?
+
 - Why are some matrix cells painted in a lighter green than others?
 
   When in 'SSM or ASM' view (the default one), a bright green cell means that
