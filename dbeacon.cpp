@@ -240,7 +240,7 @@ static Sources sources;
 struct beaconExternalStats {
 	beaconExternalStats() : identified(false) {}
 
-	uint64_t lastlocalupdate;
+	uint64_t lastupdate;
 	uint32_t age;
 
 	Stats ASM, SSM;
@@ -675,13 +675,28 @@ void handle_gc() {
 			remove = true;
 		}
 		if (!remove) {
+			if ((now - i->second.ASM.s.lastupdate) > 30000) {
+				i->second.ASM.s.valid = false;
+			}
+
+			if ((now - i->second.SSM.s.lastupdate) > 30000) {
+				i->second.SSM.s.valid = false;
+			}
+
 			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
 			while (j != i->second.externalSources.end()) {
-				if ((now - j->second.lastlocalupdate) > 30000) {
+				if ((now - j->second.lastupdate) > 30000) {
 					beaconSource::ExternalSources::iterator k = j;
 					j++;
 					i->second.externalSources.erase(k);
 				} else {
+					if ((now - j->second.ASM.lastupdate) > 30000) {
+						j->second.ASM.valid = false;
+					}
+					if ((now - j->second.SSM.lastupdate) > 30000) {
+						j->second.SSM.valid = false;
+					}
+
 					j++;
 				}
 			}
@@ -947,7 +962,7 @@ beaconExternalStats &beaconSource::getExternal(const sockaddr_storage &baddr, ui
 
 	beaconExternalStats &stats = k->second;
 
-	stats.lastlocalupdate = ts;
+	stats.lastupdate = ts;
 
 	return stats;
 }
