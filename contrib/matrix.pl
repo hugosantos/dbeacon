@@ -739,14 +739,18 @@ sub render_matrix {
 		print " -a CONTACT</code></p>\n";
 	}
 
-	my $render_end = [gettimeofday];
-	my $diff = tv_interval $load_start, $render_end;
-
-	if ($debug) {
-		print "<p>Took $diff seconds from load to end of render.</p>\n";
-	}
+	display_render_time();
 
 	end_document();
+}
+
+sub display_render_time {
+	if ($debug) {
+		my $render_end = [gettimeofday];
+		my $diff = tv_interval $load_start, $render_end;
+
+		print "<p>Took $diff seconds from load to end of render.</p>\n";
+	}
 }
 
 sub store_data {
