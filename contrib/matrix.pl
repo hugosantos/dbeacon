@@ -7,6 +7,8 @@
 # ScriptAlias /matrix/ /path/to/dbeacon/contrib/matrix.pl
 #
 # by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël
+#
+#   Perl code improvement suggestions by Marco d'Itri
 
 use CGI;
 use XML::Parser;
@@ -30,7 +32,7 @@ our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
 our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
 
-do('matrix.conf');
+do 'matrix.conf';
 
 my $dbeacon = '<a href="http://artemis.av.it.pt/~hsantos/software/dbeacon.html">dbeacon</a>';
 
@@ -53,9 +55,7 @@ my $ssm_sessiongroup;
 my $load_start = [gettimeofday];
 my $ended_parsing_dump;
 
-if (scalar(@ARGV) > 0) {
-	exit(store_data($ARGV[0]));
-}
+exit(store_data($ARGV[0])) if scalar(@ARGV) > 0;
 
 my $page = new CGI;
 my $url = $page->script_name();
@@ -77,21 +77,19 @@ my %ages = (
 
 my @propersortedages = ('-1m', '-1w', '-1d', '-12h', '-6h', '-1h');
 
-if (not defined($age)) {
-	$age = '-1d';
-}
+$age ||= '-1d';
 
-if (defined($history_enabled) and $history_enabled and defined($page->param('img'))) {
+if (defined $history_enabled and $history_enabled and defined $page->param('img')) {
 	$|=1;
 	graphgen();
 
-} elsif (defined($history_enabled) and $history_enabled and defined($page->param('history'))) {
+} elsif (defined $history_enabled and $history_enabled and defined $page->param('history')) {
 	list_graph();
 
 } else {
-	my ($start,$step);
+	my ($start, $step);
 
-	if (defined($page->param('at')) and $page->param('at')=~/^\d+$/) {
+	if (defined $page->param('at') and $page->param('at') =~ /^\d+$/) {
 		# Build matrix from old data
 		($start, $step) = build_vertex_from_rrd();
 	} else {
@@ -108,31 +106,27 @@ sub build_vertex_from_rrd {
 	foreach my $dstbeacon (get_beacons($historydir)) {
 		my ($dstname,$dstaddr) = get_name_from_host($dstbeacon);
 
-		if (not defined($adj{$dstaddr})) {
+		if (not defined $adj{$dstaddr}) {
 			$adj{$dstaddr}[IN_EDGE] = 0;
 			$adj{$dstaddr}[OUT_EDGE] = 0;
 		}
 
 		$adj{$dstaddr}[NAME] = $dstname;
 
-		foreach my $srcbeacon (get_beacons($historydir.'/'.$dstbeacon)) {
-			my ($srcname,$srcaddr,$asmorssm) = get_name_from_host($srcbeacon);
+		foreach my $srcbeacon (get_beacons($historydir . '/' . $dstbeacon)) {
+			my ($srcname, $srcaddr, $asmorssm) = get_name_from_host($srcbeacon);
 
-			($start,$step,$names,$data) = RRDs::fetch(build_rrd_file_path($historydir,  $dstbeacon, $srcbeacon, $asmorssm), 'AVERAGE',
-				 '-s',$page->param('at'),'-e',$page->param('at'));
+			($start, $step, $names, $data) = RRDs::fetch(build_rrd_file_path($historydir,  $dstbeacon, $srcbeacon, $asmorssm), 'AVERAGE',
+				 '-s', $page->param('at'), '-e', $page->param('at'));
 
-			if (RRDs::error) {
-				next;
-			}
+			next if RRDs::error;
 
 			if (not defined($adj{$srcaddr})) {
 				$adj{$srcaddr}[IN_EDGE] = 0;
 				$adj{$srcaddr}[OUT_EDGE] = 0;
 			}
 
-			if (defined($srcname)) {
-				$adj{$srcaddr}[NAME] = $srcname;
-			}
+			$adj{$srcaddr}[NAME] = $srcname if defined $srcname;
 
 			for (my $i = 0; $i < $#$names+1; $i++) {
 				if (defined($$data[0][$i])) {
@@ -156,7 +150,8 @@ sub build_vertex_from_rrd {
 			}
 		}
 	}
-	return ($start,$step);
+
+	return ($start, $step);
 }
 
 sub full_url0 {
@@ -164,9 +159,7 @@ sub full_url0 {
 }
 
 sub full_url {
-	if (not defined($type)) {
-		$type = 'ttl';
-	}
+	$type ||= 'ttl';
 	return "$url?dst=$dst&amp;src=$src&amp;type=$type";
 }
 
@@ -183,7 +176,7 @@ sub parse_dump_file {
 sub check_outdated_dump {
 	my $last_update_time = (stat($dumpfile))[9];
 
-	if ($last_update_time+($dump_update_delay*2) < time()) {
+	if ($last_update_time + ($dump_update_delay * 2) < time) {
 		return $last_update_time;
 	} else {
 		return 0;
@@ -247,18 +240,18 @@ sub format_date {
 	my $dosecs = 1;
 
 	if ($tm > 86400) {
-		$res .= sprintf(" %id", $tm / 86400);
+		$res .= sprintf " %id", $tm / 86400;
 		$tm = $tm % 86400;
 		$dosecs = 0;
 	}
 
 	if ($tm > 3600) {
-		$res .= sprintf(" %ih", $tm / 3600);
+		$res .= sprintf " %ih", $tm / 3600;
 		$tm = $tm % 3600;
 	}
 
 	if ($tm > 60) {
-		$res .= sprintf(" %im", $tm / 60);
+		$res .= sprintf " %im", $tm / 60;
 		$tm = $tm % 60;
 	}
 
@@ -289,19 +282,14 @@ sub start_handler {
 			$adj{$current_beacon}[NAME] = $atts{'name'};
 			$adj{$current_beacon}[CONTACT] = $atts{'contact'};
 			$adj{$current_beacon}[AGE] = $atts{'age'};
-			if (defined($atts{'country'})) {
-				$adj{$current_beacon}[COUNTRY] = $atts{'country'};
-			}
+			$adj{$current_beacon}[COUNTRY] = $atts{'country'} if defined $atts{'country'};
 		}
 	} elsif ($tag eq 'asm' or $tag eq 'ssm') {
-		foreach my $att ('ttl', 'loss', 'delay', 'jitter') {
-			if (defined($atts{$att})) {
-				my $index = 1;
-				if ($tag eq 'ssm') {
-					$index = 2;
-				}
+		foreach my $att qw(ttl loss delay jitter) {
+			if (defined $atts{$att}) {
+				my $index = $tag eq 'ssm' ? 2 : 1;
 
-				if (not defined($adj{$current_beacon}[NEIGH]{$current_source})) {
+				if (not defined $adj{$current_beacon}[NEIGH]{$current_source}) {
 					$adj{$current_beacon}[IN_EDGE] ++;
 					$adj{$current_source}[OUT_EDGE] ++;
 				}
@@ -313,17 +301,10 @@ sub start_handler {
 	} elsif ($tag eq 'source') {
 		$current_source = $atts{'addr'};
 
-		if (defined($atts{'name'}) and defined($atts{'addr'})) {
-			if (defined($atts{'name'})) {
-				$adj{$current_source}[NAME] = $atts{'name'};
-			}
-			if (defined($atts{'contact'})) {
-				$adj{$current_source}[CONTACT] = $atts{'contact'}
-			}
-
-			if (not $adj{$current_source}[COUNTRY] and defined($atts{'country'})) {
-				$adj{$current_source}[COUNTRY] = $atts{'country'};
-			}
+		if (defined $atts{'name'} and defined $atts{'addr'}) {
+			$adj{$current_source}[NAME] = $atts{'name'} if defined $atts{'name'};
+			$adj{$current_source}[CONTACT] = $atts{'contact'} if defined $atts{'contact'};
+			$adj{$current_source}[COUNTRY] ||= $atts{'country'} if defined $atts{'country'};
 		}
 	} elsif ($tag eq 'website') {
 		if ($atts{'type'} ne '' and $atts{'url'} ne '') {
@@ -351,7 +332,7 @@ sub start_document {
 sub build_header {
 	my ($attname, $atthideinfo, $attwhat, $start, $step) = @_;
 
-	if (defined($step)) { # From history
+	if (defined $step) { # From history
 		print "<p><b>Snapshot stats at " . localtime($start) . "</b> ($step seconds average)</p>\n";
 
 		print '<form id="timenavigator" action=";">';
@@ -371,18 +352,14 @@ sub build_header {
 		print '<select name="offset" style="margin-left: 0.5em; margin-right: 0.5em">'."\n";
 
 		my $ammount = $page->param('ammount');
-		if (not defined($ammount)) {
-			$ammount = 60;
-		}
+		$ammount ||= 60;
 
 		my @ammounts = ([60, '60 s'], [600, '10m'], [3600, '60m'], [14400, '4h'], [43200, '12h'], [86400, '24h'], [604800, '7d'], [2592000, '30d']);
 		# 7884000 3 months
 
 		foreach my $ammitem (@ammounts) {
 			print '<option value="' . $ammitem->[0] . '"';
-			if ($ammitem->[0] == $ammount) {
-				print ' selected="selected"';
-			}
+			print ' selected="selected"' if $ammitem->[0] == $ammount;
 			print '> ' . $ammitem->[1] . '</option>';
 		}
 
@@ -393,26 +370,20 @@ sub build_header {
 
 	} else {
 		print '<p><b>Current stats for</b> <code>', $sessiongroup, '</code>';
-		if ($ssm_sessiongroup) {
-			print ' (SSM: <code>', $ssm_sessiongroup, '</code>)';
-		}
+		print ' (SSM: <code>', $ssm_sessiongroup, '</code>)' if $ssm_sessiongroup;
 
-		my $last_update_time = check_outdated_dump();
-		if ($last_update_time) {
-			print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
-		}
+		my $last_update_time = check_outdated_dump;
+		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n" if $last_update_time;
 		print '</p>';
 	}
 
 	my $hideatt;
 
-	if ($atthideinfo) {
-		$hideatt = 'hideinfo=1&amp;';
-	}
+	$hideatt = 'hideinfo=1&amp;' if $atthideinfo;
 
 	my $whatatt = "what=$attwhat&amp;";
 
-	my @view = ('ttl', 'loss', 'delay', 'jitter');
+	my @view = qw(ttl loss delay jitter);
 	my @view_name = ('TTL', 'Loss', 'Delay', 'Jitter');
 	my @view_type = ('hop count', 'percentage', 'ms', 'ms');
 
@@ -420,15 +391,9 @@ sub build_header {
 	my $i;
 
 	print '<p style="margin: 0"><span style="float: left"><b>View</b>&nbsp;<small>(';
-	if (not defined($attname)){
-		$attname = "";
-	}
-	if (not defined($hideatt)){
-		$hideatt = "";
-	}
-	if (not defined($at)){
-		$at = "";
-	}
+	$attname ||= '';
+	$hideatt ||= '';
+	$at ||= '';
 
 	if (not $atthideinfo) {
 		print "<a href=\"$url?hideinfo=1&amp;$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
@@ -449,7 +414,7 @@ sub build_header {
 
 	print ')</small>:</span></p>';
 
-	print "<ul id=\"view\" style=\"float: left\">\n";
+	print '<ul id="view" style="float: left">', "\n";
 	for ($i = 0; $i < $view_len; $i++) {
 		my $att = $view[$i];
 		my $attn = $view_name[$i];
@@ -498,35 +463,25 @@ sub render_matrix {
 	my ($start, $step) = @_;
 
 	my $attname = $page->param('att');
-	if (not $attname) {
-		$attname = "ttl";
-	}
+	my $atthideinfo = $page->param('hideinfo');
+	my $attwhat = $page->param('what');
 
-	my $atthideinfo = $default_hideinfo;
-	if (defined($page->param('hideinfo'))) {
-		$atthideinfo = $page->param('hideinfo');
-	}
-
-	my $attwhat = $default_what;
-	if (defined($page->param('what'))) {
-		$attwhat = $page->param('what');
-	}
+	$attname ||= 'ttl';
+	$atthideinfo ||= $default_hideinfo;
+	$attwhat ||= $default_what;
 
 	my $what_td = "colspan=\"2\"";
 
-	if ($attwhat eq "asm" or $attwhat eq "ssmorasm") {
-		$what_td = "";
-	}
+	$what_td = '' if $attwhat eq 'asm' or $attwhat eq 'ssmorasm';
 
 	my $attat = $page->param('at');
-	if (not defined($attat) or $attat eq "") {
-		$attat = 0;
-	}
+	$attat = 0 if not defined $attat or $attat eq '';
+
 	my $addinfo;
 	if ($attat > 0) {
 		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname\">Live stats</a>)";
 	} else {
-		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=" . (time() - 60) ."\">Past stats</a>)"
+		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=" . (time - 60) ."\">Past stats</a>)"
 	}
 
 	start_document($addinfo);
@@ -544,95 +499,87 @@ sub render_matrix {
 	print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
 	print '<tr><td>&nbsp;</td>';
 
-	foreach $c (keys %adj) {
+	my @sortedkeys = sort { $adj{$b}[AGE] <=> $adj{$a}[AGE] } keys %adj;
+
+	foreach $c (@sortedkeys) {
 		if (defined($adj{$c}[AGE]) and $adj{$c}[AGE] < 30) {
 			push (@warmingup, $c);
 		} elsif (not $adj{$c}[IN_EDGE] and not $adj{$c}[OUT_EDGE]) {
 			push (@problematic, $c);
 		} else {
-			if ($adj{$c}[OUT_EDGE] > 0) {
-				print '<td ', $what_td, '><b>S', $i, '</b></td>';
-			}
+			print '<td ', $what_td, '><b>S', $i, '</b></td>' if $adj{$c}[OUT_EDGE] > 0;
 
 			$ids{$c} = $i;
 			$i++;
 
-			if (not $adj{$c}[IN_EDGE]) {
-				push (@localnoreceive, $c);
-			}
+			push (@localnoreceive, $c) if not $adj{$c}[IN_EDGE];
 		}
 	}
 
 	print "</tr>\n";
 
-	foreach $a (keys %adj) {
+	foreach $a (@sortedkeys) {
 		my $id = $ids{$a};
 		if ($id >= 1 and $adj{$a}[IN_EDGE] > 0) {
 			print '<tr>';
 			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $id, '</b></td>';
-			foreach $b (keys %adj) {
+			foreach $b (@sortedkeys) {
 				if ($ids{$b} >= 1 and $adj{$b}[OUT_EDGE] > 0) {
-					if ($b ne $a and defined($adj{$a}[NEIGH]{$b})) {
+					if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
 						my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
 						my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
 
 						if ($attname ne 'ttl') {
-							if (defined($txt)) {
-								$txt = sprintf("%.1f", $txt);
-							}
-							if (defined($txtssm)) {
-								$txtssm = sprintf("%.1f", $txtssm);
-							}
+							$txt = sprintf("%.1f", $txt) if defined $txt;
+							$txtssm = sprintf("%.1f", $txtssm) if defined $txtssm;
 						}
 
-						if ($attwhat eq "asm" or $attwhat eq "ssmorasm") {
-							my $whattype = "asm";
-							my $cssclass = "fulladjacent";
-							if ($attwhat eq "ssmorasm") {
-								if (defined($txtssm)) {
+						if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
+							my $whattype = 'asm';
+							my $cssclass = 'fulladjacent';
+							if ($attwhat eq 'ssmorasm') {
+								if (defined $txtssm) {
 									$txt = $txtssm;
-									$whattype = "ssm";
-								} elsif (defined($txt)) {
-									$cssclass = "nossm_fulladjacent";
+									$whattype = 'ssm';
+								} elsif (defined $txt) {
+									$cssclass = 'nossm_fulladjacent';
 									$txt = "<i>$txt</i>";
 								}
 							}
 
-							if (not defined($txt)) {
+							if (not defined $txt) {
 								print '<td ', $what_td, ' class="blackhole">XX</td>';
 							} else {
-								print "<td class=\"$cssclass\">";
-								make_history_link($b, $a, $whattype, $txt, "historyurl");
+								print '<td class="', $cssclass, '">';
+								make_history_link($b, $a, $whattype, $txt, 'historyurl');
 								print '</td>';
 							}
 						} else {
-							if (not defined($txt) and not defined($txtssm)) {
-								print "<td $what_td class=\"blackhole\">XX</td>";
+							if (not defined $txt and not defined $txtssm) {
+								print '<td ', $what_td, ' class="blackhole">XX</td>';
 							} else {
-								make_matrix_cell($b, $a, "asm", $txt, "historyurl");
-								make_matrix_cell($b, $a, "ssm", $txtssm, "historyurl");
+								make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
+								make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
 							}
 						}
 					} elsif ($a eq $b) {
-						print "<td $what_td class=\"corner\">&nbsp;</td>";
+						print '<td ', $what_td, ' class="corner">&nbsp;</td>';
 					} else {
-						print "<td $what_td class=\"blackhole\">XX</td>";
+						print '<td ', $what_td, ' class="blackhole">XX</td>';
 					}
 				}
 			}
-			print "</tr>\n";
+			print '</tr>', "\n";
 		}
 	}
-	print "</table>\n";
+	print '</table>', "\n";
 
 	if (scalar(@localnoreceive) > 0) {
 		print '<h4 style="margin-bottom: 0">The following beacons are not being received locally via ASM</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@localnoreceive) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
-			if ($adj{$a}[CONTACT]) {
-				print ' (', $adj{$a}[CONTACT], ')';
-			}
+			print ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
 			print '</li>', "\n";
 		}
 		print '</ul>', "\n";
@@ -643,9 +590,7 @@ sub render_matrix {
 		print '<ul>', "\n";
 		foreach $a (@warmingup) {
 			print '<li>', $a;
-			if ($adj{$a}[NAME]) {
-				print ' (', $adj{$a}[NAME], ', ', $adj{$a}[CONTACT], ')';
-			}
+			print ' (', $adj{$a}[NAME], ', ', $adj{$a}[CONTACT], ')' if $adj{$a}[NAME];
 			print '</li>', "\n";
 		}
 		print '</ul>', "\n";
@@ -662,9 +607,7 @@ sub render_matrix {
 			print '<li>', $prob;
 			if ($adj{$prob}[NAME]) {
 				print ' (', $adj{$prob}[NAME];
-				if ($adj{$prob}[CONTACT]) {
-					print ', ', $adj{$prob}[CONTACT];
-				}
+				print ', ', $adj{$prob}[CONTACT] if $adj{$prob}[CONTACT];
 				print ')';
 			}
 
@@ -679,15 +622,12 @@ sub render_matrix {
 
 				for (my $l = 0; $l < $k; $l++) {
 					print '<li><span class="beacon">', $neighs[$l];
-					if ($adj{$neighs[$l]}[NAME]) {
-						print ' (', $adj{$neighs[$l]}[NAME], ')';
-					}
+					print ' (', $adj{$neighs[$l]}[NAME], ')' if $adj{$neighs[$l]}[NAME];
 					print '</span></li>', "\n";
 				}
 
-				if ($k < $ned) {
-					print '<li>and others</li>', "\n";
-				}
+				print '<li>and others</li>', "\n" if $k < $ned;
+
 				print '</ul></ul>';
 			}
 
@@ -701,16 +641,12 @@ sub render_matrix {
 		print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
 
 		print '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>', "\n";
-		foreach $a (keys %adj) {
+		foreach $a (@sortedkeys) {
 			if ($ids{$a} > 0) {
 				print '<tr>', '<td align="right" class="beacname">';
-				if ($adj{$a}[URL]) {
-					print '<a class="beacon_url" href="', $adj{$a}[URL], '">';
-				}
+				print '<a class="beacon_url" href="', $adj{$a}[URL], '">' if $adj{$a}[URL];
 				print $adj{$a}[NAME];
-				if ($adj{$a}[URL]) {
-					print '</a>';
-				}
+				print '</a>' if $adj{$a}[URL];
 				print ' <b>R', $ids{$a}, '</b>', '</td>';
 
 				print '<td>';
@@ -729,12 +665,8 @@ sub render_matrix {
 				print '<td class="admincontact">', ($adj{$a}[CONTACT] or '-'), '</td>';
 
 				my $urls;
-				if ($adj{$a}[LG]) {
-					$urls .= " <a href=\"" . $adj{$a}[LG] . "\">L</a>";
-				}
-				if ($adj{$a}[MATRIX]) {
-					$urls .= " <a href=\"" . $adj{$a}[MATRIX] . "\">M</a>";
-				}
+				$urls .= " <a href=\"" . $adj{$a}[LG] . "\">L</a>" if $adj{$a}[LG];
+				$urls .= " <a href=\"" . $adj{$a}[MATRIX] . "\">M</a>" if $adj{$a}[MATRIX];
 
 				print '<td class="urls">', ($urls or '-'), '</td>';
 				print '</tr>', "\n";
@@ -744,26 +676,24 @@ sub render_matrix {
 	}
 
 	print '<p><br />If you wish to add a beacon to your site, you may use ', $dbeacon;
-	if (defined($step)) {
+	if (defined $step) {
 		print '.</p>', "\n";
 	} else {
 		print ' with the following parameters:</p>', "\n";
 		print '<p><code>./dbeacon -n NAME -b ', $sessiongroup;
-		if (defined($ssm_sessiongroup)) {
+		if (defined $ssm_sessiongroup) {
 			print ' -S';
-			if ($ssm_sessiongroup ne $default_ssm_group) {
-				print ' ', $ssm_sessiongroup;
-			}
+			print ' ', $ssm_sessiongroup if $ssm_sessiongroup ne $default_ssm_group;
 		}
 		print ' -a CONTACT</code></p>', "\n";
 	}
 
-	end_document();
+	end_document;
 }
 
 sub store_data {
 
-	if (check_outdated_dump()) {
+	if (check_outdated_dump) {
 		die "Outdated dumpfile\n";
 	}
 	parse_dump_file(@_);
@@ -771,7 +701,7 @@ sub store_data {
 	foreach my $a (keys %adj) {
 		if ($adj{$a}[NAME]) {
 			foreach my $b (keys %adj) {
-				if ($a ne $b and defined($adj{$a}[NEIGH]{$b})) {
+				if ($a ne $b and defined $adj{$a}[NEIGH]{$b}) {
 					if ($adj{$b}[NAME]) {
 						store_data_one($a, $adj{$a}[NAME], $b, $adj{$b}[NAME], "asm");
 						store_data_one($a, $adj{$a}[NAME], $b, $adj{$b}[NAME], "ssm");
@@ -799,11 +729,9 @@ sub store_data_one {
 		$index = 2;
 	}
 
-	foreach my $type ('ttl', 'loss', 'delay', 'jitter') {
+	foreach my $type qw(ttl loss delay jitter) {
 		$values{$type} = $adj{$dst}[NEIGH]{$src}[$index]{$type};
-		if (defined($values{$type})) {
-			$good++;
-		}
+		$good++ if defined $values{$type};
 	}
 
 	if ($good > 0) {
@@ -892,17 +820,13 @@ sub storedata {
 	# Update rrd with new values
 
 	my $updatestring = 'N';
-	foreach my $valuetype ('ttl', 'loss', 'delay', 'jitter') {
-		if ($valuetype eq 'delay' or $valuetype eq 'jitter') {
-			# Store it in s and not ms
-			$values{$valuetype} = $values{$valuetype} / 1000.;
-		}
+	foreach my $valuetype qw(ttl loss delay jitter) {
+		# Store it in s and not ms
+		$values{$valuetype} = $values{$valuetype} / 1000. if $valuetype eq 'delay' or $valuetype eq 'jitter';
 		$updatestring .= ':' . $values{$valuetype};
 	}
 
-	if ($verbose > 1) {
-		print "Updating $dstbeacon <- $srcbeacon with $updatestring\n";
-	}
+	print "Updating $dstbeacon <- $srcbeacon with $updatestring\n" if $verbose > 1;
 
 	if (!RRDs::update(build_rrd_file_path($historydir, $dstbeacon, $srcbeacon, $asmorssm), $updatestring)) {
 		return 0;
@@ -923,7 +847,7 @@ sub graphgen {
 	else { die "Unknown type\n"; }
 
 	# Display only the name
-	my ($msrc,undef,$asmorssm) = get_name_from_host($src);
+	my ($msrc, undef, $asmorssm) = get_name_from_host($src);
 	my ($mdst) = get_name_from_host($dst);
 
 	my $rrdfile = build_rrd_file_path($historydir, $dst, $src, $asmorssm);
@@ -938,7 +862,7 @@ sub graphgen {
 	my $width = 450;
 	my $height = 150;
 
-	if (defined($page->param('thumb'))) {
+	if (defined $page->param('thumb')) {
 		$width = 300;
 		$height = 100;
 		$title .= " ($ytitle)";
@@ -958,9 +882,9 @@ sub graphgen {
 		'CDEF:nodata=Max,UN,INF,UNKN,IF',
 		'AREA:nodata#E0E0FD');
 
-	if (not defined($page->param('thumb'))) {
+	if (not defined $page->param('thumb')) {
 		push (@args,  '--vertical-label',$ytitle);
-		push (@args, 'COMMENT:'.strftime("%a %b %e %Y %H:%M (%Z)",localtime).' '.strftime("%H:%M (GMT)",gmtime).'\r');
+		push (@args, 'COMMENT:' . strftime("%a %b %e %Y %H:%M (%Z)", localtime) . ' ' . strftime("%H:%M (GMT)", gmtime).'\r');
 		push (@args, 'AREA:Max#FF0000:Max');
 		push (@args, 'GPRINT:Max:MAX:'.$unit);
 		push (@args, 'AREA:Avg#CC0000:Avg');
@@ -1000,14 +924,8 @@ sub get_beacons {
 sub get_name_from_host {
 	my ($host) = @_;
 
-	if ($host =~ /^(.+)\-(.+)\.(ssm|asm)$/)
-	{
-		return ($1,$2,$3);
-	}
-	elsif ($host =~ /^(.+)\-(.+)$/)
-	{
-		return ($1,$2);
-	}
+	return ($1, $2, $3) if $host =~ /^(.+)\-(.+)\.(ssm|asm)$/;
+	return ($1, $2) if $host =~ /^(.+)\-(.+)$/;
 	return 0;
 }
 
@@ -1016,56 +934,44 @@ sub do_list_beacs {
 
 	print '<select name="'.$name.'" onchange="location = this.options[this.selectedIndex].value;">'."\n";
 
-	my $def;
-	if ($name eq 'srcc') {
-		$def = $src;
-	} else {
-		$def = $dst;
-	}
+	my $def = $name eq 'srcc' ? $src : $dst;
 
 	foreach my $foo (@vals) {
 		print '<option value="'.$url.'?history=1&amp;dst=';
-		if ($name eq 'srcc') {
-			print $dst.'&amp;src='.$foo;
-		} else {
-			print $foo;
-		}
+		print $dst, '&amp;src=' if $name eq 'srcc';
+		print $foo;
 		print '"';
 
-		if ($foo eq $def) {
-			print ' selected="selected"';
-		}
+		print ' selected="selected"' if $foo eq $def;
 
-		print ">" . (get_name_from_host($foo))[0] ;
-		if ($name eq 'srcc') {
-			print ' ('.(get_name_from_host($foo))[2].')';
-		}
-		print "</option>\n";
+		print ">" . (get_name_from_host($foo))[0];
+		print ' (' . (get_name_from_host($foo))[2] . ')' if $name eq 'srcc';
+		print '</option>', "\n";
 	}
 
-	print "</select>\n";
+	print '</select>', "\n";
 
 }
 
 sub graphthumb {
 	my ($type) = shift;
-	print '<a href="' . full_url0() . "&amp;history=1&amp;type=$type\">\n";
-	print '<img style="margin-right: 0.5em; margin-bottom: 0.5em; border: 0" alt="thumb" src="'.full_url0()."&amp;type=$type&amp;img=true&amp;thumb=true&amp;age=$age\" /></a><br />\n";
+	print '<a href="' . full_url0 . "&amp;history=1&amp;type=$type\">\n";
+	print '<img style="margin-right: 0.5em; margin-bottom: 0.5em; border: 0" alt="thumb" src="' . full_url0 . "&amp;type=$type&amp;img=true&amp;thumb=true&amp;age=$age\" /></a><br />\n";
 }
 
 sub list_graph {
 	start_document(" (<a href=\"$url\">Live stats</a>)");
 
-        if (defined($dst)) {
+        if (defined $dst) {
                print "<p>To ";
 
                do_list_beacs("dstc", $dst, undef, get_beacons($historydir));
 
-               if (defined($src)) {
+               if (defined $src) {
                        print "From ";
                        do_list_beacs("srcc", $dst, $src, get_beacons("$historydir/$dst"));
 
-                       if (defined($type)) {
+                       if (defined $type) {
                                print "Type ";
 
                                my @types = (["-- All --", "", ""], ["TTL", "ttl", ""], ["Loss", "loss", ""], ["Delay", "delay", ""], ["Jitter", "jitter", ""]);
@@ -1073,10 +979,8 @@ sub list_graph {
 				print '<select name="type" onchange="location = this.options[this.selectedIndex].value;">'."\n";
 
 				foreach my $foo (@types) {
-					print '<option value="'.full_url0() . '&amp;history=1&amp;type=' . $$foo[1].'"';
-					if ($type eq $$foo[1]) {
-						print ' selected="selected"';
-					}
+					print '<option value="' . full_url0 . '&amp;history=1&amp;type=' . $$foo[1].'"';
+					print ' selected="selected"' if $type eq $$foo[1];
 					print '>'.$$foo[0]."\n";;
 				}
 				print "</select>\n";
@@ -1086,7 +990,7 @@ sub list_graph {
 		print "</p>";
 	}
 
-	if (not defined($dst)) {
+	if (not defined $dst) {
 
 		# List beacon receiving infos
 
@@ -1102,7 +1006,7 @@ sub list_graph {
 
 		print "</ul>\n";
 
-	} elsif (not defined($src)) {
+	} elsif (not defined $src) {
 		print '<br />Select a source:';
 
 		# List visible src for this beacon
@@ -1124,24 +1028,24 @@ sub list_graph {
 		foreach my $key (keys %pairs) {
 			print "<li>";
 
-			if (defined($pairs{$key}[0])) {
+			if (defined $pairs{$key}[0]) {
 				print '<a href="?history=1&amp;dst=' . $dst . '&amp;src=' . $pairs{$key}[0] . '">';
 			}
 
 			print ((get_name_from_host($key))[0]);
 
-			if (defined($pairs{$key}[0])) {
+			if (defined $pairs{$key}[0]) {
 				print '</a>';
 			}
 
-			if (defined($pairs{$key}[1])) {
+			if (defined $pairs{$key}[1]) {
 				print ' / <a href="?history=1&amp;dst='.$dst.'&amp;src=' . $pairs{$key}[1] . "\">SSM</a>";
 			}
 
 			print "</li>\n";
 		}
 		print "</ul>\n";
-	}  elsif (not defined($type)) {
+	}  elsif (not defined $type) {
 		print "<div style=\"margin-left: 2em\">\n";
 		print "<h2 style=\"margin-bottom: 0\">History for the last " . $ages{$age} . "</h2>\n";
 		print "<small>Click on a graphic for more detail</small><br />\n";
@@ -1149,25 +1053,21 @@ sub list_graph {
 
 		my $count = 0;
 
-		foreach my $type ("ttl", "loss", "delay", "jitter") {
-			if (($count % 2) == 0) {
-				print "<tr>";
-			}
-			print "<td>";
+		foreach my $type qw(ttl loss delay jitter) {
+			print '<tr>' if ($count % 2) == 0;
+			print '<td>';
 			graphthumb($type);
-			print "</td>\n";
-			if (($count % 2) == 1) {
-				print "</tr>\n";
-			}
+			print '</td>', "\n";
+			print '</tr>', "\n" if ($count %2) == 1;
 			$count++;
 		}
 
 		print "</table>\n";
 
-		print "<p>Last: ";
+		print '<p>Last: ';
 
 		foreach my $agen (@propersortedages) {
-			print " <a href=\"" . full_url0() . "&amp;history=1&amp;age=" . $agen . "\">" . $ages{$agen} . "</a>";
+			print " <a href=\"" . full_url0 . "&amp;history=1&amp;age=" . $agen . "\">" . $ages{$agen} . "</a>";
 		}
 
 		print "</p>\n";
@@ -1177,12 +1077,12 @@ sub list_graph {
 		print "<div style=\"margin-left: 2em\">\n";
 		# Dst, src and type selected => Displaying all time range graphs
 		foreach my $age ('-1d','-1w','-1m','-1y') {
-			print "<img style=\"margin-bottom: 0.5em\" src=\"" . full_url() . "&amp;age=$age&amp;img=true\" /><br />";
+			print "<img style=\"margin-bottom: 0.5em\" src=\"" . full_url . "&amp;age=$age&amp;img=true\" /><br />";
 		}
 		print "</div>";
 	}
 
-	end_document();
+	end_document;
 }
 
 sub start_base_document {
