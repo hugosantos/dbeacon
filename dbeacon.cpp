@@ -208,7 +208,9 @@ enum {
 
 	T_WEBSITE_GENERIC = 'G',
 	T_WEBSITE_MATRIX = 'M',
-	T_WEBSITE_LG = 'L'
+	T_WEBSITE_LG = 'L',
+
+	T_LEAVE = 'Q'
 };
 
 static vector<pair<address, content_type> > mcastListen;
@@ -220,7 +222,6 @@ static WebSites webSites;
 static vector<address> redist;
 
 enum {
-	REPORT_EVENT,
 	GARBAGE_COLLECT_EVENT,
 	DUMP_EVENT,
 	DUMP_BW_EVENT,
@@ -228,8 +229,18 @@ enum {
 
 	SENDING_EVENT,
 	WILLSEND_EVENT,
+
+	REPORT_EVENT = 'R',
 	MAP_REPORT_EVENT,
 	WEBSITE_REPORT_EVENT
+};
+
+enum {
+	// This must match the above value
+	STATS_REPORT = 'R',
+	MAP_REPORT,
+	WEBSITE_REPORT,
+	LEAVE_REPORT
 };
 
 #define PACKETS_PERIOD 40
@@ -323,6 +334,7 @@ static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 static void do_dump();
 static void do_bw_dump(bool);
 static void dumpBigBwStats(int);
+static void sendLeaveReport(int);
 
 static uint32_t bytesReceived = 0;
 static uint32_t bytesSent = 0;
@@ -557,6 +569,7 @@ int main(int argc, char **argv) {
 	send_report(WEBSITE_REPORT_EVENT);
 
 	signal(SIGUSR1, dumpBigBwStats);
+	signal(SIGINT, sendLeaveReport);
 
 	startTime = lastDumpBwTS = get_timestamp();
 
@@ -831,6 +844,17 @@ static inline beaconSource &getSource(const beaconSourceAddr &baddr, const char 
 	return src;
 }
 
+static void removeSource(const beaconSourceAddr &baddr) {
+	Sources::iterator i = sources.find(baddr);
+	if (i != sources.end()) {
+		sources.erase(i);
+
+		if (ssmMcastSock) {
+			SSMLeave(ssmMcastSock, &baddr);
+		}
+	}
+}
+
 static inline uint8_t *tlv_begin(uint8_t *hd, int &len) {
 	if (len < 2 || hd[1] > len)
 		return 0;
@@ -861,6 +885,15 @@ static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 
 	st.valid = true;
 
+	return true;
+}
+
+static inline bool check_string(char *hd, int len, string &result) {
+	for (int i = 0; i < len; i++) {
+		if (hd[i] <= 0)
+			return false;
+	}
+	result = string(hd, len);
 	return true;
 }
 
@@ -899,10 +932,11 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 
 		for (uint8_t *hd = tlv_begin(buff + 5, len); hd; hd = tlv_next(hd, len)) {
 			if (hd[0] == T_BEAC_NAME) {
-				string name((char *)hd + 2, hd[1]);
-				src.setName(name);
+				string name;
+				if (check_string((char *)hd + 2, hd[1], name))
+					src.setName(name);
 			} else if (hd[0] == T_ADMIN_CONTACT) {
-				src.adminContact = string((char *)hd + 2, hd[1]);
+				check_string((char *)hd + 2, hd[1], src.adminContact);
 			} else if (hd[0] == T_SOURCE_INFO || hd[0] == T_SOURCE_INFO_IPv4) {
 				int blen = hd[0] == T_SOURCE_INFO ? 18 : 6;
 
@@ -932,10 +966,11 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 				int plen = hd[1] - blen;
 				for (uint8_t *pd = tlv_begin(hd + 2 + blen, plen); pd; pd = tlv_next(pd, plen)) {
 					if (pd[0] == T_BEAC_NAME) {
-						stats.name = string((char *)pd + 2, pd[1]);
-						stats.identified = !stats.name.empty();
+						if (check_string((char *)pd + 2, pd[1], stats.name)) {
+							stats.identified = !stats.name.empty();
+						}
 					} else if (pd[0] == T_ADMIN_CONTACT) {
-						stats.contact = string((char *)pd + 2, pd[1]);
+						check_string((char *)pd + 2, pd[1], stats.contact);
 					} else if (pd[0] == T_ASM_STATS || pd[0] == T_SSM_STATS) {
 						Stats *st = (pd[0] == T_ASM_STATS ? &stats.ASM : &stats.SSM);
 
@@ -949,7 +984,13 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 				if (!addr.is_equal(beaconUnicastAddr))
 					getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts).adminContact = stats.contact;
 			} else if (hd[0] == T_WEBSITE_GENERIC || hd[0] == T_WEBSITE_LG || hd[0] == T_WEBSITE_MATRIX) {
-				src.webSites[hd[0]] = string((char *)hd + 2, hd[1]);
+				string url;
+				if (check_string((char *)hd + 2, hd[1], url)) {
+					src.webSites[hd[0]] = url;
+				}
+			} else if (hd[0] == T_LEAVE) {
+				removeSource(*from);
+				break;
 			}
 		}
 	}
@@ -1196,10 +1237,14 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 	if (!write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, adminContact.c_str()))
 		return -1;
 
-	if (type == WEBSITE_REPORT_EVENT) {
+	if (type == WEBSITE_REPORT) {
 		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
 			if (!write_tlv_string(buff, maxlen, ptr, j->first, j->second.c_str()))
 				return -1;
+		return ptr;
+	} else if (type == LEAVE_REPORT) {
+		if (!write_tlv_start(buff, maxlen, ptr, T_LEAVE, 0))
+			return -1;
 		return ptr;
 	}
 
@@ -1217,7 +1262,7 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 		if (i->first.ss_family == AF_INET)
 			len = 6;
 
-		if (type == MAP_REPORT_EVENT) {
+		if (type == MAP_REPORT) {
 			int namelen = i->second.name.size();
 			int contactlen = i->second.adminContact.size();
 			len += 2 + namelen + 2 + contactlen;
@@ -1244,7 +1289,7 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 			ptr += 6;
 		}
 
-		if (type == MAP_REPORT_EVENT) {
+		if (type == MAP_REPORT) {
 			write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
 			write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
 		} else {
@@ -1364,30 +1409,34 @@ void do_dump() {
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-			if (i->second.ASM.s.valid && i->second.identified) {
-				i->first.print(tmp, sizeof(tmp));
-				fprintf(fp, "\t\t\t<source");
+			i->first.print(tmp, sizeof(tmp));
+			fprintf(fp, "\t\t\t<source addr=\"%s\"", tmp);
+			if (i->second.identified) {
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
-				fprintf(fp, " addr=\"%s\"", tmp);
-				fprintf(fp, " age=\"%llu\"\n\t\t\t\t", (now - i->second.creation) / 1000);
-				if (i->second.ASM.s.valid)
-					dumpStats(fp, i->second.ASM.s, now, i->second.sttl, true);
-				fprintf(fp, ">\n");
-
-				for (WebSites::const_iterator j = i->second.webSites.begin(); j != i->second.webSites.end(); j++) {
-					const char *typnam = j->first == T_WEBSITE_GENERIC ? "generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
-					fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n", typnam, j->second.c_str());
-				}
-
-				if (i->second.SSM.s.valid) {
-					fprintf(fp, "\t\t\t\t<ssm");
-					dumpStats(fp, i->second.SSM.s, now, i->second.sttl, true);
-					fprintf(fp, " />\n");
-				}
-				fprintf(fp, "\t\t\t</source>\n");
+				fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 			}
+
+			if (i->second.ASM.s.valid) {
+				fprintf(fp, "\n\t\t\t\t");
+				dumpStats(fp, i->second.ASM.s, now, i->second.sttl, true);
+			}
+
+			fprintf(fp, ">\n");
+
+			for (WebSites::const_iterator j = i->second.webSites.begin(); j != i->second.webSites.end(); j++) {
+				const char *typnam = j->first == T_WEBSITE_GENERIC ? "generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
+				fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n", typnam, j->second.c_str());
+			}
+
+			if (i->second.SSM.s.valid) {
+				fprintf(fp, "\t\t\t\t<ssm");
+				dumpStats(fp, i->second.SSM.s, now, i->second.sttl, true);
+				fprintf(fp, " />\n");
+			}
+
+			fprintf(fp, "\t\t\t</source>\n");
 		}
 
 		fprintf(fp, "\t\t</sources>\n");
@@ -1478,6 +1527,10 @@ void dumpBigBwStats(int) {
 	uint64_t diff = (get_timestamp() - lastDumpBwTS) / 1000;
 	fprintf(stdout, "BW Usage for %llu secs: Received %llu bytes (%.2lf Kb/s) Sent %llu bytes (%.2lf Kb/s)\n", diff,
 			bigBytesReceived, bigBytesReceived * 8 / (1000. * diff), bigBytesSent, bigBytesSent * 8 / (1000. * diff));
+}
+
+void sendLeaveReport(int) {
+	send_report(LEAVE_REPORT);
 }
 
 int MulticastListen(int sock, address *grpaddr) {
