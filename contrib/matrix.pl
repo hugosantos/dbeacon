@@ -179,7 +179,10 @@ if (not $atthideinfo) {
 			print "<tr>";
 			print "<td align=\"right\" class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
 			print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
-			print "<td class=\"addr\">$a</td>";
+                        # Removing port number from id and link toward RIPE whois db
+		        my $ip = $a;
+		        $ip =~ s/\/\d+$//;
+		        print "<td class=\"addr\"><a href=\"http://www.ripe.net/whois?form_type=simple&full_query_string=&searchtext=$ip&do_search=Search\"> $ip</a></td>";
 			print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";
 
 			my $urls;
