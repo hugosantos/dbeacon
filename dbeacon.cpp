@@ -983,7 +983,7 @@ int build_nreport(uint8_t *buff, int maxlen) {
 		ptr += 1 + namelen;
 
 		*((uint32_t *)ptr) = htonl((uint32_t)i->second.lasttimestamp);
-		*((uint32_t *)(ptr + 4)) = htonl((uint32_t)((i->second.creation - now) / 1000));
+		*((uint32_t *)(ptr + 4)) = htonl((uint32_t)((now - i->second.creation) / 1000));
 		ptr[8] = i->second.lastttl;
 
 		uint32_t *stats = (uint32_t *)(ptr + 9);
