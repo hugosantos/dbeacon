@@ -142,8 +142,7 @@ sub full_url0 {
 }
 
 sub full_url {
-	if (not defined($type))
-	{
+	if (not defined($type)) {
 		$type = "ttl";
 	}
 	return "$url?dst=$dst&amp;src=$src&amp;type=$type";
@@ -200,7 +199,7 @@ sub make_history_link {
 	my ($dst, $src, $type, $txt, $class) = @_;
 
 	if ($history_enabled) {
-		print "<a class=\"$class\" href=\"" . make_history_url(build_name($dst), build_name($src), $type) . "\">$txt</a>";
+		print '<a class="', $class, '" href="', make_history_url(build_name($dst), build_name($src), $type) . '">', $txt, '</a>';
 	} else {
 		print $txt;
 	}
@@ -210,9 +209,9 @@ sub make_matrix_cell {
 	my ($dst, $src, $type, $txt, $class) = @_;
 
 	if (not defined($txt)) {
-		print "<td class=\"noinfo_$type\">-</td>";
+		print '<td class="noinfo_', $type, '">-</td>';
 	} else {
-		print "<td class=\"adjacent_$type\">";
+		print '<td class="adjacent_', $type, '">';
 		make_history_link($dst, $src, $type, $txt, $class);
 		print '</td>';
 	}
@@ -260,71 +259,71 @@ sub start_handler {
 	my $name;
 	my $value;
 
-	if ($tag eq "group") {
-		$sessiongroup = $atts{"addr"};
-		$ssm_sessiongroup = $atts{"ssmgroup"};
-	} elsif ($tag eq "beacon") {
-		$current_beacon = $atts{"addr"};
-		$current_source = "";
+	if ($tag eq 'group') {
+		$sessiongroup = $atts{'addr'};
+		$ssm_sessiongroup = $atts{'ssmgroup'};
+	} elsif ($tag eq 'beacon') {
+		$current_beacon = $atts{'addr'};
+		$current_source = '';
 
-		if ($atts{"addr"} ne "") {
-			if (defined($atts{"name"}) and defined($atts{"age"}) and ($atts{"age"} > 0)) {
+		if ($atts{'addr'} ne '') {
+			if (defined($atts{'name'}) and defined($atts{'age'}) and ($atts{'age'} > 0)) {
 				$g->add_vertex($current_beacon);
-				$g->set_vertex_attribute($current_beacon, "name", $atts{"name"});
-				$g->set_vertex_attribute($current_beacon, "contact", $atts{"contact"});
-				$g->set_vertex_attribute($current_beacon, "age", $atts{"age"});
-				if (defined($atts{"country"})) {
-					$g->set_vertex_attribute($current_beacon, "country", $atts{"country"});
+				$g->set_vertex_attribute($current_beacon, 'name', $atts{'name'});
+				$g->set_vertex_attribute($current_beacon, 'contact', $atts{'contact'});
+				$g->set_vertex_attribute($current_beacon, 'age', $atts{'age'});
+				if (defined($atts{'country'})) {
+					$g->set_vertex_attribute($current_beacon, 'country', $atts{'country'});
 				}
 			}
 		}
-	} elsif ($tag eq "asm") {
-		if ($current_source ne "") {
-			parse_stats($current_source, "", %atts);
+	} elsif ($tag eq 'asm') {
+		if ($current_source ne '') {
+			parse_stats($current_source, '', \%atts);
 		}
-	} elsif ($tag eq "ssm") {
-		if ($current_source ne "") {
-			parse_stats($current_source, "ssm_", %atts);
+	} elsif ($tag eq 'ssm') {
+		if ($current_source ne '') {
+			parse_stats($current_source, 'ssm_', \%atts);
 		}
-	} elsif ($tag eq "source") {
-		$current_source = $atts{"addr"};
+	} elsif ($tag eq 'source') {
+		$current_source = $atts{'addr'};
 
-		if (defined($atts{"name"}) and defined($atts{"addr"})) {
+		if (defined($atts{'name'}) and defined($atts{'addr'})) {
 			if (not $g->has_vertex($current_source)) {
 				$g->add_vertex($current_source);
 
-				$g->set_vertex_attribute($current_source, "name", $atts{"name"});
-				$g->set_vertex_attribute($current_source, "contact", $atts{"contact"});
+				$g->set_vertex_attribute($current_source, 'name', $atts{'name'});
+				$g->set_vertex_attribute($current_source, 'contact', $atts{'contact'});
 			}
 
-			if (not $g->has_vertex_attribute($current_source, "country") and defined($atts{"country"})) {
-				$g->set_vertex_attribute($current_source, "country", $atts{"country"});
+			if (not $g->has_vertex_attribute($current_source, 'country') and defined($atts{'country'})) {
+				$g->set_vertex_attribute($current_source, 'country', $atts{'country'});
 			}
 
 			$g->add_edge($current_source, $current_beacon);
 		}
-	} elsif ($tag eq "website") {
-		if ($atts{"type"} ne "" and $atts{"url"} ne "") {
-			if ($current_source ne "") {
-				$g->set_vertex_attribute($current_source, "url_" . $atts{"type"}, $atts{"url"});
+	} elsif ($tag eq 'website') {
+		if ($atts{'type'} ne '' and $atts{'url'} ne '') {
+			if ($current_source ne '') {
+				$g->set_vertex_attribute($current_source, 'url_' . $atts{'type'}, $atts{'url'});
 			} else {
-				$g->set_vertex_attribute($current_beacon, "url_" . $atts{"type"}, $atts{"url"});
+				$g->set_vertex_attribute($current_beacon, 'url_' . $atts{'type'}, $atts{'url'});
 			}
 		}
 	}
 }
 
 sub parse_stats {
-	my ($addr, $prefix, %atts) = @_;
+	my ($addr, $prefix, $atts) = @_;
 
-	if ($atts{"ttl"} ge 0) {
-		$g->set_edge_attribute($addr, $current_beacon, $prefix . "ttl", $atts{"ttl"});
-		$g->set_vertex_attribute($addr, "goodedge", 1);
+	if ($$atts{"ttl"} ge 0) {
+		$g->set_edge_attribute($addr, $current_beacon, $prefix . 'ttl', $$atts{'ttl'});
+		$g->set_vertex_attribute($addr, 'goodedge', 1);
 	}
 
 	foreach my $att ('loss', 'delay', 'jitter') {
-		if (defined($atts{$att})) {
-			$g->set_edge_attribute($addr, $current_beacon, "$prefix$att", $atts{$att});
+		if (defined($$atts{$att})) {
+			$g->set_edge_attribute($addr, $current_beacon, "$prefix$att", $$atts{$att});
 		}
 	}
 }
@@ -334,9 +333,9 @@ sub start_document {
 
 	start_base_document();
 
-	print "<h1 style=\"margin: 0\">$title</h1>\n";
+	print '<h1 style="margin: 0">', $title, '</h1>', "\n";
 
-	print "<p style=\"margin: 0\"><small>Current server time is " . localtime() ."$additionalinfo</small></p>\n";
+	print '<p style="margin: 0"><small>Current server time is ', localtime() . $additionalinfo, '</small></p>', "\n";
 }
 
 sub build_header {
@@ -383,34 +382,34 @@ sub build_header {
 		print '</p></form>';
 
 	} else {
-		print "<p><b>Current stats for</b> <code>$sessiongroup</code>";
+		print '<p><b>Current stats for</b> <code>', $sessiongroup, '</code>';
 		if ($ssm_sessiongroup) {
-			print " (SSM: <code>$ssm_sessiongroup</code>)";
+			print ' (SSM: <code>', $ssm_sessiongroup, '</code>)';
 		}
 
 		my $last_update_time = check_outdated_dump();
 		if ($last_update_time) {
 			print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
 		}
-		print "</p>";
+		print '</p>';
 	}
 
 	my $hideatt;
 
 	if ($atthideinfo) {
-		$hideatt = "hideinfo=1&amp;";
+		$hideatt = 'hideinfo=1&amp;';
 	}
 
 	my $whatatt = "what=$attwhat&amp;";
 
-	my @view = ("ttl", "loss", "delay", "jitter");
-	my @view_name = ("TTL", "Loss", "Delay", "Jitter");
-	my @view_type = ("hop count", "percentage", "ms", "ms");
+	my @view = ('ttl', 'loss', 'delay', 'jitter');
+	my @view_name = ('TTL', 'Loss', 'Delay', 'Jitter');
+	my @view_type = ('hop count', 'percentage', 'ms', 'ms');
 
 	my $view_len = scalar(@view);
 	my $i;
 
-	print "<p style=\"margin: 0\"><span style=\"float: left\"><b>View</b>&nbsp;<small>(";
+	print '<p style="margin: 0"><span style="float: left"><b>View</b>&nbsp;<small>(';
 	if (not defined($attname)){
 		$attname = "";
 	}
@@ -438,44 +437,45 @@ sub build_header {
 		print ", <a href=\"$url?$hideatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	}
 
-	print ")</small>:</span></p>";
+	print ')</small>:</span></p>';
 
 	print "<ul id=\"view\" style=\"float: left\">\n";
 	for ($i = 0; $i < $view_len; $i++) {
 		my $att = $view[$i];
 		my $attn = $view_name[$i];
-		print "<li>";
+		print '<li>';
 		if ($attname eq $att) {
-			print "<span class=\"viewitem\" id=\"currentview\">$attn</span>";
+			print '<span class="viewitem" id="currentview">', $attn, '</span>';
 		} else {
 			print "<a class=\"viewitem\" href=\"$url?$hideatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
 		}
-		print " <small>(" . $view_type[$i] . ")</small></li>\n";
+		print ' <small>(', $view_type[$i], ')</small></li>', "\n";
 	}
-	print "</ul>\n";
+	print '</ul>', "\n";
 
-	print "<p style=\"margin: 0; margin-bottom: 1em\">&nbsp;</p>";
+	print '<p style="margin: 0; margin-bottom: 1em">&nbsp;</p>';
 }
 
 sub end_document {
-	print "<hr />\n";
+	print '<hr />', "\n";
 
 	if ($debug) {
 		my $render_end = [gettimeofday];
 		my $diff = tv_interval $load_start, $render_end;
 
-		print "<p style=\"margin: 0\"><small>Took $diff seconds from load to end of render";
+		print '<p style="margin: 0"><small>Took ', "$diff", ' seconds from load to end of render';
 		if (defined($ended_parsing_dump)) {
 			my $dumpdiff = tv_interval $load_start, $ended_parsing_dump;
-			print " ($dumpdiff in parsing dump file)";
+			print ' (', "$dumpdiff", ' in parsing dump file)';
 		}
-		print ".</small></p>\n";
+		print '.</small></p>', "\n";
 	}
 
-	print "<p style=\"margin: 0\"><small>matrix.pl - a tool for dynamic viewing of $dbeacon information and history. by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>\n";
+	print '<p style="margin: 0"><small>matrix.pl - a tool for dynamic viewing of ', $dbeacon, ' information and history.';
+	print 'by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>', "\n";
 
-	print "</body>\n";
-	print "</html>\n";
+	print '</body>', "\n";
+	print '</html>', "\n";
 }
 
 sub make_ripe_search_url {
@@ -542,7 +542,7 @@ sub render_matrix {
 		} elsif (not $g->get_vertex_attribute($c, "goodedge")) {
 			push (@problematic, $c);
 		} else {
-			print "<td $what_td><b>S$i</b></td>";
+			print '<td ', $what_td, '><b>S', $i, '</b></td>';
 			$g->set_vertex_attribute($c, "id", $i);
 			$i++;
 
@@ -556,8 +556,8 @@ sub render_matrix {
 	foreach $a (@V) {
 		my $id = $g->get_vertex_attribute($a, "id");
 		if ($id >= 1 and scalar($g->in_edges($a)) > 0) {
-			print "<tr>";
-			print "<td align=\"right\" class=\"beacname\">" . beacon_name($a) . " <b>R$id</b></td>";
+			print '<tr>';
+			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $id, '</b></td>';
 			foreach $b (@V) {
 				if ($g->get_vertex_attribute($b, "id") >= 1) {
 					if ($b ne $a and $g->has_edge($b, $a)) {
@@ -582,11 +582,11 @@ sub render_matrix {
 							}
 
 							if (not defined($txt)) {
-								print "<td $what_td class=\"blackhole\">XX</td>";
+								print '<td ', $what_td, ' class="blackhole">XX</td>';
 							} else {
 								print "<td class=\"$cssclass\">";
 								make_history_link($b, $a, $whattype, $txt, "historyurl");
-								print "</td>";
+								print '</td>';
 							}
 						} else {
 							my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
