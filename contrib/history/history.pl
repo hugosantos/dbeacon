@@ -26,32 +26,20 @@ $|=1; # Do not bufferize STDOUT
 my $page = new CGI;
 my $url = $page->script_name();
 
-sub listgraph
-{
+my $dst = $page->param('dst');
+my $src = $page->param('src');
+my $type = $page->param('type');
 
-print $page->header;
-
-print "
-<html>
-<head>
-
-<meta http-equiv=\"refresh\" content=\"60\" />
-
-<style type=\"text/css\">
-body {
-	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 100%;
+sub full_url0 {
+	return "$url?dst=$dst&src=$src";
 }
 
-
-</style>
-</head>
-<body>
-<h1>IPv6 Multicast Beacon history</h1>
-";
+sub full_url {
+	return "$url?dst=$dst&src=$src&type=$type";
+}
 
 sub get_beacons {
-	my ($target, $isf) = @_;
+	my ($target, $isf, $start) = @_;
 
 	opendir (DIR, $target) or die "Failed to open directory $target\n";
 	my @res = ();
@@ -63,12 +51,14 @@ sub get_beacons {
 			my $final = "$target/$dircontent";
 			if ($isf) {
 				$dst =~ s/\.rrd$//;
+				my $simname = $dst;
+				$simname =~ s/^(.+)\..+\.(.+)$/$1/;
 				my $name = $dst;
 				$name =~ s/^(.+)\..+\.(.+)$/$1 ($2)/;
-				push (@res, [$name, $dst, $final]);
+				push (@res, [$name, $dst, "$start$dst", $final, $simname, $2 eq "ssm"]);
 			} else {
 				$dst =~ s/^(.+)\..+$/$1/;
-				push (@res, [$dst, $dircontent, $final]);
+				push (@res, [$dst, $dircontent, "$start$dircontent", $final]);
 			}
 		}
 	}
@@ -79,114 +69,125 @@ sub get_beacons {
 }
 
 sub get_dstbeacons {
-	return get_beacons($historydir, 0);
+	return get_beacons($historydir, 0, "$url?dst=");
 }
 
 sub get_srcbeacons {
 	my ($dst) = @_;
-	return get_beacons("$historydir/$dst", 1);
+	return get_beacons("$historydir/$dst", 1, "$url?dst=$dst&src=");
 }
 
-if (!$page->param('dst'))
-{
-	# List beacon receiving infos
+sub listgraph {
+	start_document();
 
-	print 'Select a receiver:<br><br>';
+	if (defined($dst)) {
+		print "To ";
 
-	opendir(DIR,$historydir) or die "trouble in opening the directory: $historydir $!\n";
-	foreach my $dircontent (readdir(DIR))
-	{
-		if (-d $historydir.'/'.$dircontent and $dircontent ne '.' and $dircontent ne '..')
-		{
-			print '<a href="'.$url.'?dst='.$dircontent.'">';
-			$dircontent =~ s/(.+)\.(.+)$/$1 ($2)/;
-			print "$dircontent</a><br>\n";
+		my @beacs = (["-- Initial Page --", "", "$url"], get_dstbeacons());
+
+		do_list_beacs("dstc", $dst, @beacs);
+
+		if (defined($src)) {
+			print "From ";
+			do_list_beacs("srcc", $src, get_srcbeacons($dst));
+
+			if (defined($type)) {
+				print "Type ";
+
+				my @types = (["TTL", "ttl", ""], ["Loss", "loss", ""], ["Delay", "delay", ""], ["Jitter", "jitter", ""]);
+
+				foreach my $type (@types) {
+					$type->[2] = full_url0() . '&type=' . $type->[1];
+				}
+
+				do_list_beacs("typec", $type, @types);
+			}
+		}
+
+		print "<br /><br />";
+	}
+
+	if (!defined($dst)) {
+		# List beacon receiving infos
+
+		print 'Select a receiver:';
+
+		my @beacs = get_dstbeacons();
+
+		print "<ul>\n";
+
+		foreach my $beac (@beacs) {
+			print '<li><a href="' . $beac->[2] . '">' . $beac->[0] . "</a></li>\n";
+		}
+
+		print "</ul>\n";
+
+	} elsif (!defined($src)) {
+		print 'Select a source:';
+
+		# List visible src for this beacon
+
+		my @beacs = get_srcbeacons($dst);
+
+		my $prev;
+
+		print "<ul>\n";
+
+		foreach my $beac (@beacs) {
+			if (not $beac->[5] and $prev ne "" and $prev ne $beac->[2]) {
+				print "</li>\n";
+			}
+
+			if ($beac->[5]) {
+				print ' / <a href="' . $beac->[2] . "\">SSM</a>";
+			} else {
+				print '<li><a href="' . $beac->[2] . '">' . $beac->[4] . "</a>";
+			}
+
+			$prev = $beac->[2];
+		}
+
+		print "</li>";
+
+		print "</ul>\n";
+
+	} elsif (!defined($type)) {
+		print "Click on a graphic for more detail<br /><br />\n";
+		print "<table>";
+
+		my $count = 0;
+
+		foreach my $type ("ttl", "loss", "delay", "jitter") {
+			if (($count % 2) == 0) {
+				print "<tr>";
+			}
+			print "<td>";
+			graphthumb($type);
+			print "</td>\n";
+			if (($count % 2) == 1) {
+				print "</tr>\n";
+			}
+			$count++;
+		}
+
+		print "</table>";
+	} else {
+		# Dst, src and type selected => Displaying all time range graphs
+		foreach my $age ('-1d','-1w','-1m','-1y') {
+			print "<img src=\"" . full_url() . "&age=$age&img=true\" /><br />";
 		}
 	}
-	close(DIR);
-}
-elsif (!$page->param('src'))
-{
-	print 'Select a source:<br><br>';
 
-	# List visible src for this beacon
-
-	opendir(DIR,$historydir.'/'.$page->param('dst')) or die "trouble in opening the directory: $historydir $!\n";
-	foreach my $dircontent (readdir(DIR))
-	{
-		if (-f $historydir.'/'.$page->param('dst').'/'.$dircontent and $dircontent and $dircontent ne '.' and $dircontent ne '..')
-		{
-			$dircontent =~ s/\.rrd$//;
-			print '<a href="'.$url.'?dst='.$page->param('dst').'&src='.$dircontent.'">';
-			$dircontent =~ s/(.+)\.(.+)\.(.+)$/$1 ($2)/;
-			print "$dircontent</a> $3<br>\n";
-		}
-	}
-	close(DIR);
-}
-elsif (!$page->param('type'))
-{
-	print "To ";
-	do_list_beacs("dstc", $page->param("dst"), get_dstbeacons());
-	print "From ";
-	do_list_beacs("srcc", $page->param("src"), get_srcbeacons($page->param("dst")));
-
-	print "<br /><br />";
-
-	print "Click on a graphic for more detail<br /><br />\n";
-	my $src = $page->param('src');
-	my $dst = $page->param('dst');
-	$src =~ s/^(.+)\..+\.(.+)$/$1/;
-	$dst =~ s/^(.+)\..+$/$1/;
-	print "<table>";
-	print "<tr>";
-	foreach my $type ("ttl", "loss") {
-		print "<td>";
-		graphthumb($type);
-		print "</td>";
-	}
-	print "</tr>";
-	print "<tr>";
-	foreach my $type ("delay", "jitter") {
-		print "<td>";
-		graphthumb($type);
-		print "</td>";
-	}
-	print "</tr>";
-}
-else
-{
-	print "To ";
-	do_list_beacs("dstc", $page->param("dst"), get_dstbeacons());
-	print "From ";
-	do_list_beacs("srcc", $page->param("src"), get_srcbeacons($page->param("dst")));
-	print "Type ";
-	do_list_beacs("typec", $page->param("type"), (["TTL", "ttl"], ["Loss", "loss"], ["Delay", "delay"], ["Jitter", "jitter"]));
-
-	print "<br /><br />";
-
-	# Dst, src and type selected => Displaying all time range graphs
-	foreach my $age ('-1d','-1w','-1m','-1y')
-	{
-		print '<img src="'.$url.'?dst='.$page->param('dst').'&src='.$page->param('src').'&type='.$page->param('type').'&age='.$age.'&img=true"><br>';
-	}
-}
-
-
-
-print "
-</body>
-<html>
-";
+	end_document();
 }
 
 sub do_list_beacs {
 	my ($name, $def, @vals) = @_;
 
-	print "<select name=\"$name\">\n";
+	print "<select name=\"$name\" onChange=\"location = this.options[this.selectedIndex].value;\">\n";
 
 	foreach my $foo (@vals) {
-		print "<option value=\"" . $foo->[1] . "\"";
+		print "<option value=\"" . $foo->[2] . "\"";
 		if ($foo->[1] eq $def) {
 			print " selected";
 		}
@@ -199,27 +200,20 @@ sub do_list_beacs {
 
 sub graphthumb {
 	my ($type) = shift @_;
-	print '<a href="'.$url.'?dst='.$page->param('dst').'&src='.$page->param('src').'&type='.$type.'">';
-	print '<img border="0" src="'.$url.'?dst='.$page->param('dst').'&src='.$page->param('src').'&type='.$type.'&img=true&thumb=true"></a><br>';
+	print "<a href=\"" . full_url0() . "&type=$type\">";
+	print "<img border=\"0\" src=\"" . full_url0() . "&type=$type&img=true&thumb=true\" /></a><br />";
 }
 
-sub graphgen
-{
-	my $age;
-	if ($page->param('age'))
-	{
+sub graphgen {
+	my $age = "-1d";
+	if (defined($page->param('age'))) {
 		$age = $page->param('age');
-	}
-	else
-	{
-		$age = '-1d';
 	}
 
 	my $title;
 	my $ytitle;
 	my $unit;
-	switch ($page->param('type'))
-	{
+	switch ($type) {
 		case "ttl"	{ $title='TTL'   ; $ytitle='Hops'; $unit='%3.0lf hops' }
 		case "loss"	{ $title='Loss'  ; $ytitle='% of packet loss'; $unit='%2.1lf %%' }
 		case "delay"	{ $title='Delay' ; $ytitle='Seconds'; $unit='%2.2lf %ss' }
@@ -228,20 +222,20 @@ sub graphgen
 	}
 
 	# Display only the name
-	my $src = $page->param('src');
-	my $dst = $page->param('dst');
+	my $msrc = $src;
+	my $mdst = $dst;
 
-	$src =~ s/^(.+)\..+\.(.+)$/$1/;
+	$msrc =~ s/^(.+)\..+\.(.+)$/$1/;
 	my $asmorssm = $2;
 	$asmorssm =~ s/([a-z])/\u$1/g; # Convert to uppercase
 
-	$dst =~ s/^(.+)\..+$/$1/;
+	$mdst =~ s/^(.+)\..+$/$1/;
 
 	# Escape ':' chars
-	my $rrdfile = $historydir.'/'.$page->param('dst').'/'.$page->param('src').'.rrd';
+	my $rrdfile = "$historydir/$dst/$src.rrd";
 	$rrdfile =~ s/:/\\:/g;
 
-	print $page->header(-type=>'image/png',-expires=>'+3s');
+	print $page->header(-type => 'image/png', -expires => '+3s');
 
 	my $width = 450;
 	my $height = 150;
@@ -251,18 +245,18 @@ sub graphgen
 		$height = 100;
 		$title .= " ($ytitle)";
 	} else {
-		$title.= " from $src to $dst ($asmorssm)";
+		$title.= " from $msrc to $mdst ($asmorssm)";
 	}
 
 	my @args = ('-',
 		'--imgformat', 'PNG',
-		'--start',$age,
-		'--width=' . $width,
-		'--height=' . $height,
-		'--title='.$title,
-		'DEF:Max='.$rrdfile.':'.$page->param('type').':MAX',
-		'DEF:Avg='.$rrdfile.':'.$page->param('type').':AVERAGE',
-		'DEF:Min='.$rrdfile.':'.$page->param('type').':MIN',
+		'--start', $age,
+		"--width=$width",
+		"--height=$height",
+		"--title=$title",
+		"DEF:Max=$rrdfile:$type:MAX",
+		"DEF:Avg=$rrdfile:$type:AVERAGE",
+		"DEF:Min=$rrdfile:$type:MIN",
 		'CDEF:nodata=Max,UN,INF,UNKN,IF',
 		'AREA:nodata#E0E0FD');
 
@@ -284,15 +278,39 @@ sub graphgen
 
 	if (!RRDs::graph(@args)) {
 		die(RRDs::error);
-  	}
+	}
 }
 
+sub start_document {
+	print $page->header;
 
-if ($page->param('dst') and $page->param('src') and $page->param('type') and $page->param('img'))
-{
-  graphgen();
+	print "<html>
+<head>
+
+<meta http-equiv=\"refresh\" content=\"60\" />
+
+<style type=\"text/css\">
+body {
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: 100%;
 }
-else
-{
-  listgraph();
+</style>
+</head>
+<body>
+<h1>IPv6 Multicast Beacon history</h1>\n";
 }
+
+sub end_document {
+	print "<hr />\n";
+
+	print "<small>history.pl - a history backend for dbeacon. by Sebastian Chaumontet and Hugo Santos</small>\n";
+
+	print "</body></html>";
+}
+
+if (defined($dst) and defined($src) and defined($type) and $page->param('img') eq "true") {
+	graphgen();
+} else {
+	listgraph();
+}
+
