@@ -6,7 +6,7 @@
 # Modifications by Hugo Santos
 
 # change this filename to your dump file
-my $dump_file = "/home/hugo/work/mcast/dbeacon.old/dump.xml";
+my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
 
 # Program code follows
 
@@ -190,7 +190,7 @@ foreach $a (@V) {
 	my $id = $g->get_vertex_attribute($a, "id");
 	if ($id >= 1) {
 		print "<tr>";
-		print "<td class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
+		print "<td align=\"right\" class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
 		foreach $b (@V) {
 			if ($g->get_vertex_attribute($b, "id") >= 1) {
 				if ($b ne $a and $g->has_edge($b, $a)) {
@@ -236,7 +236,7 @@ if (not $atthideinfo) {
 		my $id = $g->get_vertex_attribute($a, "id");
 		if ($id >= 1) {
 			print "<tr>";
-			print "<td class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
+			print "<td align=\"right\" class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
 			print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
 			print "<td class=\"addr\">$a</td>";
 			print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";

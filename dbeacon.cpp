@@ -65,8 +65,13 @@ struct address : sockaddr_storage {
 
 	sockaddr_in *v4() { return (sockaddr_in *)this; }
 	sockaddr_in6 *v6() { return (sockaddr_in6 *)this; }
+	const sockaddr_in *v4() const { return (const sockaddr_in *)this; }
+	const sockaddr_in6 *v6() const { return (const sockaddr_in6 *)this; }
 
 	static int family(const char *);
+
+	int optlevel() const;
+	int sockaddr_len() const;
 
 	bool parse(const char *);
 
@@ -257,13 +262,21 @@ static uint64_t get_timestamp();
 static beaconSource &getSource(const beaconSourceAddr &baddr, const char *name, uint64_t now);
 static void removeSource(const beaconSourceAddr &baddr, bool);
 
-static int SetupSocket(address *, bool, bool, bool);
-static int MulticastListen(int, address *);
+static int SetupSocket(const address &, bool, bool, bool);
+static int MulticastListen(int, const address &);
 static int SSMJoin(int, const address *);
 static int SSMLeave(int, const address *);
 
 address::address() {
 	memset(this, 0, sizeof(*this));
+}
+
+int address::optlevel() const {
+	return ss_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
+}
+
+int address::sockaddr_len() const {
+	return ss_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
 }
 
 int address::family(const char *addr) {
@@ -313,17 +326,17 @@ bool address::parse(const char *str) {
 
 bool address::is_multicast() const {
 	if (ss_family == AF_INET6)
-		return IN6_IS_ADDR_MULTICAST(&((sockaddr_in6 *)this)->sin6_addr);
+		return IN6_IS_ADDR_MULTICAST(&v6()->sin6_addr);
 	else if (ss_family == AF_INET)
-		return IN_CLASSD(&((sockaddr_in *)this)->sin_addr.s_addr);
+		return IN_CLASSD(&v4()->sin_addr.s_addr);
 	return false;
 }
 
 bool address::is_unspecified() const {
 	if (ss_family == AF_INET6)
-		return IN6_IS_ADDR_UNSPECIFIED(&((sockaddr_in6 *)this)->sin6_addr);
+		return IN6_IS_ADDR_UNSPECIFIED(&v6()->sin6_addr);
 	else if (ss_family == AF_INET)
-		return ((sockaddr_in *)this)->sin_addr.s_addr == 0;
+		return v4()->sin_addr.s_addr == 0;
 	return true;
 }
 
@@ -331,13 +344,11 @@ void address::print(char *str, size_t len) const {
 	uint16_t port;
 
 	if (ss_family == AF_INET6) {
-		struct sockaddr_in6 *sin6src = (struct sockaddr_in6 *)this;
-		inet_ntop(AF_INET6, &sin6src->sin6_addr, str, len);
-		port = ntohs(sin6src->sin6_port);
+		inet_ntop(AF_INET6, &v6()->sin6_addr, str, len);
+		port = ntohs(v6()->sin6_port);
 	} else if (ss_family == AF_INET) {
-		struct sockaddr_in *sinsrc = (struct sockaddr_in *)this;
-		inet_ntop(AF_INET, &sinsrc->sin_addr, str, len);
-		port = ntohs(sinsrc->sin_port);
+		inet_ntop(AF_INET, &v4()->sin_addr, str, len);
+		port = ntohs(v4()->sin_port);
 	} else {
 		return;
 	}
@@ -349,9 +360,9 @@ bool address::is_equal(const address &a) const {
 	if (ss_family != a.ss_family)
 		return false;
 	if (ss_family == AF_INET6)
-		return memcmp(&((sockaddr_in6 *)this)->sin6_addr, &((sockaddr_in6 *)&a)->sin6_addr, sizeof(in6_addr)) == 0;
+		return memcmp(&v6()->sin6_addr, &a.v6()->sin6_addr, sizeof(in6_addr)) == 0;
 	else if (ss_family == AF_INET)
-		return ((sockaddr_in *)this)->sin_addr.s_addr == ((sockaddr_in *)&a)->sin_addr.s_addr;
+		return v4()->sin_addr.s_addr == a.v4()->sin_addr.s_addr;
 	return false;
 }
 
@@ -534,7 +545,7 @@ int main(int argc, char **argv) {
 	address local;
 	local.ss_family = probeAddr.ss_family;
 
-	mcastSock = SetupSocket(&local, false, false, false);
+	mcastSock = SetupSocket(local, false, false, false);
 	if (mcastSock < 0)
 		return -1;
 
@@ -553,7 +564,7 @@ int main(int argc, char **argv) {
 	}
 
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
-		int sock = SetupSocket(&i->first, true, i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
+		int sock = SetupSocket(i->first, true, i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
 		mcastSocks.push_back(make_pair(sock, i->second));
@@ -1304,14 +1315,14 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 			break;
 
 		if (i->first.ss_family == AF_INET6) {
-			sockaddr_in6 *addr = (sockaddr_in6 *)&i->first;
+			const sockaddr_in6 *addr = i->first.v6();
 
 			memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
 			*((uint16_t *)(buff + ptr + 16)) = addr->sin6_port;
 
 			ptr += 18;
 		} else {
-			sockaddr_in *addr = (sockaddr_in *)&i->first;
+			const sockaddr_in *addr = i->first.v4();
 
 			memcpy(buff + ptr, &addr->sin_addr, sizeof(in_addr));
 			*((uint16_t *)(buff + ptr + 4)) = addr->sin_port;
@@ -1353,7 +1364,7 @@ int send_report(int type) {
 		}
 
 		int res;
-		if ((res = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, sizeof(struct sockaddr_in6))) < 0) {
+		if ((res = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, to->sockaddr_len())) < 0) {
 			cerr << "Failed to send report to " << tmp << ": " << strerror(errno) << endl;
 		} else {
 			bytesSent += res;
@@ -1567,14 +1578,14 @@ void sendLeaveReport(int) {
 	exit(0);
 }
 
-int MulticastListen(int sock, address *grpaddr) {
+int MulticastListen(int sock, const address &grpaddr) {
 	struct group_req grp;
 
 	memset(&grp, 0, sizeof(grp));
 	grp.gr_interface = mcastInterface;
-	grp.gr_group = *grpaddr;
+	grp.gr_group = grpaddr;
 
-	return setsockopt(sock, grpaddr->ss_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP, MCAST_JOIN_GROUP, &grp, sizeof(grp));
+	return setsockopt(sock, grpaddr.optlevel(), MCAST_JOIN_GROUP, &grp, sizeof(grp));
 }
 
 static int SSMJoinLeave(int sock, int type, const address *srcaddr) {
@@ -1586,7 +1597,7 @@ static int SSMJoinLeave(int sock, int type, const address *srcaddr) {
 	req.gsr_group = ssmProbeAddr;
 	req.gsr_source = *srcaddr;
 
-	return setsockopt(sock, IPPROTO_IPV6, type, &req, sizeof(req));
+	return setsockopt(sock, srcaddr->optlevel(), type, &req, sizeof(req));
 }
 
 int SSMJoin(int sock, const address *srcaddr) {
@@ -1597,15 +1608,15 @@ int SSMLeave(int sock, const address *srcaddr) {
 	return SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, srcaddr);
 }
 
-int SetupSocket(address *addr, bool shouldbind, bool needTSHL, bool ssm) {
+int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
 	if (verbose) {
 		char tmp[64];
-		addr->print(tmp, sizeof(tmp));
+		addr.print(tmp, sizeof(tmp));
 		fprintf(stderr, "SetupSocket(%s)\n", tmp);
 	}
 
-	int af_family = addr->ss_family;
-	int level = af_family == AF_INET6 ? IPPROTO_IPV6 : IPPROTO_IP;
+	int af_family = addr.ss_family;
+	int level = addr.optlevel();
 
 	int sock = socket(af_family, SOCK_DGRAM, 0);
 	if (sock < 0) {
@@ -1621,7 +1632,7 @@ int SetupSocket(address *addr, bool shouldbind, bool needTSHL, bool ssm) {
 	}
 
 	if (shouldbind) {
-		if (bind(sock, (sockaddr *)addr, af_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in)) != 0) {
+		if (bind(sock, (const sockaddr *)&addr, addr.sockaddr_len()) != 0) {
 			perror("Failed to bind multicast socket");
 			return -1;
 		}
@@ -1653,7 +1664,7 @@ int SetupSocket(address *addr, bool shouldbind, bool needTSHL, bool ssm) {
 		return -1;
 	}
 
-	if (!ssm && addr->is_multicast()) {
+	if (!ssm && addr.is_multicast()) {
 		if (MulticastListen(sock, addr) != 0) {
 			perror("Failed to join multicast group");
 			return -1;
