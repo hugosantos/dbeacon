@@ -65,7 +65,7 @@ using namespace std;
 #define NEW_BEAC_PCOUNT	10
 #define NEW_BEAC_VER	1
 
-static const char *versionInfo = "0.2 ($Rev$ $Date$)";
+static const char *versionInfo = "0.2 ($Rev$)";
 
 static const char *defaultIPv6SSMChannel = "ff3e::beac";
 static const char *defaultIPv4SSMChannel = "232.2.3.2";
