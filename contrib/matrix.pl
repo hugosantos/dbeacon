@@ -177,7 +177,15 @@ if (not $atthideinfo) {
 		my $id = $g->get_vertex_attribute($a, "id");
 		if ($id >= 1) {
 			print "<tr>";
-			print "<td align=\"right\" class=\"beacname\">" . $g->get_vertex_attribute($a, "name") . " <b>R$id</b></td>";
+			print "<td align=\"right\" class=\"beacname\">";
+			if ($g->has_vertex_attribute($a, "url_generic")) {
+				print "<a class=\"beacon_url\" href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">";
+			}
+			print $g->get_vertex_attribute($a, "name");
+			if ($g->has_vertex_attribute($a, "url_generic")) {
+				print "</a>";
+			}
+			print " <b>R$id</b></td>";
 			print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
                         # Removing port number from id and link toward RIPE whois db
 		        my $ip = $a;
@@ -186,9 +194,6 @@ if (not $atthideinfo) {
 			print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";
 
 			my $urls;
-			if ($g->has_vertex_attribute($a, "url_generic")) {
-				$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">W</a>";
-			}
 			if ($g->has_vertex_attribute($a, "url_lg")) {
 				$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_lg") . "\">L</a>";
 			}
