@@ -319,7 +319,7 @@ body {
 sub end_document {
 	print "<hr />\n";
 
-	print "<small>history.pl - a history backend for dbeacon. by Sebastian Chaumontet and Hugo Santos</small>\n";
+	print "<small>history.pl - a history backend for dbeacon. by Sebastien Chaumontet and Hugo Santos</small>\n";
 
 	print "</body></html>";
 }
