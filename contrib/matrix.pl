@@ -42,6 +42,9 @@ print "<html>\n";
 
 print "
 <head>
+
+<meta http-equiv=\"refresh\" content=\"60\" />
+
 <style type=\"text/css\">
 body {
 	font-family: Verdana, Arial, Helvetica, sans-serif;
@@ -92,6 +95,12 @@ table#beacs td.addr, table#beacs td.admincontact {
 ";
 
 print "<body>\n";
+
+print "<h1>IPv6 Multicast Beacon</h1>\n";
+
+my $now = localtime();
+
+print "<h4>Current Server time is $now</h4>\n";
 
 my $url = $page->script_name();
 
@@ -163,7 +172,7 @@ if (scalar(@problematic) ne 0) {
 
 print "<br /><br />\n";
 print "<table cellspacing=\"0\" cellpadding=\"0\" id=\"beacs\">";
-print "<tr><th>Beacon Name</th><th>Address</th><th>Admin Contact</th><th>Age</th></tr>\n";
+print "<tr><th>Beacon Name</th><th>Source Address/Port</th><th>Admin Contact</th><th>Age</th></tr>\n";
 
 foreach $a (@V) {
 	my $addr = $g->get_vertex_attribute($a, "addr");
