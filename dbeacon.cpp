@@ -53,6 +53,8 @@ static fd_set readSet;
 static int verbose = 0;
 static bool newProtocol = false;
 
+static uint64_t startTime = 0;
+
 static string dumpFile = "dump.xml";
 
 enum content_type {
@@ -431,7 +433,7 @@ int main(int argc, char **argv) {
 
 	signal(SIGUSR1, dumpBigBwStats);
 
-	lastDumpBwTS = get_timestamp();
+	startTime = lastDumpBwTS = get_timestamp();
 
 	while (1) {
 		fd_set readset;
@@ -1308,13 +1310,13 @@ void do_dump() {
 
 	fprintf(fp, "<beacons>\n");
 
+	uint64_t now = get_timestamp();
 
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
 		inet_ntop(AF_INET6, &beaconUnicastAddr.sin6_addr, tmp, sizeof(tmp));
-		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s\">\n", (newProtocol ? beaconName : probeName), sessionName, tmp);
+		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s\" age=\"%llu\">\n", (newProtocol ? beaconName : probeName),
+						sessionName, tmp, (now - startTime) / 1000);
 		fprintf(fp, "\t\t<sources>\n");
-
-		uint64_t now = get_timestamp();
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
 			if (i->second.hasstats && i->second.identified) {
@@ -1323,7 +1325,7 @@ void do_dump() {
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
-				fprintf(fp, " address=\"%s\"", tmp);
+				fprintf(fp, " addr=\"%s\"", tmp);
 				fprintf(fp, " ttl=\"%i\"\n", i->second.lastttl);
 				fprintf(fp, "\t\t\t\tage=\"%llu\"", (now - i->second.creation) / 1000);
 				fprintf(fp, " loss=\"%.1f\"", i->second.avgloss);
@@ -1352,6 +1354,7 @@ void do_dump() {
 			}
 			inet_ntop(AF_INET6, &i->first.first, tmp, sizeof(tmp));
 			fprintf(fp, " addr=\"%s\"", tmp);
+			fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 			fprintf(fp, ">\n");
 			fprintf(fp, "\t\t<sources>\n");
 
