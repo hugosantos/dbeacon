@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
+#include <sys/signal.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <net/if.h>
@@ -170,12 +171,14 @@ static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 
 static void do_dump();
 static void do_bw_dump(bool);
+static void dumpBigBwStats(int);
 
 static uint32_t bytesReceived = 0;
 static uint32_t bytesSent = 0;
 
 static uint64_t bigBytesReceived = 0;
 static uint64_t bigBytesSent = 0;
+static uint64_t lastDumpBwTS = 0;
 
 static uint64_t get_timestamp();
 
@@ -306,10 +309,10 @@ int main(int argc, char **argv) {
 				mcastListen.push_back(make_pair(addr, JREPORT));
 			}
 			redist.push_back(addr);
-		} else if (res == 'd') {
+		} else if (res == 'd' || res == 'D') {
 			dump = true;
-		} else if (res == 'D') {
-			dumpFile = optarg;
+			if (res == 'D')
+				dumpFile = optarg;
 		} else if (res == 'l' || res == 'L') {
 			struct sockaddr_in6 addr;
 			if (!parse_addr_port(optarg, &addr)) {
@@ -405,6 +408,10 @@ int main(int argc, char **argv) {
 	if (newProtocol)
 		send_report(false);
 
+	signal(SIGUSR1, dumpBigBwStats);
+
+	lastDumpBwTS = get_timestamp();
+
 	while (1) {
 		fd_set readset;
 		struct timeval eventm;
@@ -415,6 +422,8 @@ int main(int argc, char **argv) {
 
 		res = select(largestSock + 1, &readset, 0, 0, &eventm);
 		if (res < 0) {
+			if (errno == EINTR)
+				continue;
 			perror("Select failed");
 			return -1;
 		} else if (res == 0) {
@@ -763,8 +772,10 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 		}
 	} else if (buff[3] == 2) {
 		int plen = 4;
-		beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts);
 		uint8_t *ptr = buff + 4;
+
+		beaconSource &src = getSource(from->sin6_addr, ntohs(from->sin6_port), 0, recvdts);
+
 		while (plen < len) {
 			if ((plen + 18 + 2) > len)
 				break;
@@ -774,7 +785,6 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 			int contactlen = ptr[19 + namelen];
 			if ((plen + 18 + 2 + namelen + contactlen) > len)
 				break;
-
 			in6_addr addr;
 			memcpy(&addr, ptr, sizeof(in6_addr));
 			beaconExternalStats &stats = src.getExternal(addr, ntohs(*((uint16_t *)(ptr + 16))), recvdts);
@@ -783,8 +793,8 @@ void handle_nmsg(sockaddr_in6 *from, uint64_t recvdts, int ttl, uint8_t *buff, i
 			stats.contact = string((char *)ptr + 20 + namelen, contactlen);
 			stats.identified = true;
 
-			plen += 20 + namelen + contactlen;
-			ptr = buff + 4 + plen;
+			plen += 18 + 2 + namelen + contactlen;
+			ptr += 18 + 2 + namelen + contactlen;
 		}
 	}
 }
@@ -1126,7 +1136,9 @@ int build_nmapreport(uint8_t *buff, int maxlen) {
 		if (!i->second.identified)
 			continue;
 
-		int plen = 18 + 2 + i->second.name.size() + i->second.adminContact.size();
+		int namelen = i->second.name.size();
+		int contactlen = i->second.adminContact.size();
+		int plen = 18 + 2 + namelen + contactlen;
 
 		if ((len + plen) > maxlen)
 			return -1;
@@ -1134,10 +1146,10 @@ int build_nmapreport(uint8_t *buff, int maxlen) {
 		memcpy(ptr, &i->first.first, sizeof(in6_addr));
 		*((uint16_t *)(ptr + 16)) = htons(i->first.second);
 
-		ptr[18] = i->second.name.size();
-		memcpy(ptr + 19, i->second.name.c_str(), ptr[18]);
-		ptr[19 + ptr[18]] = i->second.adminContact.size();
-		memcpy(ptr + 20 + ptr[18], i->second.adminContact.c_str(), ptr[19 + ptr[18]]);
+		ptr[18] = namelen;
+		memcpy(ptr + 19, i->second.name.c_str(), namelen);
+		ptr[19 + namelen] = contactlen;
+		memcpy(ptr + 20 + namelen, i->second.adminContact.c_str(), contactlen);
 
 		ptr += plen;
 		len += plen;
@@ -1287,8 +1299,8 @@ void do_dump() {
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 				fprintf(fp, " address=\"%s\"", tmp);
-				fprintf(fp, " ttl=\"%i\"", i->second.lastttl);
-				fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
+				fprintf(fp, " ttl=\"%i\"\n", i->second.lastttl);
+				fprintf(fp, "\t\t\t\tage=\"%llu\"", (now - i->second.creation) / 1000);
 				fprintf(fp, " loss=\"%.1f\"", i->second.avgloss);
 				fprintf(fp, " delay=\"%.3f\"", i->second.avgdelay);
 				fprintf(fp, " jitter=\"%.3f\"", i->second.avgjitter);
@@ -1327,8 +1339,8 @@ void do_dump() {
 				}
 				inet_ntop(AF_INET6, &j->first.first, tmp, sizeof(tmp));
 				fprintf(fp, " addr=\"%s\"", tmp);
-				fprintf(fp, " ttl=\"%u\"", j->second.ttl);
-				fprintf(fp, " age=\"%u\"", j->second.age);
+				fprintf(fp, " ttl=\"%u\"\n", j->second.ttl);
+				fprintf(fp, "\t\t\t\tage=\"%u\"", j->second.age);
 				fprintf(fp, " loss=\"%.1f\"", j->second.avgloss);
 				fprintf(fp, " delay=\"%.3f\"", j->second.avgdelay);
 				fprintf(fp, " jitter=\"%.3f\"", j->second.avgjitter);
@@ -1374,6 +1386,7 @@ void do_bw_dump(bool big) {
 				bigBytesReceived, bigBytesReceived * 8 / (1000. * 600), bigBytesSent, bigBytesSent * 8 / (1000. * 600));
 		bigBytesReceived = 0;
 		bigBytesSent = 0;
+		lastDumpBwTS = get_timestamp();
 	} else {
 		fprintf(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)\n",
 				bytesReceived, bytesReceived * 8 / 10000., bytesSent, bytesSent * 8 / 10000.);
@@ -1382,6 +1395,12 @@ void do_bw_dump(bool big) {
 		bytesReceived = 0;
 		bytesSent = 0;
 	}
+}
+
+void dumpBigBwStats(int) {
+	uint64_t diff = (get_timestamp() - lastDumpBwTS) / 1000;
+	fprintf(stdout, "BW Usage for %llu secs: Received %llu bytes (%.2lf Kb/s) Sent %llu bytes (%.2lf Kb/s)\n", diff,
+			bigBytesReceived, bigBytesReceived * 8 / (1000. * diff), bigBytesSent, bigBytesSent * 8 / (1000. * diff));
 }
 
 int IPv6MulticastListen(int sock, struct in6_addr *grpaddr) {
