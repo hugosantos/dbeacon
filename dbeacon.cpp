@@ -66,7 +66,7 @@ static const char *defaultDumpFile = "dump.xml";
 
 static const int timeOutI = 6;
 static const int reportI = 2;
-static const int ssmReportI = 3;
+static const int ssmReportI = 4;
 static const int mapReportI = 6;
 static const int websiteReportI = 24;
 
@@ -130,6 +130,8 @@ static vector<pair<int, content_type> > mcastSocks;
 
 static vector<address> redist;
 
+static vector<address> ssmBootstrap;
+
 static uint32_t bytesReceived = 0;
 static uint32_t bytesSent = 0;
 
@@ -183,6 +185,7 @@ void usage() {
 	fprintf(stderr, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
 	fprintf(stderr, "  -r REDIST_ADDR[/PORT]  Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
+	fprintf(stderr, "  -B ADDR                Bootstraps by joining the specified address\n");
 	fprintf(stderr, "  -s ADDR                Bind to local address\n");
 	fprintf(stderr, "  -d [FILE]              Dump periodic reports to dump.xml or specified file\n");
 	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
@@ -360,6 +363,13 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	if (ssmMcastSock) {
+		uint64_t now = get_timestamp();
+		for (vector<address>::const_iterator i = ssmBootstrap.begin(); i != ssmBootstrap.end(); i++) {
+			getSource(*i, 0, now, false);
+		}
+	}
+
 	signal(SIGUSR1, dumpBigBwStats);
 	signal(SIGINT, sendLeaveReport);
 
@@ -435,7 +445,7 @@ void show_version() {
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::Os:d::I:l:L:W:C:vUhf46V");
+		res = getopt(argc, argv, "n:a:i:b:r:S::OB:s:d::I:l:L:W:C:vUhf46V");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -465,6 +475,13 @@ int parse_arguments(int argc, char **argv) {
 		} else if (res == 'O') {
 			useSSM = true;
 			listenForSSM = false;
+		} else if (res == 'B') {
+			address addr;
+			if (!addr.parse(optarg)) {
+				fprintf(stderr, "Bad address format.\n");
+				return -1;
+			}
+			ssmBootstrap.push_back(addr);
 		} else if (res == 's') {
 			if (!beaconUnicastAddr.parse(optarg, false, false)) {
 				fprintf(stderr, "Bad address format.\n");
@@ -961,7 +978,7 @@ int send_ssm_probe() {
 int send_report(int type) {
 	int len;
 
-	len = build_report(buffer, bufferLen, type == SSM_REPORT ? STATS_REPORT : type, type != SSM_REPORT);
+	len = build_report(buffer, bufferLen, type == SSM_REPORT ? STATS_REPORT : type, true);
 	if (len < 0)
 		return len;
 
