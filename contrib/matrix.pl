@@ -88,11 +88,11 @@ table#adj td.adjacent {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.blackhole, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
+table#adj td.blackhole, table#adj td.noinfo, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
 	border-right: 0.2em solid white;
 }
 
-table#adjname td.addr, table#adjname td.admincontact, table#adjname td.age {
+table#adjname td.addr, table#adjname td.admincontact, table#adjname td.age, table#adjname td.urls {
 	background-color: #eeeeee;
 	border-right: 0.2em solid white;
 }
@@ -215,7 +215,7 @@ print "<br />\n";
 
 print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
-print "<tr><td></td><td><b>Age</b></td><td><b>Source Address/Port</b></td><td><b>Admin Contact</b></td></tr>";
+print "<tr><td></td><td><b>Age</b></td><td><b>Source Address/Port</b></td><td><b>Admin Contact</b></td><td><b>W</b></td></tr>";
 foreach $a (@V) {
 	my $id = $g->get_vertex_attribute($a, "id");
 	if ($id >= 1) {
@@ -231,7 +231,25 @@ foreach $a (@V) {
 		}
 		print "$name <b>R$id</b>";
 		print "</td>";
-		print "<td class=\"age\">$age</td><td class=\"addr\">$a</td><td class=\"admincontact\">$contact</td></tr>\n";
+		print "<td class=\"age\">$age</td><td class=\"addr\">$a</td><td class=\"admincontact\">$contact</td>";
+
+		my $urls;
+		if ($g->has_vertex_attribute($a, "url_generic")) {
+			$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">W</a>";
+		}
+		if ($g->has_vertex_attribute($a, "url_lg")) {
+			$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_lg") . "\">L</a>";
+		}
+		if ($g->has_vertex_attribute($a, "url_matrix")) {
+			$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_matrix") . "\">M</a>";
+		}
+
+		if ($urls eq "") {
+			$urls = "-";
+		}
+
+		print "<td class=\"urls\">$urls</td>";
+		print "</tr>\n";
 	}
 }
 print "</table>\n";
@@ -251,7 +269,6 @@ if (scalar(@warmingup) > 0) {
 		print "</li>\n";
 	}
 	print "</ul>\n";
-	print "<br />\n";
 }
 
 if (scalar(@problematic) ne 0) {
@@ -299,7 +316,7 @@ if (scalar(@problematic) ne 0) {
 }
 
 print "<p>If you wish to add a beacon to your site, you may use dbeacon with the following parameters:</p>\n";
-print "<p><code>./dbeacon -P -n NAME -b $sessiongroup";
+print "<p><code>./dbeacon -n NAME -b $sessiongroup";
 if ($ssm_sessiongroup) {
 	print " -S $ssm_sessiongroup";
 }
@@ -439,7 +456,8 @@ sub start_handler {
 
 		if ($fname ne "") {
 			$current_source = $faddr;
-			if ($g->add_vertex($faddr)) {
+			if (not $g->has_vertex($faddr)) {
+				$g->add_vertex($faddr);
 				$g->set_vertex_attribute($faddr, "name", $fname);
 				$g->set_vertex_attribute($faddr, "contact", $fadmin);
 			}
@@ -459,6 +477,10 @@ sub start_handler {
 			if ($fjitter ge 0) {
 				$g->set_edge_attribute($faddr, $current_beacon, "jitter", $fjitter);
 			}
+		}
+	} elsif ($tag eq "website") {
+		if ($atts{"type"} ne "" and $atts{"url"} ne "") {
+			$g->set_vertex_attribute($current_beacon, "url_" . $atts{"type"}, $atts{"url"});
 		}
 	}
 }
