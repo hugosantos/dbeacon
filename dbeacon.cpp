@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <libgen.h>
+#include <netdb.h>
 
 #include <map>
 #include <string>
@@ -65,7 +66,7 @@ using namespace std;
 #define NEW_BEAC_VER	1
 
 static const char *defaultSSMChannel = "ff3e::beac";
-static const int defaultPort = 10000;
+static const char *defaultPort = "10000";
 static const TTLType defaultTTL = 127;
 
 struct address : sockaddr_storage {
@@ -81,14 +82,16 @@ struct address : sockaddr_storage {
 	int optlevel() const;
 	int sockaddr_len() const;
 
-	bool parse(const char *, bool = true);
+	bool parse(const char *, bool multicast = true, bool addport = true);
 
 	bool is_multicast() const;
 	bool is_unspecified() const;
 
 	bool is_equal(const address &) const;
 
-	void print(char *, size_t) const;
+	void set(const sockaddr *);
+
+	void print(char *, size_t, bool port = true) const;
 };
 
 enum content_type {
@@ -220,6 +223,7 @@ static string beaconName;
 static int mcastInterface = 0;
 static string adminContact;
 static address probeAddr;
+static const char *probeAddrLiteral = 0;
 static address beaconUnicastAddr;
 static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
@@ -253,9 +257,10 @@ static uint64_t dumpBytesReceived = 0;
 static uint64_t dumpBytesSent = 0;
 static uint64_t lastDumpDumpBwTS = 0;
 
-bool dump = false;
-int dumpInterval = 5;
-const char *multicastInterface = 0;
+static bool dump = false;
+static int dumpInterval = 5;
+static const char *multicastInterface = 0;
+static int forceVersion = 0;
 
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
@@ -303,42 +308,42 @@ int address::family(const char *addr) {
 	return -1;
 }
 
-bool address::parse(const char *str, bool reqport) {
-	char tmp[64];
+bool address::parse(const char *str, bool multicast, bool addport) {
+	char tmp[128];
+	strncpy(tmp, str, sizeof(tmp));
 
-	int family = address::family(str);
-	if (family == -1)
-		return false;
-
-	ss_family = family;
-
-	strcpy(tmp, str);
-
-	if (reqport) {
-		int port = defaultPort;
-
-		char *p = strchr(tmp, '/');
-		if (p) {
-			char *end;
-			port = strtoul(p + 1, &end, 10);
-			if (*end)
-				return false;
-			*p = 0;
-		}
-
-		if (family == AF_INET6) {
-			v6()->sin6_port = htons(port);
-		} else if (family == AF_INET) {
-			v4()->sin_port = htons(port);
-		}
+	char *port = strchr(tmp, '/');
+	if (port) {
+		*port = 0;
+		port ++;
+	} else if (addport) {
+		port = (char *)defaultPort;
 	}
 
-	if (family == AF_INET6) {
-		if (inet_pton(family, tmp, &v6()->sin6_addr) <= 0)
-			return false;
-	} else if (family == AF_INET) {
-		if (inet_pton(family, tmp, &v4()->sin_addr) <= 0)
-			return false;
+	int cres;
+	addrinfo hint, *res;
+	memset(&hint, 0, sizeof(hint));
+
+	hint.ai_family = forceVersion == 4 ? AF_INET : forceVersion == 6 ? AF_INET6 : AF_UNSPEC;
+	hint.ai_socktype = SOCK_DGRAM;
+
+	if ((cres = getaddrinfo(tmp, port, &hint, &res)) != 0) {
+		fprintf(stderr, "getaddrinfo failed: %s\n", gai_strerror(cres));
+		return false;
+	}
+
+	for (; res; res = res->ai_next) {
+		set(res->ai_addr);
+		if (multicast) {
+			if (is_multicast())
+				break;
+		} else if (!is_unspecified())
+			break;
+	}
+
+	if (!res) {
+		fprintf(stderr, "No usable records for %s\n", tmp);
+		return false;
 	}
 
 	return true;
@@ -360,7 +365,7 @@ bool address::is_unspecified() const {
 	return true;
 }
 
-void address::print(char *str, size_t len) const {
+void address::print(char *str, size_t len, bool printport) const {
 	uint16_t port;
 
 	if (ss_family == AF_INET6) {
@@ -373,7 +378,8 @@ void address::print(char *str, size_t len) const {
 		return;
 	}
 
-	snprintf(str + strlen(str), len - strlen(str), "/%u", port);
+	if (printport)
+		snprintf(str + strlen(str), len - strlen(str), "/%u", port);
 }
 
 bool address::is_equal(const address &a) const {
@@ -384,6 +390,17 @@ bool address::is_equal(const address &a) const {
 	else if (ss_family == AF_INET)
 		return v4()->sin_addr.s_addr == a.v4()->sin_addr.s_addr;
 	return false;
+}
+
+void address::set(const sockaddr *sa) {
+	ss_family = sa->sa_family;
+	if (ss_family == AF_INET6) {
+		v6()->sin6_addr = ((const sockaddr_in6 *)sa)->sin6_addr;
+		v6()->sin6_port = ((const sockaddr_in6 *)sa)->sin6_port;
+	} else {
+		v4()->sin_addr = ((const sockaddr_in *)sa)->sin_addr;
+		v4()->sin_port = ((const sockaddr_in *)sa)->sin_port;
+	}
 }
 
 static inline double Rand() {
@@ -416,7 +433,9 @@ void usage() {
 	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
 	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
-	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename.\n");
+	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename\n");
+	fprintf(stderr, "  -4                     Force IPv4 usage\n");
+	fprintf(stderr, "  -6                     Force IPv6 usage\n");
 	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
 	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
 	fprintf(stderr, "\n");
@@ -464,8 +483,17 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (!probeAddr.is_unspecified()) {
+	if (probeAddrLiteral) {
+		if (!probeAddr.parse(probeAddrLiteral, true)) {
+			return -1;
+		}
+
 		probeAddr.print(sessionName, sizeof(sessionName));
+
+		if (!probeAddr.is_multicast()) {
+			fprintf(stderr, "Specified probe addr (%s) is not of a multicast group\n", sessionName);
+			return -1;
+		}
 
 		if (adminContact.empty()) {
 			fprintf(stderr, "No administration contact supplied.\n");
@@ -558,7 +586,9 @@ int main(int argc, char **argv) {
 
 	send_report(WEBSITE_REPORT_EVENT);
 
-	fprintf(stdout, "Local name is %s\n", beaconName.c_str());
+	beaconUnicastAddr.print(tmp, sizeof(tmp), false);
+
+	fprintf(stdout, "Local name is %s [Beacon group: %s, Local address: %s]\n", beaconName.c_str(), sessionName, tmp);
 
 	startTime = lastDumpBwTS = lastDumpDumpBwTS = get_timestamp();
 
@@ -596,7 +626,7 @@ int main(int argc, char **argv) {
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::s:dD:I:l:L:W:vUhf");
+		res = getopt(argc, argv, "n:a:i:b:r:S::s:dD:I:l:L:W:vUhf46");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -610,29 +640,20 @@ int parse_arguments(int argc, char **argv) {
 			}
 			adminContact = optarg;
 		} else if (res == 'b') {
-			if (!probeAddr.parse(optarg)) {
-				fprintf(stderr, "Invalid beacon addr.\n");
-				return -1;
-			}
-
-			if (!probeAddr.is_multicast()) {
-				fprintf(stderr, "Beacon group address is not a multicast address.\n");
-				return -1;
-			}
+			probeAddrLiteral = optarg;
 		} else if (res == 'r') {
 			address addr;
 			if (!addr.parse(optarg)) {
-				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
 			redist.push_back(addr);
 		} else if (res == 'S') {
-			if (!ssmProbeAddr.parse(optarg ? optarg : defaultSSMChannel) || !ssmProbeAddr.is_multicast()) {
+			if (!ssmProbeAddr.parse(optarg ? optarg : defaultSSMChannel, true)) {
 				fprintf(stderr, "Bad address format for SSM channel.\n");
 				return -1;
 			}
 		} else if (res == 's') {
-			if (!beaconUnicastAddr.parse(optarg, false)) {
+			if (!beaconUnicastAddr.parse(optarg, false, false)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
@@ -649,7 +670,7 @@ int parse_arguments(int argc, char **argv) {
 			}
 		} else if (res == 'l') {
 			address addr;
-			if (!addr.parse(optarg)) {
+			if (!addr.parse(optarg, false, true)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
@@ -675,6 +696,10 @@ int parse_arguments(int argc, char **argv) {
 			verbose++;
 		} else if (res == 'U') {
 			dumpBwReport = true;
+		} else if (res == '4') {
+			forceVersion = 4;
+		} else if (res == '6') {
+			forceVersion = 6;
 		} else if (res == -1) {
 			break;
 		}
