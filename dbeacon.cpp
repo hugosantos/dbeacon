@@ -321,7 +321,7 @@ static bool parse_addr_port(const char *str, sockaddr_storage *addr) {
 
 	memset(addr, 0, sizeof(sockaddr_storage));
 
-	if(af_family==AF_INET6) {
+	if (af_family == AF_INET6) {
 		sin6src->sin6_family = af_family;
 	} else if (af_family == AF_INET) {
 		sinsrc->sin_family = af_family;
@@ -332,9 +332,9 @@ static bool parse_addr_port(const char *str, sockaddr_storage *addr) {
 	char *p = strchr(tmp, '/');
 	if (p) {
 		char *end;
-		if(af_family==AF_INET6) {
-		sin6src->sin6_port = htons(strtoul(p + 1, &end, 10));
-		} else if(af_family == AF_INET) {
+		if (af_family == AF_INET6) {
+			sin6src->sin6_port = htons(strtoul(p + 1, &end, 10));
+		} else if (af_family == AF_INET) {
 			sinsrc->sin_port = htons(strtoul(p + 1, &end, 10));
 		}
 		if (*end)
@@ -344,7 +344,7 @@ static bool parse_addr_port(const char *str, sockaddr_storage *addr) {
 		return false;
 	}
 
-	if(af_family==AF_INET6) {
+	if (af_family == AF_INET6) {
 		if (inet_pton(af_family, tmp, &sin6src->sin6_addr) <= 0)
 			return false;
 	} else if (af_family == AF_INET) {
@@ -486,7 +486,7 @@ int main(int argc, char **argv) {
 
 	sockaddr_storage local;
 	memset(&local, 0, sizeof(local));
-	local.ss_family = AF_INET6;
+	local.ss_family = probeAddr.ss_family;
 
 	mcastSock = SetupSocket(&local, false, false);
 	if (mcastSock < 0)
