@@ -1246,6 +1246,8 @@ void beaconMcastState::refresh(uint32_t seq, uint64_t now) {
 	s.valid = false;
 }
 
+int64_t abs(int64_t foo) { return foo < 0 ? -foo : foo; }
+
 // logic adapted from java beacon
 
 void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t _now) {
