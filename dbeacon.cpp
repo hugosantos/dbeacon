@@ -34,28 +34,6 @@
 #define IP_RECVTTL 12
 #endif
 
-// not everyone have this
-#ifndef MCAST_JOIN_SOURCE_GROUP
-#define MCAST_JOIN_SOURCE_GROUP 46
-#define MCAST_LEAVE_SOURCE_GROUP 47
-
-#ifndef MCAST_JOIN_GROUP
-#define MCAST_JOIN_GROUP 42
-#endif
-
-struct group_req
-{
-       uint32_t gr_interface;
-       struct sockaddr_storage gr_group;
-};
-
-struct group_source_req {
-	uint32_t gsr_interface;
-	struct sockaddr_storage gsr_group;
-	struct sockaddr_storage gsr_source;
-};
-#endif
-
 using namespace std;
 
 #define NEW_BEAC_PCOUNT	10
@@ -1622,6 +1600,7 @@ void sendLeaveReport(int) {
 }
 
 int MulticastListen(int sock, const address &grpaddr) {
+#ifdef MCAST_JOIN_GROUP
 	struct group_req grp;
 
 	memset(&grp, 0, sizeof(grp));
@@ -1629,8 +1608,26 @@ int MulticastListen(int sock, const address &grpaddr) {
 	grp.gr_group = grpaddr;
 
 	return setsockopt(sock, grpaddr.optlevel(), MCAST_JOIN_GROUP, &grp, sizeof(grp));
+#else
+	if (grpaddr.ss_family == AF_INET6) {
+		ipv6_mreq mreq;
+		mreq.ipv6mr_interface = mcastInterface;
+		mreq.ipv6mr_multiaddr = grpaddr.v6()->sin6_addr;
+
+		return setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, &mreq, sizeof(mreq));
+	} else {
+		ip_mreq mreq;
+		memset(&mreq, 0, sizeof(mreq));
+		// Specifying the interface doesn't work, there's ip_mreqn in linux..
+		// but what about other OSs? -hugo
+		mreq.imr_multiaddr = grpaddr.v4()->sin_addr;
+
+		return setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+	}
+#endif
 }
 
+#ifdef MCAST_JOIN_SOURCE_GROUP
 static int SSMJoinLeave(int sock, int type, const address *srcaddr) {
 	struct group_source_req req;
 	memset(&req, 0, sizeof(req));
@@ -1650,6 +1647,20 @@ int SSMJoin(int sock, const address *srcaddr) {
 int SSMLeave(int sock, const address *srcaddr) {
 	return SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, srcaddr);
 }
+
+#else
+
+int SSMJoin(int sock, const address *srcaddr) {
+	errno = ENOPROTOOPT;
+	return -1;
+}
+
+int SSMLeave(int sock, const address *srcaddr) {
+	errno = ENOPROTOOPT;
+	return -1;
+}
+
+#endif
 
 int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
 	if (verbose) {
