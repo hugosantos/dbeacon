@@ -557,23 +557,23 @@ int main(int argc, char **argv) {
 
 	// connect the socket to probeAddr, so the source address can be determined
 
-	if (beaconUnicastAddr.is_unspecified()) {
-		socklen_t addrlen = probeAddr.sockaddr_len();
+	socklen_t addrlen = probeAddr.sockaddr_len();
 
+	if (beaconUnicastAddr.is_unspecified()) {
 		if (connect(mcastSock, (sockaddr *)&probeAddr, addrlen) != 0) {
 			perror("Failed to connect multicast socket");
 			return -1;
 		}
-
-		if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
-			perror("getsockname");
-			return -1;
-		}
 	} else {
-		if (bind(mcastSock, (sockaddr *)&beaconUnicastAddr, probeAddr.sockaddr_len()) != 0) {
+		if (bind(mcastSock, (sockaddr *)&beaconUnicastAddr, addrlen) != 0) {
 			perror("Failed to bind local socket");
 			return -1;
 		}
+	}
+
+	if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
+		perror("getsockname");
+		return -1;
 	}
 
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
