@@ -607,7 +607,7 @@ int main(int argc, char **argv) {
 	signal(SIGUSR1, dumpBigBwStats);
 	signal(SIGINT, sendLeaveReport);
 
-	signal(SIGCLD, waitForMe); // bloody fork, we dont want to wait for thee
+	signal(SIGCHLD, waitForMe); // bloody fork, we dont want to wait for thee
 
 	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
