@@ -129,26 +129,42 @@ sub listgraph {
 
 		my @beacs = get_srcbeacons($dst);
 
-		my $prev;
+		my %pairs;
 
-		print "<ul>\n";
+		# indexing is being done by name only, should be name+addr, needs fixing -hugo
 
 		foreach my $beac (@beacs) {
-			if (not $beac->[5] and $prev ne "" and $prev ne $beac->[2]) {
-				print "</li>\n";
+			if (not defined($pairs{$beac->[4]})) {
+				$pairs{$beac->[4]} = [undef, undef];
 			}
 
 			if ($beac->[5]) {
-				print ' / <a href="' . $beac->[2] . "\">SSM</a>";
+				$pairs{$beac->[4]}->[1] = $beac->[2];
 			} else {
-				print '<li><a href="' . $beac->[2] . '">' . $beac->[4] . "</a>";
+				$pairs{$beac->[4]}->[0] = $beac->[2];
 			}
-
-			$prev = $beac->[2];
 		}
 
-		print "</li>";
+		print "<ul>\n";
+		foreach my $key (keys %pairs) {
+			print "<li>";
 
+			if (defined($pairs{$key}->[0])) {
+				print '<a href="' . $pairs{$key}->[0] . '">';
+			}
+
+			print $key;
+
+			if (defined($pairs{$key}->[0])) {
+				print '</a>';
+			}
+
+			if (defined($pairs{$key}->[1])) {
+				print ' / <a href="' . $pairs{$key}->[1] . "\">SSM</a>";
+			}
+
+			print "</li>\n";
+		}
 		print "</ul>\n";
 
 	} elsif (!defined($type)) {
