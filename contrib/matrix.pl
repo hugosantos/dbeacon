@@ -456,6 +456,14 @@ sub build_header {
 
 sub end_document {
 	print "<hr />\n";
+
+	if ($debug) {
+		my $render_end = [gettimeofday];
+		my $diff = tv_interval $load_start, $render_end;
+
+		print "<p style=\"margin: 0\"><small>Took $diff seconds from load to end of render.</small></p>\n";
+	}
+
 	print "<p style=\"margin: 0\"><small>matrix.pl - a tool for dynamic viewing of $dbeacon information and history. by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>\n";
 
 	print "</body>\n";
@@ -739,18 +747,7 @@ sub render_matrix {
 		print " -a CONTACT</code></p>\n";
 	}
 
-	display_render_time();
-
 	end_document();
-}
-
-sub display_render_time {
-	if ($debug) {
-		my $render_end = [gettimeofday];
-		my $diff = tv_interval $load_start, $render_end;
-
-		print "<p>Took $diff seconds from load to end of render.</p>\n";
-	}
 }
 
 sub store_data {
