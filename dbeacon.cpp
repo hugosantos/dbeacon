@@ -53,6 +53,8 @@ struct address : sockaddr_storage {
 
 	static int family(const char *);
 
+	bool parse(const char *);
+
 	bool is_multicast() const;
 	bool is_unspecified() const;
 
@@ -71,6 +73,43 @@ int address::family(const char *addr) {
 	else if (strchr(addr, '.') != NULL)
 		return AF_INET;
 	return -1;
+}
+
+bool address::parse(const char *str) {
+	char tmp[64];
+
+	int family = address::family(str);
+	if (family == -1)
+		return false;
+
+	ss_family = family;
+
+	strcpy(tmp, str);
+
+	char *p = strchr(tmp, '/');
+	if (p) {
+		char *end;
+		if (family == AF_INET6) {
+			v6()->sin6_port = htons(strtoul(p + 1, &end, 10));
+		} else if (family == AF_INET) {
+			v4()->sin_port = htons(strtoul(p + 1, &end, 10));
+		}
+		if (*end)
+			return false;
+		*p = 0;
+	} else {
+		return false;
+	}
+
+	if (family == AF_INET6) {
+		if (inet_pton(family, tmp, &v6()->sin6_addr) <= 0)
+			return false;
+	} else if (family == AF_INET) {
+		if (inet_pton(family, tmp, &v4()->sin_addr) <= 0)
+			return false;
+	}
+
+	return true;
 }
 
 bool address::is_multicast() const {
@@ -335,43 +374,6 @@ void usage() {
 	fprintf(stderr, "\n");
 }
 
-static bool parse_addr_port(const char *str, address *addr) {
-	char tmp[64];
-
-	int family = address::family(str);
-	if (family == -1)
-		return false;
-
-	addr->ss_family = family;
-
-	strcpy(tmp, str);
-
-	char *p = strchr(tmp, '/');
-	if (p) {
-		char *end;
-		if (family == AF_INET6) {
-			addr->v6()->sin6_port = htons(strtoul(p + 1, &end, 10));
-		} else if (family == AF_INET) {
-			addr->v4()->sin_port = htons(strtoul(p + 1, &end, 10));
-		}
-		if (*end)
-			return false;
-		*p = 0;
-	} else {
-		return false;
-	}
-
-	if (family == AF_INET6) {
-		if (inet_pton(family, tmp, &addr->v6()->sin6_addr) <= 0)
-			return false;
-	} else if (family == AF_INET) {
-		if (inet_pton(family, tmp, &addr->v4()->sin_addr) <= 0)
-			return false;
-	}
-
-	return true;
-}
-
 int main(int argc, char **argv) {
 	int res;
 
@@ -408,7 +410,7 @@ int main(int argc, char **argv) {
 			}
 			adminContact = optarg;
 		} else if (res == 'b') {
-			if (!parse_addr_port(optarg, &probeAddr)) {
+			if (!probeAddr.parse(optarg)) {
 				fprintf(stderr, "Invalid beacon addr.\n");
 				return -1;
 			}
@@ -418,14 +420,14 @@ int main(int argc, char **argv) {
 				return -1;
 			}
 		} else if (res == 'r') {
-			struct address addr;
-			if (!parse_addr_port(optarg, &addr)) {
+			address addr;
+			if (!addr.parse(optarg)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
 			redist.push_back(addr);
 		} else if (res == 'S') {
-			if (!parse_addr_port(optarg, &ssmProbeAddr) || !ssmProbeAddr.is_multicast()) {
+			if (!ssmProbeAddr.parse(optarg) || !ssmProbeAddr.is_multicast()) {
 				fprintf(stderr, "Bad address format for SSM channel.\n");
 				return -1;
 			}
@@ -434,8 +436,8 @@ int main(int argc, char **argv) {
 			if (res == 'D')
 				dumpFile = optarg;
 		} else if (res == 'l' || res == 'L') {
-			struct address addr;
-			if (!parse_addr_port(optarg, &addr)) {
+			address addr;
+			if (!addr.parse(optarg)) {
 				fprintf(stderr, "Bad address format.\n");
 				return -1;
 			}
