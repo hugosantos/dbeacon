@@ -172,7 +172,7 @@ print "<br />\n";
 if (not $atthideinfo) {
 	print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adjname\">\n";
 
-	print "<tr><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>W</b></td></tr>\n";
+	print "<tr><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
 	foreach $a (@V) {
 		my $id = $g->get_vertex_attribute($a, "id");
 		if ($id >= 1) {
@@ -442,6 +442,11 @@ table#adjname td.age {
 
 .addr, .admincontact {
 	font-family: Monospace;
+}
+
+.addr a, .addr a:visited {
+	text-decoration: none;
+	color: black;
 }
 
 .beacon {
