@@ -21,6 +21,7 @@ static char beaconName[256];
 static char probeName[256] = "";
 static struct sockaddr_in6 probeAddr;
 static int mcastSock;
+static bool verbose = false;
 
 static list<sockaddr_in6> redist;
 
@@ -38,6 +39,7 @@ struct beaconSource {
 	beaconSource();
 
 	string name;
+	struct in6_addr addr;
 
 	uint32_t lastseq;
 	uint64_t lasttimestamp;
@@ -53,7 +55,7 @@ struct beaconSource {
 	uint32_t cacheseqnum[PACKETS_PERIOD+1];
 
 	void refresh(uint32_t);
-	void update(uint32_t, uint64_t, uint64_t);
+	void update(const in6_addr *, uint32_t, uint64_t, uint64_t);
 };
 
 static map<string, beaconSource> sources;
@@ -81,7 +83,7 @@ static void do_dump();
 
 static uint64_t get_timestamp();
 
-static void updateStats(const char *, uint32_t, uint64_t, uint64_t);
+static void updateStats(const char *, const in6_addr *, uint32_t, uint64_t, uint64_t);
 
 static int IPv6MulticastListen(int, struct in6_addr *);
 
@@ -135,7 +137,7 @@ int main(int argc, char **argv) {
 	bool listen = false;
 
 	while (1) {
-		res = getopt(argc, argv, "n:b:r:dlh");
+		res = getopt(argc, argv, "n:b:r:dlhv");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -177,6 +179,8 @@ int main(int argc, char **argv) {
 		} else if (res == 'h') {
 			usage();
 			return -1;
+		} else if (res == 'v') {
+			verbose = true;
 		} else if (res == -1) {
 			break;
 		}
@@ -209,6 +213,11 @@ int main(int argc, char **argv) {
 	int on = 1;
 
 	if (setsockopt(mcastSock, SOL_SOCKET, SO_TIMESTAMP, &on, sizeof(on)) != 0) {
+		perror("setsockopt");
+		return -1;
+	}
+
+	if (setsockopt(mcastSock, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != 0) {
 		perror("setsockopt");
 		return -1;
 	}
@@ -433,7 +442,7 @@ void handle_probe() {
 	if (sscanf(tmp, "%llu", &timestamp) != 1)
 		return;
 
-	updateStats(name, seqnum, timestamp, recvdts);
+	updateStats(name, &from.sin6_addr, seqnum, timestamp, recvdts);
 }
 
 uint64_t get_timestamp() {
@@ -481,7 +490,7 @@ void beaconSource::refresh(uint32_t seq) {
 	hasstats = false;
 }
 
-void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
+void beaconSource::update(const in6_addr *from, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 	int64_t diff = now - (int64_t)timestamp;
 
 	if (diff < 0)
@@ -493,6 +502,8 @@ void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 
 	if (seqnum < lastseq && (seqnum - lastseq) >= packetcount)
 		return;
+
+	memcpy(&addr, from, sizeof(in6_addr));
 
 	lasttimestamp = timestamp;
 
@@ -556,12 +567,14 @@ void beaconSource::update(uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 		packetcountreal = 0;
 		pointer = 0;
 
-		cout << name << ": " << avgdelay << ", " << avgloss << ", " << avgooo << ", " << avgdup << endl;
+		if (verbose) {
+			cout << "Updating " << name << ": " << avgdelay << ", " << avgloss << ", " << avgooo << ", " << avgdup << endl;
+		}
 	}
 }
 
-void updateStats(const char *name, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
-	getSource(name, seqnum).update(seqnum, timestamp, now);
+void updateStats(const char *name, const in6_addr *from, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
+	getSource(name, seqnum).update(from, seqnum, timestamp, now);
 }
 
 int send_probe() {
@@ -675,10 +688,13 @@ int send_report() {
 		char tmp[64];
 		inet_ntop(AF_INET6, &to->sin6_addr, tmp, sizeof(tmp));
 
-		cerr << "SENDING TO " << tmp << "/" << ntohs(to->sin6_port) << endl;
+		if (verbose) {
+			cerr << "Sending Report to " << tmp << "/" << ntohs(to->sin6_port) << endl;
+		}
 
-		if (sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, sizeof(struct sockaddr_in6)) < 0)
-			cerr << "FAILED TO SEND: " << strerror(errno) << endl;
+		if (sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, sizeof(struct sockaddr_in6)) < 0) {
+			cerr << "Failed to send report to " << tmp << "/" << ntohs(to->sin6_port) << endl;
+		}
 	}
 
 	return 0;
@@ -727,10 +743,14 @@ void do_dump() {
 	fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\">\n", probeName, sessionName);
 	fprintf(fp, "\t\t<sources>\n");
 
+	char tmp[64];
+
 	for (map<string, beaconSource>::const_iterator i = sources.begin(); i != sources.end(); i++) {
 		if (i->second.hasstats) {
+			inet_ntop(AF_INET6, &i->second.addr, tmp, sizeof(tmp));
 			fprintf(fp, "\t\t\t<source>\n");
 			fprintf(fp, "\t\t\t\t<name>%s</name>\n", i->first.c_str());
+			fprintf(fp, "\t\t\t\t<address>%s</address>\n", tmp);
 			fprintf(fp, "\t\t\t\t<loss>%.1f</loss>\n", i->second.avgloss);
 			fprintf(fp, "\t\t\t\t<delay>%.3f</delay>\n", i->second.avgdelay);
 			fprintf(fp, "\t\t\t\t<jitter>%.3f</jitter>\n", i->second.avgjitter);
