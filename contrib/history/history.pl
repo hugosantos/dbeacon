@@ -51,6 +51,43 @@ body {
 <h1>IPv6 Multicast Beacon history</h1>
 ";
 
+sub get_beacons {
+	my ($target, $isf) = @_;
+
+	opendir (DIR, $target) or die "Failed to open directory $target\n";
+	my @res = ();
+
+	foreach my $dircontent (readdir(DIR)) {
+		if ($dircontent ne "." and $dircontent ne ".." and
+			(($isf and -f "$target/$dircontent") or (not $isf and -d "$target/$dircontent"))) {
+			my $dst = $dircontent;
+			my $final = "$target/$dircontent";
+			if ($isf) {
+				$dst =~ s/\.rrd$//;
+				my $name = $dst;
+				$name =~ s/^(.+)\..+\.(.+)$/$1 ($2)/;
+				push (@res, [$name, $dst, $final]);
+			} else {
+				$dst =~ s/^(.+)\..+$/$1/;
+				push (@res, [$dst, $dircontent, $final]);
+			}
+		}
+	}
+
+	close (DIR);
+
+	return @res;
+}
+
+sub get_dstbeacons {
+	return get_beacons($historydir, 0);
+}
+
+sub get_srcbeacons {
+	my ($dst) = @_;
+	return get_beacons("$historydir/$dst", 1);
+}
+
 if (!$page->param('dst'))
 {
 	# List beacon receiving infos
@@ -90,12 +127,18 @@ elsif (!$page->param('src'))
 }
 elsif (!$page->param('type'))
 {
-	print 'Select value you want to display:<br><br>';
+	print "To ";
+	do_list_beacs("dstc", $page->param("dst"), get_dstbeacons());
+	print "From ";
+	do_list_beacs("srcc", $page->param("src"), get_srcbeacons($page->param("dst")));
+
+	print "<br /><br />";
+
+	print "Click on a graphic for more detail<br /><br />\n";
 	my $src = $page->param('src');
 	my $dst = $page->param('dst');
 	$src =~ s/^(.+)\..+\.(.+)$/$1/;
 	$dst =~ s/^(.+)\..+$/$1/;
-	print "Values from $src to $dst<br /><br />";
 	print "<table>";
 	print "<tr>";
 	foreach my $type ("ttl", "loss") {
@@ -114,6 +157,15 @@ elsif (!$page->param('type'))
 }
 else
 {
+	print "To ";
+	do_list_beacs("dstc", $page->param("dst"), get_dstbeacons());
+	print "From ";
+	do_list_beacs("srcc", $page->param("src"), get_srcbeacons($page->param("dst")));
+	print "Type ";
+	do_list_beacs("typec", $page->param("type"), (["TTL", "ttl"], ["Loss", "loss"], ["Delay", "delay"], ["Jitter", "jitter"]));
+
+	print "<br /><br />";
+
 	# Dst, src and type selected => Displaying all time range graphs
 	foreach my $age ('-1d','-1w','-1m','-1y')
 	{
@@ -127,6 +179,23 @@ print "
 </body>
 <html>
 ";
+}
+
+sub do_list_beacs {
+	my ($name, $def, @vals) = @_;
+
+	print "<select name=\"$name\">\n";
+
+	foreach my $foo (@vals) {
+		print "<option value=\"" . $foo->[1] . "\"";
+		if ($foo->[1] eq $def) {
+			print " selected";
+		}
+		print ">" . $foo->[0] . "</option>\n";
+	}
+
+	print "</select>\n";
+
 }
 
 sub graphthumb {

@@ -393,6 +393,7 @@ void usage() {
 	fprintf(stderr, "  -s ADDR                Bind to local address\n");
 	fprintf(stderr, "  -d                     Dump reports to xml each 5 secs\n");
 	fprintf(stderr, "  -D FILE                Specifies dump file (default is dump.xml)\n");
+	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
 	fprintf(stderr, "  -l LOCAL_ADDR/PORT     Listen for reports from other probes\n");
 	fprintf(stderr, "  -W type$url            Specify a website to announce. type is one of lg, matrix\n");
 	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename.\n");
@@ -411,6 +412,7 @@ int main(int argc, char **argv) {
 
 	bool dump = false;
 	bool force = false;
+	int dumpint = 5;
 
 	char tmp[256];
 	if (gethostname(tmp, sizeof(tmp)) != 0) {
@@ -423,7 +425,7 @@ int main(int argc, char **argv) {
 	const char *intf = 0;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S:s:dD:l:L:W:vUhf");
+		res = getopt(argc, argv, "n:a:i:b:r:S:s:dD:I:l:L:W:vUhf");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -467,6 +469,13 @@ int main(int argc, char **argv) {
 			dump = true;
 			if (res == 'D')
 				dumpFile = optarg;
+		} else if (res == 'I') {
+			char *end;
+			dumpint = strtoul(optarg, &end, 10);
+			if (*end || dumpint < 5) {
+				fprintf(stderr, "Bad interval.\n");
+				return -1;
+			}
 		} else if (res == 'l') {
 			address addr;
 			if (!addr.parse(optarg)) {
@@ -592,7 +601,7 @@ int main(int argc, char **argv) {
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
 	if (dump)
-		insert_event(DUMP_EVENT, 5000);
+		insert_event(DUMP_EVENT, dumpint * 1000);
 
 	insert_event(DUMP_BW_EVENT, 10000);
 
