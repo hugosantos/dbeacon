@@ -154,6 +154,7 @@ enum content_type {
 enum {
 	T_BEAC_NAME = 'n',
 	T_ADMIN_CONTACT = 'a',
+	T_SOURCE_INFO_IPv4 = 'i',
 	T_SOURCE_INFO = 'I',
 	T_ASM_STATS = 'A',
 	T_SSM_STATS = 'S'
@@ -758,6 +759,8 @@ void handle_probe(int sock, content_type type) {
 			recvdts += tv->tv_usec / 1000;
 		} else if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
 			ttl = *(int *)CMSG_DATA(hdr);
+		} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
+			ttl = *(int *)CMSG_DATA(hdr);
 		}
 	}
 
@@ -876,25 +879,35 @@ void handle_nmsg(sockaddr_storage *from, uint64_t recvdts, int ttl, uint8_t *buf
 				src.setName(name);
 			} else if (hd[0] == T_ADMIN_CONTACT) {
 				src.adminContact = string((char *)hd + 2, hd[1]);
-			} else if (hd[0] == T_SOURCE_INFO) {
-				if (hd[1] < 18)
+			} else if (hd[0] == T_SOURCE_INFO || hd[0] == T_SOURCE_INFO_IPv4) {
+				int blen = hd[0] == T_SOURCE_INFO ? 18 : 6;
+
+				if (hd[1] < blen)
 					continue;
 
 				sockaddr_storage addr;
 				memset(&addr, 0, sizeof(addr));
 
-				sockaddr_in6 *a6 = (sockaddr_in6 *)&addr;
+				if (hd[0] == T_SOURCE_INFO) {
+					sockaddr_in6 *a6 = (sockaddr_in6 *)&addr;
 
-				a6->sin6_family = AF_INET6;
+					a6->sin6_family = AF_INET6;
 
-				memcpy(&a6->sin6_addr, hd + 2, sizeof(in6_addr));
-				// a6->sin6_port = ntohs(*(uint16_t *)(hd + 18));
-				a6->sin6_port = *(uint16_t *)(hd + 18);
+					memcpy(&a6->sin6_addr, hd + 2, sizeof(in6_addr));
+					a6->sin6_port = *(uint16_t *)(hd + 18);
+				} else {
+					sockaddr_in *a4 = (sockaddr_in *)&addr;
+
+					a4->sin_family = AF_INET;
+
+					memcpy(&a4->sin_addr, hd + 2, sizeof(in_addr));
+					a4->sin_port = *(uint16_t *)(hd + 6);
+				}
 
 				beaconExternalStats &stats = src.getExternal(addr, recvdts);
 
-				int plen = hd[1] - 18;
-				for (uint8_t *pd = tlv_begin(hd + 2 + 18, plen); pd; pd = tlv_next(pd, plen)) {
+				int plen = hd[1] - blen;
+				for (uint8_t *pd = tlv_begin(hd + 2 + blen, plen); pd; pd = tlv_next(pd, plen)) {
 					if (pd[0] == T_BEAC_NAME) {
 						stats.name = string((char *)pd + 2, pd[1]);
 						stats.identified = !stats.name.empty();
@@ -1167,6 +1180,9 @@ int build_nreport(uint8_t *buff, int maxlen, bool map) {
 
 		int len = 18;
 
+		if (i->first.ss_family == AF_INET)
+			len = 6;
+
 		if (map) {
 			int namelen = i->second.name.size();
 			int contactlen = i->second.adminContact.size();
@@ -1175,18 +1191,24 @@ int build_nreport(uint8_t *buff, int maxlen, bool map) {
 			len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
 		}
 
-		if (i->first.ss_family != AF_INET6)
-			continue;
-
-		if (!write_tlv_start(buff, maxlen, ptr, T_SOURCE_INFO, len))
+		if (!write_tlv_start(buff, maxlen, ptr, i->first.ss_family == AF_INET6 ? T_SOURCE_INFO : T_SOURCE_INFO_IPv4, len))
 			break;
 
-		sockaddr_in6 *addr = (sockaddr_in6 *)&i->first;
+		if (i->first.ss_family == AF_INET6) {
+			sockaddr_in6 *addr = (sockaddr_in6 *)&i->first;
 
-		memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
-		// *((uint16_t *)(buff + ptr + 16)) = htons(addr->sin6_port);
-		*((uint16_t *)(buff + ptr + 16)) = addr->sin6_port;
-		ptr += 18;
+			memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
+			*((uint16_t *)(buff + ptr + 16)) = addr->sin6_port;
+
+			ptr += 18;
+		} else {
+			sockaddr_in *addr = (sockaddr_in *)&i->first;
+
+			memcpy(buff + ptr, &addr->sin_addr, sizeof(in_addr));
+			*((uint16_t *)(buff + ptr + 4)) = addr->sin_port;
+
+			ptr += 6;
+		}
 
 		if (map) {
 			write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
