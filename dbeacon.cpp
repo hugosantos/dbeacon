@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -309,9 +310,8 @@ void next_event(struct timeval *eventm) {
 void insert_sorted_event(timer &t) {
 
 	gettimeofday(&t.target, 0);
-	t.target.tv_sec += t.interval / 1000;
 	t.target.tv_usec += t.interval * 1000;
-	if (t.target.tv_usec > 1000000) {
+	while (t.target.tv_usec > 1000000) {
 		t.target.tv_usec -= 1000000;
 		t.target.tv_sec++;
 	}
@@ -380,15 +380,15 @@ void handle_probe() {
 	uint8_t ctlbuf[64];
 	uint64_t recvdts = 0;
 
-	msg.msg_name = &from;
+	msg.msg_name = (char *)&from;
 	msg.msg_namelen = sizeof(from);
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
-	msg.msg_control = ctlbuf;
+	msg.msg_control = (char *)ctlbuf;
 	msg.msg_controllen = sizeof(ctlbuf);
 	msg.msg_flags = 0;
 
-	iov.iov_base = buffer;
+	iov.iov_base = (char *)buffer;
 	iov.iov_len = sizeof(buffer);
 
 	len = recvmsg(mcastSock, &msg, 0);
@@ -695,7 +695,7 @@ int send_report() {
 		}
 
 		if (sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, sizeof(struct sockaddr_in6)) < 0) {
-			cerr << "Failed to send report to " << tmp << "/" << ntohs(to->sin6_port) << endl;
+			cerr << "Failed to send report to " << tmp << "/" << ntohs(to->sin6_port) << ": " << strerror(errno) << endl;
 		}
 	}
 
