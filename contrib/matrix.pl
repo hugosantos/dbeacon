@@ -32,7 +32,7 @@ our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
 our $matrix_link_title = 0;
 our $default_full_matrix = 0;
-our $faq_page = 'http://mars.innerghost.net/~hugo/www/dbeacon/FAQ.html';
+our $faq_page = 'http://artemis.av.it.pt/~hsantos/dbeacon/FAQ.html';
 
 do 'matrix.conf';
 
@@ -1303,9 +1303,6 @@ ul#view li {
 }
 
 #view a.viewitem {
-	color: blue;
-	text-decoration: none;
-	border-bottom: 1px solid blue;
 }
 
 #view a.viewitem:visited {
@@ -1313,7 +1310,7 @@ ul#view li {
 }
 
 #view #currentview {
-	border-bottom: 1px dotted black;
+	text-decoration: underline;
 }
 
 a.historyurl, a.historyurl:visited {
