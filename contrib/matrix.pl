@@ -609,7 +609,12 @@ sub render_matrix {
 					my $cssclass = 'fulladjacent';
 					if ($attwhat eq 'ssmorasm') {
 						if (defined $txtssm) {
-							$txt = $txtssm;
+							if (!defined $txt) {
+								$cssclass = 'ssmonly_fulladjacent';
+								$txt = "<i>$txtssm</i>";
+							} else {
+								$txt = $txtssm;
+							}
 							$whattype = 'ssm';
 						} elsif (defined $txt) {
 							$cssclass = 'nossm_fulladjacent';
@@ -1260,6 +1265,11 @@ table#adj td.nossm_fulladjacent {
 	width: 20px;
 }
 
+table#adj td.ssmonly_fulladjacent {
+	background-color: #96d396;
+	width: 20px;
+}
+
 table#adj td.noreport {
 	background-color: #ccc;
 }
@@ -1280,7 +1290,7 @@ table#adj td.adjacent_asm {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.noreport, td.blackhole, table#adj td.fulladjacent, table#adj td.nossm_fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
+table#adj td.noreport, td.blackhole, table#adj td.fulladjacent, table#adj td.nossm_fulladjacent, table#adj td.ssmonly_fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
 	border-right: 0.2em solid white;
 }
 
