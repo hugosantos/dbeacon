@@ -110,7 +110,6 @@ sub build_vertex_from_rrd {
 			}
 
 			$g->add_edge($srcaddr, $dstaddr);
-			$g->set_vertex_attribute($srcaddr, "goodedge", 1);
 
 			($start,$step,$names,$data) = RRDs::fetch(build_rrd_file_path($historydir,  $dstbeacon, $srcbeacon, $asmorssm), 'AVERAGE',
 				 '-s',$page->param('at'),'-e',$page->param('at'));
@@ -119,17 +118,12 @@ sub build_vertex_from_rrd {
 				next;
 			}
 
-			my $prefix ="";
-			if ($asmorssm eq "ssm") {
-				$prefix="ssm_";
-			}
-
 			for (my $i = 0; $i < $#$names+1; $i++) {
 				if (defined($$data[0][$i])) {
 					if ($$names[$i] =~ /^(delay|jitter)$/) {
 						$$data[0][$i] *= 1000;
 					}
-					$g->set_edge_attribute($srcaddr, $dstaddr, $prefix.$$names[$i], $$data[0][$i]);
+					$g->set_edge_attribute($srcaddr, $dstaddr, $asmorssm . '_' . $$names[$i], $$data[0][$i]);
 				}
 			}
 		}
@@ -143,7 +137,7 @@ sub full_url0 {
 
 sub full_url {
 	if (not defined($type)) {
-		$type = "ttl";
+		$type = 'ttl';
 	}
 	return "$url?dst=$dst&amp;src=$src&amp;type=$type";
 }
@@ -277,13 +271,11 @@ sub start_handler {
 				}
 			}
 		}
-	} elsif ($tag eq 'asm') {
-		if ($current_source ne '') {
-			parse_stats($current_source, '', \%atts);
-		}
-	} elsif ($tag eq 'ssm') {
-		if ($current_source ne '') {
-			parse_stats($current_source, 'ssm_', \%atts);
+	} elsif ($tag eq 'asm' or $tag eq 'ssm') {
+		foreach my $att ('ttl', 'loss', 'delay', 'jitter') {
+			if (defined($atts{$att})) {
+				$g->set_edge_attribute($current_source, $current_beacon, $tag . '_' . $att, $atts{$att});
+			}
 		}
 	} elsif ($tag eq 'source') {
 		$current_source = $atts{'addr'};
@@ -309,21 +301,6 @@ sub start_handler {
 			} else {
 				$g->set_vertex_attribute($current_beacon, 'url_' . $atts{'type'}, $atts{'url'});
 			}
-		}
-	}
-}
-
-sub parse_stats {
-	my ($addr, $prefix, $atts) = @_;
-
-	if ($$atts{"ttl"} ge 0) {
-		$g->set_edge_attribute($addr, $current_beacon, $prefix . 'ttl', $$atts{'ttl'});
-		$g->set_vertex_attribute($addr, 'goodedge', 1);
-	}
-
-	foreach my $att ('loss', 'delay', 'jitter') {
-		if (defined($$atts{$att})) {
-			$g->set_edge_attribute($addr, $current_beacon, "$prefix$att", $$atts{$att});
 		}
 	}
 }
@@ -539,7 +516,7 @@ sub render_matrix {
 
 		if ((defined($age)) and ($age < 30)) {
 			push (@warmingup, $c);
-		} elsif (not $g->get_vertex_attribute($c, "goodedge")) {
+		} elsif (not scalar($g->edges($c))) {
 			push (@problematic, $c);
 		} else {
 			print '<td ', $what_td, '><b>S', $i, '</b></td>';
@@ -561,7 +538,7 @@ sub render_matrix {
 			foreach $b (@V) {
 				if ($g->get_vertex_attribute($b, "id") >= 1) {
 					if ($b ne $a and $g->has_edge($b, $a)) {
-						my $txt = $g->get_edge_attribute($b, $a, $attname);
+						my $txt = $g->get_edge_attribute($b, $a, "asm_$attname");
 
 						if (($attname eq 'delay' or $attname eq 'jitter') and defined($txt)) {
 							$txt = sprintf("%.1f", $txt);
@@ -571,7 +548,7 @@ sub render_matrix {
 							my $whattype = "asm";
 							my $cssclass = "fulladjacent";
 							if ($attwhat eq "ssmorasm") {
-								my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
+								my $txtssm = $g->get_edge_attribute($b, $a, "ssm_$attname");
 								if (defined($txtssm)) {
 									$txt = $txtssm;
 									$whattype = "ssm";
@@ -589,7 +566,7 @@ sub render_matrix {
 								print '</td>';
 							}
 						} else {
-							my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
+							my $txtssm = $g->get_edge_attribute($b, $a, "ssm_$attname");
 
 							if (not defined($txt) and not defined($txtssm)) {
 								print "<td $what_td class=\"blackhole\">XX</td>";
@@ -774,8 +751,8 @@ sub store_data {
 				if ($a ne $b and $g->has_edge($b, $a)) {
 					my $b_name = $g->get_vertex_attribute($b, "name");
 					if (defined($b_name)) {
-						store_data_one($a, $a_name, $b, $b_name, "asm", "");
-						store_data_one($a, $a_name, $b, $b_name, "ssm", "ssm_");
+						store_data_one($a, $a_name, $b, $b_name, "asm");
+						store_data_one($a, $a_name, $b, $b_name, "ssm");
 					}
 				}
 			}
@@ -786,7 +763,7 @@ sub store_data {
 }
 
 sub store_data_one {
-	my ($dst, $dstname, $src, $srcname, $tag, $prefix) = @_;
+	my ($dst, $dstname, $src, $srcname, $tag) = @_;
 
 	my $dst_h = build_host($dstname, $dst);
 	my $src_h = build_host($srcname, $src);
@@ -796,7 +773,7 @@ sub store_data_one {
 	my $good = 0;
 
 	foreach my $type ('ttl', 'loss', 'delay', 'jitter') {
-		$values{$type} = $g->get_edge_attribute($src, $dst, "$prefix$type");
+		$values{$type} = $g->get_edge_attribute($src, $dst, $tag . '_' . $type);
 		if (defined($values{$type})) {
 			$good++;
 		}
