@@ -1097,6 +1097,12 @@ void do_dump() {
 			fprintf(fp, " country=\"%s\"", twoLetterCC.c_str());
 		fprintf(fp, " age=\"%llu\" lastupdate=\"0\" rxlocal=\"true\">\n", (now - startTime) / 1000);
 
+		for (uint32_t k = 0; k < KnownFlags; k++) {
+			if (flags & (1 << k)) {
+				fprintf(fp, "\t\t<flag name=\"%s\" value=\"true\" />\n", Flags[k]);
+			}
+		}
+
 		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++) {
 			const char *typnam = j->first == T_WEBSITE_GENERIC ?
 				"generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
