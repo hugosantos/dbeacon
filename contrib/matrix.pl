@@ -523,18 +523,22 @@ sub render_matrix {
 
 						if ($attwhat eq "asm" or $attwhat eq "ssmorasm") {
 							my $whattype = "asm";
+							my $cssclass = "fulladjacent";
 							if ($attwhat eq "ssmorasm") {
 								my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
 								if (defined($txtssm)) {
 									$txt = $txtssm;
 									$whattype = "ssm";
+								} else {
+									$cssclass = "nossm_fulladjacent";
+									$txt = "<i>$txt</i>";
 								}
 							}
 
 							if (not defined($txt)) {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
-								print "<td class=\"fulladjacent\">";
+								print "<td class=\"$cssclass\">";
 								make_history_link($b, $a, $whattype, $txt, "historyurl");
 								print "</td>";
 							}
@@ -598,7 +602,9 @@ sub render_matrix {
 				if ($g->has_vertex_attribute($a, "url_generic")) {
 					print "</a>";
 				}
-				print " <b>R$id</b></td>";
+				print " <b>R$id</b>";
+				# print "<img src=\"http://www.sixxs.net/gfx/countries/jp.gif\" style=\"vertical-align: middle; margin-left: 0.4em; border: 1px solid black\" />";
+				print "</td>";
 				print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
 				# Removing port number from id and link toward RIPE whois db
 			        my $ip = $a;
@@ -1161,6 +1167,11 @@ table#adj td.fulladjacent, table#adj td.adjacent_asm, table#adj td.adjacent_ssm 
 	width: 20px;
 }
 
+table#adj td.nossm_fulladjacent {
+	background-color: #c0ffc0;
+	width: 20px;
+}
+
 table#adj td.blackhole {
 	background-color: #000000;
 }
@@ -1176,7 +1187,7 @@ table#adj td.adjacent_asm {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.blackhole, table#adj td.fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
+table#adj td.blackhole, table#adj td.fulladjacent, table#adj td.nossm_fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
 	border-right: 0.2em solid white;
 }
 
