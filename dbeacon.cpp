@@ -487,6 +487,11 @@ int main(int argc, char **argv) {
 		next_event(&eventm);
 
 		res = select(largestSock + 1, &readset, 0, 0, &eventm);
+
+		if (verbose > 3) {
+			fprintf(stderr, "select(): res = %i\n", res);
+		}
+
 		if (res < 0) {
 			if (errno == EINTR)
 				continue;
@@ -686,6 +691,12 @@ void handle_probe(int sock, content_type type) {
 	len = recvmsg(sock, &msg, 0);
 	if (len < 0)
 		return;
+
+	if (verbose > 3) {
+		char tmp[64];
+		inet_ntop(AF_INET6, &from.sin6_addr, tmp, sizeof(tmp));
+		fprintf(stderr, "recvmsg(%s): len = %u\n", tmp, len);
+	}
 
 	bytesReceived += len;
 
@@ -960,7 +971,7 @@ int parse_jreport(uint8_t *buffer, int len, uint64_t recvdts, string &session, s
 }
 
 void handle_mcast(int sock, content_type cnt) {
-	if (cnt == JPROBE || cnt == NPROBE) {
+	if (cnt == JPROBE || cnt == NPROBE || cnt == NSSMPROBE) {
 		handle_probe(sock, cnt);
 	} else if (cnt == JREPORT) {
 		handle_jreport(sock);
