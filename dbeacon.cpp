@@ -67,6 +67,7 @@ enum {
 	SEND_EVENT,
 	GARBAGE_COLLECT_EVENT,
 	DUMP_EVENT,
+	DUMP_BW_EVENT,
 
 	SENDING_EVENT,
 	WILLSEND_EVENT
@@ -145,6 +146,10 @@ static int build_jprobe(uint8_t *, int, uint32_t, uint64_t);
 static int build_nprobe(uint8_t *, int, uint32_t, uint64_t);
 
 static void do_dump();
+static void do_bw_dump();
+
+static uint32_t bytesReceived = 0;
+static uint32_t bytesSent = 0;
 
 static uint64_t get_timestamp();
 
@@ -181,6 +186,7 @@ void usage() {
 	fprintf(stderr, "  -L REPORT_ADDR/PORT    Listen to reports from other probs in multicast group REPORT_ADDR\n");
 	fprintf(stderr, "  -P                     Use new protocol\n");
 	fprintf(stderr, "  -v                     be (very) verbose\n");
+	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
 	fprintf(stderr, "\n");
 }
 
@@ -219,9 +225,10 @@ int main(int argc, char **argv) {
 
 	bool dump = false;
 	bool force = false;
+	bool dump_bw = false;
 
 	while (1) {
-		res = getopt(argc, argv, "n:a:b:r:M:l:L:dhvPf");
+		res = getopt(argc, argv, "n:a:b:r:M:l:L:dhvPfU");
 		if (res == 'n') {
 			if (strlen(probeName) > 0) {
 				fprintf(stderr, "Already have a name.\n");
@@ -291,6 +298,8 @@ int main(int argc, char **argv) {
 			newProtocol = true;
 		} else if (res == 'f') {
 			force = true;
+		} else if (res == 'U') {
+			dump_bw = true;
 		} else if (res == -1) {
 			break;
 		}
@@ -344,6 +353,9 @@ int main(int argc, char **argv) {
 
 	if (dump)
 		insert_event(DUMP_EVENT, 5000);
+
+	if (dump_bw)
+		insert_event(DUMP_BW_EVENT, 10000);
 
 	if (newProtocol)
 		send_report();
@@ -453,6 +465,9 @@ void handle_event() {
 	case DUMP_EVENT:
 		do_dump();
 		break;
+	case DUMP_BW_EVENT:
+		do_bw_dump();
+		break;
 	}
 
 	if (t.type == WILLSEND_EVENT) {
@@ -533,6 +548,8 @@ void handle_probe(int sock, content_type type) {
 	len = recvmsg(sock, &msg, 0);
 	if (len < 0)
 		return;
+
+	bytesReceived += len;
 
 	uint64_t recvdts = 0;
 	int ttl = 0;
@@ -716,6 +733,8 @@ void handle_jreport(int sock) {
 
 	if (len < 0)
 		return;
+
+	bytesReceived += len;
 
 	string session, name;
 	externalBeacon beac;
@@ -925,7 +944,10 @@ int send_jprobe() {
 	len = build_jprobe(buffer, sizeof(buffer), seq, get_timestamp());
 	seq++;
 
-	return sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
+	len = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
+	if (len > 0)
+		bytesSent += len;
+	return len;
 }
 
 int send_nprobe() {
@@ -935,7 +957,10 @@ int send_nprobe() {
 	len = build_nprobe(buffer, sizeof(buffer), seq, get_timestamp());
 	seq++;
 
-	return sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
+	len = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)&probeAddr, sizeof(probeAddr));
+	if (len > 0)
+		bytesSent += len;
+	return len;
 }
 
 int build_nreport(uint8_t *buff, int maxlen) {
@@ -1067,8 +1092,11 @@ int send_report() {
 			cerr << "Sending Report to " << tmp << "/" << ntohs(to->sin6_port) << endl;
 		}
 
-		if (sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, sizeof(struct sockaddr_in6)) < 0) {
+		int res;
+		if ((res = sendto(mcastSock, buffer, len, 0, (struct sockaddr *)to, sizeof(struct sockaddr_in6))) < 0) {
 			cerr << "Failed to send report to " << tmp << "/" << ntohs(to->sin6_port) << ": " << strerror(errno) << endl;
+		} else {
+			bytesSent += res;
 		}
 	}
 
@@ -1179,6 +1207,13 @@ void do_dump() {
 	fprintf(fp, "</beacons>\n");
 
 	fclose(fp);
+}
+
+void do_bw_dump() {
+	fprintf(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)\n",
+			bytesReceived, bytesReceived * 8 / 10000., bytesSent, bytesSent * 8 / 10000.);
+	bytesReceived = 0;
+	bytesSent = 0;
 }
 
 int IPv6MulticastListen(int sock, struct in6_addr *grpaddr) {
