@@ -79,12 +79,12 @@ sub start_handler
 		my %values;
 		foreach my $valuetype ('ttl','loss','delay','jitter')
 		{
-			if ($atts{$valuetype})
+			if (defined($atts{$valuetype}))
 			{
 				$values{$valuetype} = $atts{$valuetype};
 			}
 		}
-		if ($values{'ttl'} and $values{'loss'} and $values{'delay'} and $values{'jitter'})
+		if (defined($values{'ttl'}) and defined($values{'loss'}) and defined($values{'delay'}) and defined($values{'jitter'}))
 		{
 			if ($srcbeacon and $dstbeacon) {
 				storedata($dstbeacon,$srcbeacon,$tag,%values);
