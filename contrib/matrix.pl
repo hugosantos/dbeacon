@@ -36,6 +36,16 @@ do("matrix.conf");
 my $dbeacon = "<a href=\"http://artemis.av.it.pt/~hsantos/software/dbeacon.html\">dbeacon</a>";
 
 my $g;
+
+# trying to speed things up by using hashtables instead of Graph's vertex attributes
+my %names;
+my %contacts;
+my %countries;
+my %urls;
+my %urls_lg;
+my %urls_matrix;
+my %beac_ages;
+
 my $sessiongroup;
 my $ssm_sessiongroup;
 
@@ -92,15 +102,14 @@ if (defined($history_enabled) and $history_enabled and defined($page->param('img
 }
 
 sub build_vertex_from_rrd {
-
-	my ($start,$step,$names,$data);
+	my ($start, $step, $names, $data);
 
 	$g = new Graph::Directed;
 
 	foreach my $dstbeacon (get_beacons($historydir)) {
 		my ($dstname,$dstaddr) = get_name_from_host($dstbeacon);
 		$g->add_vertex($dstaddr);
-		$g->set_vertex_attribute($dstaddr, "name", $dstname);
+		$names{$dstaddr} = $dstname;
 		foreach my $srcbeacon (get_beacons($historydir.'/'.$dstbeacon)) {
 			my ($srcname,$srcaddr,$asmorssm) = get_name_from_host($srcbeacon);
 
@@ -113,7 +122,7 @@ sub build_vertex_from_rrd {
 
 			if (not $g->has_vertex($srcaddr)) {
 				$g->add_vertex($srcaddr);
-				$g->set_vertex_attribute($srcaddr, "name", $srcname);
+				$names{$srcaddr} = $srcname;
 			}
 
 			# $g->add_edge($srcaddr, $dstaddr);
@@ -166,9 +175,8 @@ sub check_outdated_dump {
 
 sub beacon_name {
 	my ($d) = @_;
-	my $name = $g->get_vertex_attribute($a, "name");
 
-	return $name or "($d)";
+	return $names{$d} or "($d)";
 }
 
 sub make_history_url {
@@ -186,7 +194,7 @@ sub make_history_url {
 sub build_name {
 	my ($a) = @_;
 
-	return [$a, $g->get_vertex_attribute($a, "name")];
+	return [$a, $names{$a}];
 }
 
 sub make_history_link {
@@ -260,15 +268,13 @@ sub start_handler {
 		$current_beacon = $atts{'addr'};
 		$current_source = '';
 
-		if ($atts{'addr'} ne '') {
-			if (defined($atts{'name'}) and defined($atts{'age'}) and ($atts{'age'} > 0)) {
-				$g->add_vertex($current_beacon);
-				$g->set_vertex_attribute($current_beacon, 'name', $atts{'name'});
-				$g->set_vertex_attribute($current_beacon, 'contact', $atts{'contact'});
-				$g->set_vertex_attribute($current_beacon, 'age', $atts{'age'});
-				if (defined($atts{'country'})) {
-					$g->set_vertex_attribute($current_beacon, 'country', $atts{'country'});
-				}
+		if ($atts{'addr'} and $atts{'name'} and $atts{'age'} > 0) {
+			$g->add_vertex($current_beacon);
+			$names{$current_beacon} = $atts{'name'};
+			$contacts{$current_beacon} = $atts{'contact'};
+			$beac_ages{$current_beacon} = $atts{'age'};
+			if (defined($atts{'country'})) {
+				$countries{$current_beacon} = $atts{'country'};
 			}
 		}
 	} elsif ($tag eq 'asm' or $tag eq 'ssm') {
@@ -284,22 +290,24 @@ sub start_handler {
 			if (not $g->has_vertex($current_source)) {
 				$g->add_vertex($current_source);
 
-				$g->set_vertex_attribute($current_source, 'name', $atts{'name'});
-				$g->set_vertex_attribute($current_source, 'contact', $atts{'contact'});
+				$names{$current_source} = $atts{'name'};
+				$contacts{$current_source} = $atts{'contact'};
 			}
 
-			if (not $g->has_vertex_attribute($current_source, 'country') and defined($atts{'country'})) {
-				$g->set_vertex_attribute($current_source, 'country', $atts{'country'});
+			if (not $countries{$current_source} and defined($atts{'country'})) {
+				$countries{$current_source} = $atts{'country'};
 			}
 
 			# $g->add_edge($current_source, $current_beacon);
 		}
 	} elsif ($tag eq 'website') {
 		if ($atts{'type'} ne '' and $atts{'url'} ne '') {
-			if ($current_source ne '') {
-				$g->set_vertex_attribute($current_source, 'url_' . $atts{'type'}, $atts{'url'});
-			} else {
-				$g->set_vertex_attribute($current_beacon, 'url_' . $atts{'type'}, $atts{'url'});
+			if ($atts{'type'} eq 'generic') {
+				$urls{$current_source or $current_beacon} = $atts{'url'};
+			} elsif ($atts{'type'} eq 'lg') {
+				$urls_lg{$current_source or $current_beacon} = $atts{'url'};
+			} elsif ($atts{'type'} eq 'matrix') {
+				$urls_matrix{$current_source or $current_beacon} = $atts{'url'};
 			}
 		}
 	}
@@ -462,8 +470,7 @@ sub make_ripe_search_url {
 }
 
 sub render_matrix {
-
-	my ($start,$step) = @_;
+	my ($start, $step) = @_;
 
 	my $attname = $page->param('att');
 	if (not $attname) {
@@ -509,26 +516,29 @@ sub render_matrix {
 
 	my @V = $g->vertices();
 
+	my %in_edges;
+	my %out_edges;
+	my %ids;
+
 	print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
 	print '<tr><td>&nbsp;</td>';
 	foreach $c (@V) {
-		my $age = $g->get_vertex_attribute($c, "age");
+		$in_edges{$c} = scalar($g->in_edges($c));
+		$out_edges{$c} = scalar($g->out_edges($c));
 
-		if ((defined($age)) and ($age < 30)) {
+		if ($beac_ages{$c} < 30) {
 			push (@warmingup, $c);
-		} elsif (not scalar($g->out_edges($c)) and not scalar($g->in_edges($c))) {
+		} elsif (not $in_edges{$c} and not $out_edges{$c}) {
 			push (@problematic, $c);
 		} else {
-			my $id = $i;
-			$i++;
-
-			$g->set_vertex_attribute($c, "id", $id);
-
-			if (scalar($g->out_edges($c)) > 0) {
-				print '<td ', $what_td, '><b>S', $id, '</b></td>';
+			if ($out_edges{$c} > 0) {
+				print '<td ', $what_td, '><b>S', $i, '</b></td>';
 			}
 
-			if (scalar($g->in_edges($c)) == 0) {
+			$ids{$c} = $i;
+			$i++;
+
+			if (not $in_edges{$c}) {
 				push (@localnoreceive, $c);
 			}
 		}
@@ -536,12 +546,12 @@ sub render_matrix {
 	print "</tr>\n";
 
 	foreach $a (@V) {
-		my $id = $g->get_vertex_attribute($a, "id");
-		if ($id >= 1 and scalar($g->in_edges($a)) > 0) {
+		my $id = $ids{$a};
+		if ($id >= 1 and $in_edges{$a} > 0) {
 			print '<tr>';
 			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $id, '</b></td>';
 			foreach $b (@V) {
-				if ($g->get_vertex_attribute($b, "id") >= 1 and scalar($g->out_edges($b)) > 0) {
+				if ($ids{$b} >= 1 and $out_edges{$b} > 0) {
 					if ($b ne $a and $g->has_edge($b, $a)) {
 						my $txt = $g->get_edge_attribute($b, $a, "asm_$attname");
 						my $txtssm = $g->get_edge_attribute($b, $a, "ssm_$attname");
@@ -603,11 +613,9 @@ sub render_matrix {
 		print "<h4 style=\"margin-bottom: 0\">The following beacons are not being received locally via ASM</h4>\n";
 		print "<ul>\n";
 		foreach $a (@localnoreceive) {
-			my $id = $g->get_vertex_attribute($a, "id");
-			my $contact = $g->get_vertex_attribute($a, "contact");
-			print "<li><b>R$id</b> " . beacon_name($a);
-			if ($contact) {
-				print " ($contact)";
+			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+			if ($contacts{$a}) {
+				print ' (', $contacts{$a}, ')';
 			}
 			print "</li>\n";
 		}
@@ -618,11 +626,9 @@ sub render_matrix {
 		print "<h3>Beacons warming up (age < 30 secs)</h3>\n";
 		print "<ul>\n";
 		foreach $a (@warmingup) {
-			my $name = $g->get_vertex_attribute($a, "name");
-			my $contact = $g->get_vertex_attribute($a, "contact");
 			print "<li>$a";
-			if ($name) {
-				print " ($name, $contact)";
+			if ($names{$a}) {
+				print ' (', $names{$a}, ', ', $contacts{$a}, ')';
 			}
 			print "</li>\n";
 		}
@@ -635,14 +641,13 @@ sub render_matrix {
 		my $len = scalar(@problematic);
 		for (my $j = 0; $j < $len; $j++) {
 			my $prob = $problematic[$j];
-			my $name = $g->get_vertex_attribute($prob, "name");
 			my @neighs = $g->neighbours($prob);
 
 			print "<li>$prob";
-			if ($name) {
-				print ' (', $name;
-				if ($g->has_vertex_attribute($prob, 'contact')) {
-					print $g->get_vertex_attribute($prob, 'contact');
+			if ($names{$prob}) {
+				print ' (', $names{$prob};
+				if ($contacts{$prob}) {
+					print ', ', $contacts{$prob};
 				}
 				print ')';
 			}
@@ -657,10 +662,9 @@ sub render_matrix {
 				print "<ul>Received from:<ul>\n";
 
 				for (my $l = 0; $l < $k; $l++) {
-					$name = $g->get_vertex_attribute($neighs[$l], "name");
 					print "<li><span class=\"beacon\">" . $neighs[$l];
-					if ($name) {
-						print " ($name)";
+					if ($names{$neighs[$l]}) {
+						print ' (', $names{$neighs[$l]}, ')';
 					}
 					print "</span></li>\n";
 				}
@@ -682,46 +686,41 @@ sub render_matrix {
 
 		print "<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td><td><b>Admin Contact</b></td><td><b>L/M</b></td></tr>\n";
 		foreach $a (@V) {
-			my $id = $g->get_vertex_attribute($a, "id");
+			my $id = $ids{$a};
 			if ($id >= 1) {
 				print "<tr>";
 				print "<td align=\"right\" class=\"beacname\">";
-				if ($g->has_vertex_attribute($a, "url_generic")) {
-					print "<a class=\"beacon_url\" href=\"" . $g->get_vertex_attribute($a, "url_generic") . "\">";
+				if ($urls{$a}) {
+					print '<a class="beacon_url" href="', $urls{$a}, '">';
 				}
-				print $g->get_vertex_attribute($a, "name");
-				if ($g->has_vertex_attribute($a, "url_generic")) {
-					print "</a>";
+				print $names{$a};
+				if ($urls{$a}) {
+					print '</a>';
 				}
 				print " <b>R$id</b>";
 				print "</td>";
 
 				print "<td>";
-				if ($flag_url_format ne "" and $g->has_vertex_attribute($a, "country")) {
-					my $country = lc $g->get_vertex_attribute($a, "country");
-					print "<img src=\"";
-					printf $flag_url_format, $country;
-					print "\" alt=\"$country\" style=\"vertical-align: middle; border: 1px solid black\" />";
+				if ($flag_url_format ne "" and $countries{$a}) {
+					print '<img src="';
+					printf $flag_url_format, lc $countries{$a};
+					print '" alt="', $countries{$a}, '" style="vertical-align: middle; border: 1px solid black" />';
 				}
 				print "</td>";
 
-				print "<td class=\"age\">" . format_date($g->get_vertex_attribute($a, "age")) . "</td>";
+				print "<td class=\"age\">" . format_date($beac_ages{$a}) . "</td>";
 				# Removing port number from id and link toward RIPE whois db
 			        my $ip = $a;
 			        $ip =~ s/\/\d+$//;
 			        print "<td class=\"addr\"><a href=\"" . make_ripe_search_url($ip) . "\">$ip</a></td>";
-				if (defined($g->get_vertex_attribute($a, "contact"))) {
-					print "<td class=\"admincontact\">" . $g->get_vertex_attribute($a, "contact") . "</td>";
-				} else {
-					print "<td class=\"admincontact\"></td>";
-				}
+				print '<td class="admincontact">', $contacts{$a}, '</td>';
 
 				my $urls;
-				if ($g->has_vertex_attribute($a, "url_lg")) {
-					$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_lg") . "\">L</a>";
+				if ($urls_lg{$a}) {
+					$urls .= " <a href=\"" . $urls_lg{$a} . "\">L</a>";
 				}
-				if ($g->has_vertex_attribute($a, "url_matrix")) {
-					$urls .= " <a href=\"" . $g->get_vertex_attribute($a, "url_matrix") . "\">M</a>";
+				if ($urls_matrix{$a}) {
+					$urls .= " <a href=\"" . $urls_matrix{$a} . "\">M</a>";
 				}
 
 				print "<td class=\"urls\">" . ($urls or "-") . "</td>";
@@ -759,14 +758,12 @@ sub store_data {
 	my @verts = $g->vertices();
 
 	foreach my $a (@verts) {
-		my $a_name = $g->get_vertex_attribute($a, "name");
-		if (defined($a_name)) {
+		if ($names{$a}) {
 			foreach my $b (@verts) {
 				if ($a ne $b and $g->has_edge($b, $a)) {
-					my $b_name = $g->get_vertex_attribute($b, "name");
-					if (defined($b_name)) {
-						store_data_one($a, $a_name, $b, $b_name, "asm");
-						store_data_one($a, $a_name, $b, $b_name, "ssm");
+					if ($names{$b}) {
+						store_data_one($a, $names{$a}, $b, $names{$b}, "asm");
+						store_data_one($a, $names{$a}, $b, $names{$b}, "ssm");
 					}
 				}
 			}
