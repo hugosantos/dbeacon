@@ -620,7 +620,7 @@ sub render_matrix {
 	}
 
 	if (scalar(@lowrx) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons that only receive a small number of other beacons</h4>', "\n";
+		print '<h4 style="margin-bottom: 0">Beacons that report only a small number of received sources</h4>', "\n";
 		print '<ul>', "\n";
 		foreach $a (@lowrx) {
 			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
