@@ -20,6 +20,7 @@ our $dumpfile = "/home/seb/dbeacon/dump.xml";
 our $historydir = 'data';
 our $verbose = 1;
 our $title = "IPv6 Multicast Beacon";
+our $page_title = $title;
 our $default_hideinfo = 0;	# one of '0', '1'
 our $default_what = "both";	# one of 'both', 'asm'
 our $history_enabled = 1;
@@ -245,7 +246,7 @@ sub parse_stats {
 sub start_document {
 	start_base_document();
 
-	print "<h1 style=\"margin: 0\">IPv6 Multicast Beacon</h1>\n";
+	print "<h1 style=\"margin: 0\">$title</h1>\n";
 
 	print "<small>Current server time is " . localtime() . "</small><br />\n";
 }
@@ -978,7 +979,7 @@ sub start_base_document {
 	print "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
 
 	print "<head>
-	<title>$title</title>
+	<title>$page_title</title>
 	<meta http-equiv=\"refresh\" content=\"60\" />\n";
 
 	if ($css_file) {
