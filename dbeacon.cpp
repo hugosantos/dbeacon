@@ -433,7 +433,8 @@ static inline bool operator < (const address &a1, const address &a2) {
 	return memcmp(&a1, &a2, sizeof(address)) < 0;
 }
 
-static uint8_t buffer[2048];
+static uint8_t *buffer = 0;
+static const int bufferLen = 2048;
 
 extern char *optarg;
 
@@ -472,6 +473,11 @@ static int parse_arguments(int, char **);
 
 int main(int argc, char **argv) {
 	int res;
+
+	if ((buffer = new uint8_t[bufferLen]) == 0) {
+		fprintf(stderr, "Failed to allocate buffer memory.\n");
+		return -1;
+	}
 
 	srand(time(NULL));
 
@@ -942,7 +948,7 @@ void handle_probe(int sock, content_type type) {
 	msg.msg_flags = 0;
 
 	iov.iov_base = (char *)buffer;
-	iov.iov_len = sizeof(buffer);
+	iov.iov_len = bufferLen;
 
 	len = recvmsg(sock, &msg, 0);
 	if (len < 0)
@@ -962,20 +968,22 @@ void handle_probe(int sock, content_type type) {
 	uint64_t recvdts = 0;
 	int ttl = 0;
 
-	for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
-		if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
-			ttl = *(int *)CMSG_DATA(hdr);
-		} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
-			ttl = *(uint8_t *)CMSG_DATA(hdr);
-		} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_TTL) {
-			ttl = *(int *)CMSG_DATA(hdr);
+	if (msg.msg_controllen > 0) {
+		for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
+			if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
+				ttl = *(int *)CMSG_DATA(hdr);
+			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
+				ttl = *(uint8_t *)CMSG_DATA(hdr);
+			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_TTL) {
+				ttl = *(int *)CMSG_DATA(hdr);
 #ifdef SO_TIMESTAMP
-		} else if (hdr->cmsg_level == SOL_SOCKET && hdr->cmsg_type == SO_TIMESTAMP) {
-			timeval *tv = (timeval *)CMSG_DATA(hdr);
-			recvdts = tv->tv_sec;
-			recvdts *= 1000;
-			recvdts += tv->tv_usec / 1000;
+			} else if (hdr->cmsg_level == SOL_SOCKET && hdr->cmsg_type == SO_TIMESTAMP) {
+				timeval *tv = (timeval *)CMSG_DATA(hdr);
+				recvdts = tv->tv_sec;
+				recvdts *= 1000;
+				recvdts += tv->tv_usec / 1000;
 #endif
+			}
 		}
 	}
 
@@ -1367,7 +1375,7 @@ void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, 
 static int send_nprobe(const sockaddr *addr, socklen_t addrlen, uint32_t &seq) {
 	int len;
 
-	len = build_nprobe(buffer, sizeof(buffer), seq, get_timestamp());
+	len = build_nprobe(buffer, bufferLen, seq, get_timestamp());
 	seq++;
 
 	len = sendto(mcastSock, buffer, len, 0, addr, addrlen);
@@ -1533,7 +1541,7 @@ int build_nreport(uint8_t *buff, int maxlen, int type, bool publishsources) {
 int send_report(int type) {
 	int len;
 
-	len = build_nreport(buffer, sizeof(buffer), type == SSM_REPORT ? STATS_REPORT : type, type != SSM_REPORT);
+	len = build_nreport(buffer, bufferLen, type == SSM_REPORT ? STATS_REPORT : type, type != SSM_REPORT);
 	if (len < 0)
 		return len;
 
