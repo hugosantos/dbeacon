@@ -1,7 +1,0 @@
-# Where dbeacon is generating its dump?
-$dumpfile = "../../dump.xml";
-
-# In which directory rrd are stored
-$historydir = "data";
-
-$history = "${url}history/";
