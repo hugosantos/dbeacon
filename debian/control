@@ -2,7 +2,7 @@ Source: dbeacon
 Section: base
 Priority: optional
 Maintainer: Hugo Santos <hsantos@av.it.pt>
-Build-Depends: debhelper (>= 4.0.0), g++-3.3, make
+Build-Depends: debhelper (>= 4.0.0)
 Standards-Version: 3.6.0
 
 Package: dbeacon
