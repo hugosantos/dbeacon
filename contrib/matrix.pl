@@ -385,13 +385,14 @@ sub render_matrix {
 					if ($b ne $a and $g->has_edge($b, $a)) {
 						my $txt = $g->get_edge_attribute($b, $a, $attname);
 
+						if (($attname eq 'delay' or $attname eq 'jitter') and $txt ne "") {
+							$txt = sprintf("%.1f", $txt);
+						}
+
 						if ($attwhat eq "asm") {
 							if ($txt eq "") {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
-								if ($attname eq 'delay' or $attname eq 'jitter') {
-									$txt = sprintf("%.1f", $txt);
-								}
 								print "<td class=\"fulladjacent\">";
 								make_history_link($b, $a, "asm", $txt, "historyurl");
 								print "</td>";
@@ -402,8 +403,7 @@ sub render_matrix {
 							if (($txt eq "") and ($txtssm eq "")) {
 								print "<td $what_td class=\"blackhole\">XX</td>";
 							} else {
-								if ($attname eq 'delay' or $attname eq 'jitter') {
-									$txt = sprintf("%.1f", $txt);
+								if (($attname eq 'delay' or $attname eq 'jitter') and $txtssm ne "") {
 									$txtssm = sprintf("%.1f", $txtssm);
 								}
 								make_matrix_cell($b, $a, "asm", $txt, "historyurl");
