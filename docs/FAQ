@@ -1,6 +1,18 @@
-- What does 'dbeacon' mean?
+Frequently Asked Questions (FAQ)
+--------------------------------
+
+These are some of the Frequenctly Asked Questions.
+
+* What does 'dbeacon' mean?
+
+  'dbeacon' stands for Distributed Beacon. It is named like this because it
+  requires no central server to function.
 
 - Why should i run 'dbeacon'?
+
+  You should run 'dbeacon' if you are deploying intra or inter-domain multicast
+  in your network. It is a tool that might help you find connectivity problems
+  as well as to collect statistics about the current connectivity.
 
 - I googled and found another beacon at NLAR, how does dbeacon differ from it?
 
@@ -8,33 +20,84 @@
 
 - What is ASM? and SSM?
 
+  ASM and SSM are two different multicast models. ASM stands for Any Source
+  Multicast while SSM stands for Source Specific Multicast. ASM provides a
+  simple bidirectional multicast model for hosts at the expense of router
+  complexity while SSM is a simpler unidirectional model.
+
 - Do i need to be 'root' to run dbeacon?
 
+  No, dbeacon is able (and should be) run as a simple user.
+
 - Can i deploy several dbeacons in the same host?
+
+  Yes, you may run as many dbeacons as your OS has resources for.
 
 - Where should i deploy dbeacon in my network?
 
 - How can i make my flag to show up in the matrix page?
 
+  To make your flag show up in the matrix page, specify your Two Letter Country
+  Code when running dbeacon. For instance:
+
+    ./dbeacon [...] -C EU
+
 - I read the usage of 'ntpd' is recommended, why is that?
+
+  'dbeacon' relies on the several beacon hosts to have their clocks properly
+  synchronized in order to collect good delay statistics. 'ntpd' provides this
+  feature.
 
 - How do i setup the history feature?
 
 - How much disk space is required for the history feature?
 
+- May i run a matrix page without history support?
+
+  Yes, the history feature may be disabled via matrix.conf.
+
 - My beacon is in the 'Beacons that report no received sources' list.
   What does it mean and how can i fix it?
 
+  This means that while some (or all) beacons are able to receive your multicast
+  packets, you weren't. This is due to a broken multicast setup, you should
+  investigate your routers for problems or contact your network administrator.
+
 - How much bandwidth will dbeacon consume?
+
+  It depends on the current number of beacons in the group. Due to adaptive
+  intervals 'dbeacon' usualy consumes bandwidth in a direct proportion of the
+  number of beacons. So if there are currently 14 beacons, it should consume
+  around 14Kb/s in average (a more real number would be 10-12Kb/s).
 
 - Is IPv4 supported?
 
+  Yes, for ASM and SSM.
+
 - Is my Operating System supported?
+
+  It depends on what Operating System you run. At this moment dbeacon is
+  supported in Linux 2.4 and 2.6, with SSM support in versions >= 2.6.11.
+  BSD variants are also supported, although for only ASM if don't have the
+  latest KAME stack.
 
 - Where can i find a dbeacon Debian package?
 
+  Check dbeacon's website.
+
 - Why are some matrix cells painted in a lighter green than others?
 
-- How does dbeacon protocol works ?
+  When in 'SSM or ASM' view (the default one), a bright green cell means that
+  the currently displayed value was obtained via SSM, while a lighter green
+  points to ASM.
+
+- How does dbeacon's protocol work?
+
+  For a detailed explanation on dbeacon's protocol read the included PROTOCOL file.
 
 - I didn't found a response in the FAQ, what should I do ?
+
+  Either join #m6bone in the irc.freenode.net network or mail one of the developers.
+
+
+
