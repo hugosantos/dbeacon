@@ -485,7 +485,7 @@ sub render_matrix {
 	}
 
 	my $attat = $page->param('at');
-	if (not defined($attat)) {
+	if (not defined($attat) or $attat eq "") {
 		$attat = 0;
 	}
 	my $addinfo;
