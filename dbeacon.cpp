@@ -35,8 +35,11 @@
 #define IP_RECVTTL 12
 #endif
 
-// change this to uint8_t on solaris, etc
+#if __sun__
+#define TTLType		uint8_t
+#else
 #define TTLType		int
+#endif
 
 #if __linux__ || (__FreeBSD_version > 500042)
 
