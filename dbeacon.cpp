@@ -66,6 +66,7 @@ using namespace std;
 
 static const char *defaultSSMChannel = "ff3e::beac";
 static const int defaultPort = 10000;
+static const TTLType defaultTTL = 127;
 
 struct address : sockaddr_storage {
 	address();
@@ -1335,7 +1336,7 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 	// 4 packet type
 	buff[3] = 1; // Report
 
-	buff[4] = 127; // Original Hop Limit
+	buff[4] = defaultTTL; // Original Hop Limit
 
 	int ptr = 5;
 
@@ -1769,7 +1770,7 @@ int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
 	}
 #endif
 
-	TTLType ttl = 127;
+	TTLType ttl = defaultTTL;
 
 	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_HOPS : IP_MULTICAST_TTL, &ttl, sizeof(ttl)) != 0) {
 		perror(level == IPPROTO_IPV6 ?
