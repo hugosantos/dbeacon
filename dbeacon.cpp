@@ -1559,14 +1559,14 @@ void dumpStats(FILE *fp, const char *tag, const Stats &s, uint64_t now, int sttl
 	else if (sttl)
 		fprintf(fp, " ttl=\"%i\"", sttl - s.rttl);
 	fprintf(fp, " rptage=\"%u\"", (uint32_t)((now - s.lastupdate) / 1000));
-	fprintf(fp, " loss=\"%.1f\"", s.avgloss);
+	fprintf(fp, " loss=\"%.1f\"", s.avgloss * 100);
 	fprintf(fp, " delay=\"%.3f\"", fabs(s.avgdelay));
 	if (s.avgdelay < 0) {
 		fprintf(fp, " future=\"true\"");
 	}
 	fprintf(fp, " jitter=\"%.3f\"", s.avgjitter);
-	fprintf(fp, " ooo=\"%.3f\"", s.avgooo);
-	fprintf(fp, " dup=\"%.3f\"", s.avgdup);
+	fprintf(fp, " ooo=\"%.3f\"", s.avgooo * 100);
+	fprintf(fp, " dup=\"%.3f\"", s.avgdup * 100);
 	fprintf(fp, " />\n");
 }
 
