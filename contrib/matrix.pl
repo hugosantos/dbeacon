@@ -204,7 +204,7 @@ foreach $a (@V) {
 		foreach $b (@V) {
 			$id = $g->get_vertex_attribute($b, "id");
 			if ($id >= 1) {
-				if ($g->has_edge($b, $a)) {
+				if ($b ne $a and $g->has_edge($b, $a)) {
 					my $txt;
 					my $txtssm;
 					my $tdclass = "adjacent";
