@@ -1,67 +1,68 @@
-.TH matrix.conf "1" "User Manuals"
+.TH matrix.conf "5" "User Manuals"
 .SH NAME
 matrix.conf \- matrix.pl configuration file
 .SH DESCRIPTION
 \fBmatrix.conf\fR is the setup configuration file for matrix.pl if you want to
 add an html frontend to \fBdbeacon\fR's dumped xml file. Configuration variable
-are perl variables, used to modify dynamically the behavior of matrix.pl
+are perl variables, used to dynamically modify the behavior of matrix.pl
 .SH CONFIGURATION VARIABLES
 .TP
-\fB$dumpfile\fR \fIstring\fR
-This is where the xml file dumped by dbeacon reside. This variable is required
+\fB$dumpfile\fR = \fIstring\fR;
+Required variable. The path to dbeacon's xml dump file.
 .TP
-\fB$historydir\fR \fIstring\fR
+\fB$historydir\fR = \fIstring\fR;
 This is where the history round robin database (rrd) will be stored. Be sure to
-have enough place to store it (about 30Mb per tuple (source/destination)
+have enough place to store it (about 30Mb per tuple (source/destination)).
 .TP
-\fB$verbose\fR \fInumber\fR
+\fB$verbose\fR = \fIinteger\fR;
 Set it to 1 if you want a verbose output of the xml file parsing.
 .TP
-\fB$title\fR \fIstring\fR
+\fB$title\fR = \fIstring\fR;
 The title of the generated html page. It can be anything as long as it respect
 the html syntax.
 .TP
-\fB$page_title\fR \fIstring\fR
-The page title of the generated html page, that is the title which appear at the
-top of you navigator.
+\fB$page_title\fR = \fIstring\fR;
+The page title of the generated html page, that is the title which appears in
+the titlebar of your browser.
 .TP
-\fB$default_hideinfo\fR \fInumber\fR
-Whether you want or not to display the IPv4/IPv6 source info on the web page.
-This may be a concern for security issues.
+\fB$default_hideinfo\fR = \fIinteger\fR;
+Whether you want or not to display the IPv4/IPv6 source info on the web page by
+default.
 .TP
-\fB$default_what\fR \fIstring\fR
-The default matrix view on the html page, different view are 'asmorssm', 'both', 'asm'
+\fB$default_what\fR = \fIstring\fR;
+The default matrix view on the html page, different view are 'asmorssm',
+'both', 'asm'.
 .TP
-\fB$history_enabled\fR \fInumber\fR
-Whether you want or not enable rrd history logging. This require that you have
-installed the RRD perl module.
+\fB$history_enabled\fR = \fIinteger\fR;
+Whether you want or not to enable rrd history logging. This option requires the
+RRDs perl module (lib-perl-rrds) in Debian.
 .TP
-\fB$css_file\fR \fIstring\fR
-Your preferred style file if you don't like the default.
+\fB$css_file\fR = \fIstring\fR;
+Specify a CSS file to be used instead of the embedded default.
 .TP
-\fB$dump_update_delay\fR \fInumber\fR
-The delay between each xml dump from dbeacon. This is used to detect out of date
+\fB$dump_update_delay\fR = \fIinteger\fR;
+The delay between each dbeacon xml dump. This is used to detect out of date
 data.
 .TP
-\fB$flag_url_format\fR \fIstring\fR
-Where are your flag images. It may give a location but a generic format of our
-file too.
+\fB$flag_url_format\fR = \fIstring\fR;
+A format that specifies the base URL to be used for displaying flags.
 .TP
-\fB$default_ssm_group\fR \fIstring\fR
+\fB$default_ssm_group\fR = \fIstring\fR;
 The default SSM joining channel used by dbeacon.
 .TP
-\fB$debug\fR \fInumber\fR
+\fB$debug\fR = \fIinteger\fR;
 Used for debugging.
 .TP
-\fB$matrix_link_title\fR \fInumber\fR
-Display a tip over the matrix cell is the history link are a enabled
+\fB$matrix_link_title\fR = \fIinteger\fR;
+Displays a tooltip for each matrix cell that shows the current row/column
+crossing. This option is only available when $history_enabled is 1.
 .TP
-\fB$default_full_matrix \fR \fInumber\fR
-Whether you want to have a condensed or a full view of the matrix.
+\fB$default_full_matrix \fR = \fIinteger\fR;
+Whether you want to have a condensed or a full view of the matrix by default.
 .TP
-\fB$faq_page\fR \fIstring\fR
-Where is the Frequently Asked Question page stored.
+\fB$faq_page\fR = \fIstring\fR;
+The base URL for the Frequently Asked Questions page.
 .SH BUGS
-Please report them to Hugo Santos, the core developer of this project at <hsantos@av.it.pt>
+Should be reported to the core developer Hugo Santos <hsantos@av.it.pt>.
 .SH HISTORY
-\fBmatrix.conf\fR is the configuration file from matrix.pl and is a join work from Hugo Santos, Sebastien Chaumontet and Mickael Hoerdt. It has been done in the early days of the m6bone, when nobodies know if it was ASM or SSM at the inter-domain level ;).
+\fBmatrix.conf\fR is the configuration file from matrix.pl and is a joint work of Hugo Santos, Sebastien Chaumontet and Mickael Hoerdt. It has been done in the early days of the m6bone, when nobody knew if the SPTs or RPTs were being used between hosts and also to evaluate the performance and deployment of SSM.
