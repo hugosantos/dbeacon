@@ -14,6 +14,8 @@ use strict;
 # change this filename to your dump file
 my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
 
+my $dbeacon = "<a href=\"http://artemis.av.it.pt/~hsantos/software/dbeacon.html\">dbeacon</a>";
+
 my $page = new CGI;
 my $url = $page->script_name();
 
@@ -253,7 +255,7 @@ if (scalar(@problematic) ne 0) {
 	print "</ul>\n";
 }
 
-print "<p>If you wish to add a beacon to your site, you may use dbeacon with the following parameters:</p>\n";
+print "<p>If you wish to add a beacon to your site, you may use $dbeacon with the following parameters:</p>\n";
 print "<p><code>./dbeacon -n NAME -b $sessiongroup";
 if ($ssm_sessiongroup) {
 	print " -S $ssm_sessiongroup";
@@ -537,7 +539,7 @@ sub build_header {
 
 sub end_document {
 	print "<hr />\n";
-	print "<small>matrix.pl - a tool for dynamic viewing of dbeacon information. by Hugo Santos and Hoerdt Mickaël</small>\n";
+	print "<small>matrix.pl - a tool for dynamic viewing of $dbeacon information. by Hugo Santos and Hoerdt Mickaël</small>\n";
 
 	print "</body>\n";
 	print "</html>\n";
