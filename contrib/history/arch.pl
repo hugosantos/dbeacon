@@ -13,6 +13,8 @@
 
 # Where dbeacon is generating its dump?
 my $dumpfile = "../../dump.xml";
+# to use with dbeacon -L
+#my $dumpfile = shift @ARGV;
 
 # In which directory rrd are stored
 my $historydir = "data";

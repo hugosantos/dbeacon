@@ -21,10 +21,10 @@ use Switch;
 use POSIX qw(strftime);
 
 my $page = new CGI;
+my $url = $page->script_name();
 
 sub listgraph
 {
-my $url = $page->script_name();
 
 print $page->header;
 
@@ -87,12 +87,26 @@ elsif (!$page->param('src'))
 elsif (!$page->param('type'))
 {
 	print 'Select value you want to display:<br><br>';
-	# Dst and src selected => Displaying daily graphs of all types
-	foreach my $type  ('ttl','loss','delay','jitter')
-	{
-		print '<a href="'.$url.'?dst='.$page->param('dst').'&src='.$page->param('src').'&type='.$type.'">';
-		print '<img border="0" src="'.$url.'?dst='.$page->param('dst').'&src='.$page->param('src').'&type='.$type.'&img=true"></a><br>';
+	my $src = $page->param('src');
+	my $dst = $page->param('dst');
+	$src =~ s/^(.+)\..+\.(.+)$/$1/;
+	$dst =~ s/^(.+)\..+$/$1/;
+	print "Values from $src to $dst<br /><br />";
+	print "<table>";
+	print "<tr>";
+	foreach my $type ("ttl", "loss") {
+		print "<td>";
+		graphthumb($type);
+		print "</td>";
 	}
+	print "</tr>";
+	print "<tr>";
+	foreach my $type ("delay", "jitter") {
+		print "<td>";
+		graphthumb($type);
+		print "</td>";
+	}
+	print "</tr>";
 }
 else
 {
@@ -111,6 +125,11 @@ print "
 ";
 }
 
+sub graphthumb {
+	my ($type) = shift @_;
+	print '<a href="'.$url.'?dst='.$page->param('dst').'&src='.$page->param('src').'&type='.$type.'">';
+	print '<img border="0" src="'.$url.'?dst='.$page->param('dst').'&src='.$page->param('src').'&type='.$type.'&img=true&thumb=true"></a><br>';
+}
 
 sub graphgen
 {
@@ -146,33 +165,52 @@ sub graphgen
 
 	$dst =~ s/^(.+)\..+$/$1/;
 
-	$title.= " from $src to $dst ($asmorssm)";
-
 	# Escape ':' chars
 	my $rrdfile = $historydir.'/'.$page->param('dst').'/'.$page->param('src').'.rrd';
 	$rrdfile =~ s/:/\\:/g;
 
 	print $page->header(-type=>'image/png',-expires=>'+3s');
 
-	if (!RRDs::graph('-',
+	my $width = 450;
+	my $height = 150;
+
+	if ($page->param('thumb') eq "true") {
+		$width = 300;
+		$height = 100;
+		$title .= " ($ytitle)";
+	} else {
+		$title.= " from $src to $dst ($asmorssm)";
+	}
+
+	my @args = ('-',
 		'--imgformat', 'PNG',
 		'--start',$age,
+		'--width=' . $width,
+		'--height=' . $height,
 		'--title='.$title,
-		'--vertical-label',$ytitle,
 		'DEF:Max='.$rrdfile.':'.$page->param('type').':MAX',
 		'DEF:Avg='.$rrdfile.':'.$page->param('type').':AVERAGE',
 		'DEF:Min='.$rrdfile.':'.$page->param('type').':MIN',
 		'CDEF:nodata=Max,UN,INF,UNKN,IF',
-		'AREA:nodata#E0E0FD',
-		'AREA:Max#FF0000:Max',
-		'GPRINT:Max:MAX:'.$unit,
-		'AREA:Avg#CC0000:Avg',
-		'GPRINT:Avg:AVERAGE:'.$unit,
-		'AREA:Min#990000:Min',
-		'GPRINT:Min:AVERAGE:'.$unit,
-		'GPRINT:Max:LAST:Last max '.$unit.'\n',
-		'COMMENT:'.strftime("%a %b %e %Y %H:%M (%Z)",localtime).' '.strftime("%H:%M (GMT)",gmtime).'\r' ))
-	{
+		'AREA:nodata#E0E0FD');
+
+	if ($page->param('thumb') ne "true") {
+		push (@args,  '--vertical-label',$ytitle);
+		push (@args, 'COMMENT:'.strftime("%a %b %e %Y %H:%M (%Z)",localtime).' '.strftime("%H:%M (GMT)",gmtime).'\r');
+		push (@args, 'AREA:Max#FF0000:Max');
+		push (@args, 'GPRINT:Max:MAX:'.$unit);
+		push (@args, 'AREA:Avg#CC0000:Avg');
+		push (@args, 'GPRINT:Avg:AVERAGE:'.$unit);
+		push (@args, 'AREA:Min#990000:Min');
+		push (@args, 'GPRINT:Min:AVERAGE:'.$unit);
+	} else {
+		push (@args, 'AREA:Avg#CC0000:Avg');
+		push (@args, 'GPRINT:Avg:AVERAGE:'.$unit);
+	}
+
+	push (@args, 'GPRINT:Max:LAST:Last '.$unit.'\n');
+
+	if (!RRDs::graph(@args)) {
 		die(RRDs::error);
   	}
 }
