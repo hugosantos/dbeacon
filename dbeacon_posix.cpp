@@ -40,37 +40,40 @@ int _McastListenOldAPI(int sock, const address &grpaddr);
 
 static int (*_McastListen)(int, const address &) = _McastListenOldAPI;
 
-#if !defined(MCAST_JOIN_GROUP)
-
+#ifndef MCAST_JOIN_GROUP
 #define MCAST_JOIN_GROUP 42
+#endif
+
+#ifndef MCAST_JOIN_SOURCE_GROUP
 #define MCAST_JOIN_SOURCE_GROUP 46
 #define MCAST_LEAVE_SOURCE_GROUP 47
+#endif
 
-struct group_req {
+#ifndef MCAST_FILTER
+#define MCAST_FILTER	48
+#endif
+
+// Since some GLIBCs include this definitions, and others don't (i'm not even
+// talking about BSDs) we instead define them localy to avoid definition colisions
+
+struct _loc_group_req {
 	uint32_t gr_interface;
 	struct sockaddr_storage gr_group;
 };
 
-struct group_source_req {
+struct _loc_group_source_req {
 	uint32_t gsr_interface;
 	struct sockaddr_storage gsr_group;
 	struct sockaddr_storage gsr_source;
 };
 
-#endif
-
-#if !defined MCAST_FILTER
-#define MCAST_FILTER	48
-
-struct group_filter {
+struct _loc_group_filter {
 	uint32_t gf_interface;
 	struct sockaddr_storage gf_group;
 	uint32_t gf_fmode;
 	uint32_t gf_numsrc;
 	struct sockaddr_storage gf_slist[1];
 };
-
-#endif
 
 static bool set_address(sockaddr_storage &t, const address &addr) {
 	if (addr.family() == AF_INET)
@@ -85,13 +88,14 @@ static bool set_address(sockaddr_storage &t, const address &addr) {
 void MulticastStartup() {
 	int sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock > 0) {
-		group_filter flt;
+		_loc_group_filter flt;
 		memset(&flt, 0, sizeof(flt));
 		socklen_t fltlen = sizeof(flt);
 
 		// Check if OS supports MCAST_FILTER
 
-		if (getsockopt(sock, IPPROTO_IP, MCAST_FILTER, &flt, &fltlen) == 0 && errno != ENOPROTOOPT) {
+		if (getsockopt(sock, IPPROTO_IP, MCAST_FILTER, &flt, &fltlen) == 0
+				&& errno != ENOPROTOOPT) {
 			if (verbose) {
 				fprintf(stderr, "Using new Multicast Filter API\n");
 			}
@@ -104,7 +108,7 @@ void MulticastStartup() {
 }
 
 int _McastListenNewAPI(int sock, const address &grpaddr) {
-	struct group_req grp;
+	_loc_group_req grp;
 
 	memset(&grp, 0, sizeof(grp));
 	grp.gr_interface = mcastInterface;
@@ -137,7 +141,7 @@ int MulticastListen(int sock, const address &grpaddr) {
 }
 
 static int SSMJoinLeave(int sock, int type, const address &grpaddr, const address &srcaddr) {
-	struct group_source_req req;
+	_loc_group_source_req req;
 	memset(&req, 0, sizeof(req));
 
 	req.gsr_interface = mcastInterface;
