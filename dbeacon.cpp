@@ -1176,12 +1176,13 @@ int send_nprobe() {
 }
 
 static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer, uint8_t type, const char *str) {
-	if ((pointer + 2 + (int)strlen(str)) > maxlen)
+	int len = strlen(str);
+	if ((pointer + 2 + len) > maxlen)
 		return false;
 	buf[pointer + 0] = type;
-	buf[pointer + 1] = strlen(str);
-	memcpy(buf + pointer + 2, str, buf[pointer + 1]);
-	pointer += buf[pointer + 1];
+	buf[pointer + 1] = len;
+	memcpy(buf + pointer + 2, str, len);
+	pointer += len + 2;
 	return true;
 }
 
