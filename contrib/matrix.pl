@@ -79,7 +79,7 @@ table#beacs td.name {
 	border-left: 2px solid black;
 }
 
-table#beacs td.name, table#beacs td.addr, table#beacs td.admincontact {
+table#beacs td.name, table#beacs td.addr, table#beacs td.admincontact, table#beacs td.age {
 	border-right: 2px solid black;
 }
 
@@ -163,12 +163,13 @@ if (scalar(@problematic) ne 0) {
 
 print "<br /><br />\n";
 print "<table cellspacing=\"0\" cellpadding=\"0\" id=\"beacs\">";
-print "<tr><th>Beacon Name</th><th>Address</th><th>Admin Contact</th></tr>\n";
+print "<tr><th>Beacon Name</th><th>Address</th><th>Admin Contact</th><th>Age</th></tr>\n";
 
 foreach $a (@V) {
 	my $addr = $g->get_vertex_attribute($a, "addr");
 	my $contact = $g->get_vertex_attribute($a, "contact");
-	print "<tr><td class=\"name\">$a</td><td class=\"addr\">$addr</td><td class=\"admincontact\">$contact</td></tr>\n";
+	my $age = $g->get_vertex_attribute($a, "age");
+	print "<tr><td class=\"name\">$a</td><td class=\"addr\">$addr</td><td class=\"admincontact\">$contact</td><td class=\"age\">$age secs</td></tr>\n";
 }
 
 print "</table>";
@@ -185,6 +186,7 @@ sub start_handler {
 		my $fname;
 		my $fadmin;
 		my $faddr;
+		my $fage;
 		while (($name, $value) = each %atts) {
 			if ($name eq "name") {
 				$fname = $value;
@@ -192,6 +194,8 @@ sub start_handler {
 				$fadmin = $value;
 			} elsif ($name eq "addr") {
 				$faddr = $value;
+			} elsif ($name eq "age") {
+				$fage = $value;
 			}
 		}
 
@@ -201,6 +205,7 @@ sub start_handler {
 			$g->add_vertex($fname);
 			$g->set_vertex_attribute($fname, "contact", $fadmin);
 			$g->set_vertex_attribute($fname, "addr", $faddr);
+			$g->set_vertex_attribute($fname, "age", $fage);
 		}
 	} elsif ($tag eq "source") {
 		my $fname;
