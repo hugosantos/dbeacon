@@ -499,6 +499,11 @@ sub render_matrix {
 	my @sortedkeys = sort { $adj{$b}[AGE] <=> $adj{$a}[AGE] } keys %adj;
 
 	foreach $c (@sortedkeys) {
+		$ids{$c} = 0;
+
+		$adj{$c}[IN_EDGE] ||= 0;
+		$adj{$c}[OUT_EDGE] ||= 0;
+
 		if (defined($adj{$c}[AGE]) and $adj{$c}[AGE] < 30) {
 			push (@warmingup, $c);
 		} elsif (not $adj{$c}[IN_EDGE] and not $adj{$c}[OUT_EDGE]) {
@@ -516,18 +521,18 @@ sub render_matrix {
 	print "</tr>\n";
 
 	foreach $a (@sortedkeys) {
-		if (defined $ids{$a} and $ids{$a} > 0 and $adj{$a}[IN_EDGE] > 0) {
+		if ($ids{$a} > 0 and $adj{$a}[IN_EDGE] > 0) {
 			print '<tr>';
 			print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
 			foreach $b (@sortedkeys) {
-				if (defined $ids{$b} and $ids{$b} > 0 and $adj{$b}[OUT_EDGE] > 0) {
+				if ($ids{$b} > 0 and $adj{$b}[OUT_EDGE] > 0) {
 					if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
 						my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
 						my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
 
 						if ($attname ne 'ttl') {
-							$txt = sprintf("%.1f", $txt) if defined $txt;
-							$txtssm = sprintf("%.1f", $txtssm) if defined $txtssm;
+							$txt = sprintf "%.1f", $txt if defined $txt;
+							$txtssm = sprintf "%.1f", $txtssm if defined $txtssm;
 						}
 
 						if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
