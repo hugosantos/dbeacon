@@ -209,7 +209,7 @@ static uint64_t get_timestamp();
 
 static inline void updateStats(const char *, const sockaddr_in6 *, int, uint32_t, uint64_t, uint64_t);
 
-static int SetupSocket(sockaddr_in6 *, bool);
+static int SetupSocket(sockaddr_in6 *, bool, bool);
 static int IPv6MulticastListen(int, struct in6_addr *);
 
 static int IPv6SSMJoin(int, const struct in6_addr *);
@@ -432,7 +432,7 @@ int main(int argc, char **argv) {
 	memset(&local, 0, sizeof(local));
 	local.sin6_family = AF_INET6;
 
-	mcastSock = SetupSocket(&local, false);
+	mcastSock = SetupSocket(&local, false, false);
 	if (mcastSock < 0)
 		return -1;
 
@@ -451,7 +451,7 @@ int main(int argc, char **argv) {
 	}
 
 	for (vector<pair<sockaddr_in6, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
-		int sock = SetupSocket(&i->first, i->second == JPROBE || i->second == NPROBE || i->second == NSSMPROBE);
+		int sock = SetupSocket(&i->first, i->second == JPROBE || i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
 		mcastSocks.push_back(make_pair(sock, i->second));
@@ -1540,7 +1540,7 @@ int IPv6SSMLeave(int sock, const struct in6_addr *srcaddr) {
 	return IPv6SSMJoinLeave(sock, MCAST_LEAVE_SOURCE_GROUP, srcaddr);
 }
 
-int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
+int SetupSocket(sockaddr_in6 *addr, bool needTSHL, bool ssm) {
 	int sock = socket(AF_INET6, SOCK_DGRAM, 0);
 	if (sock < 0) {
 		perror("Failed to create multicast socket");
@@ -1585,7 +1585,7 @@ int SetupSocket(sockaddr_in6 *addr, bool needTSHL) {
 		return -1;
 	}
 
-	if (IN6_IS_ADDR_MULTICAST(&addr->sin6_addr)) {
+	if (IN6_IS_ADDR_MULTICAST(&addr->sin6_addr) && !ssm) {
 		if (IPv6MulticastListen(sock, &addr->sin6_addr) != 0) {
 			perror("Failed to join multicast group");
 			return -1;
