@@ -1425,8 +1425,13 @@ void do_dump() {
 
 	if (!IN6_IS_ADDR_UNSPECIFIED(&probeAddr.sin6_addr)) {
 		inet_ntop(AF_INET6, &beaconUnicastAddr.sin6_addr, tmp, sizeof(tmp));
-		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s/%d\" age=\"%llu\">\n", (newProtocol ? beaconName : probeName),
-						sessionName, tmp, ntohs(beaconUnicastAddr.sin6_port), (now - startTime) / 1000);
+		fprintf(fp, "\t<beacon name=\"%s\" group=\"%s\" addr=\"%s/%d\"",
+				(newProtocol ? beaconName : probeName), sessionName, tmp, ntohs(beaconUnicastAddr.sin6_port));
+		if (ssmMcastSock) {
+			inet_ntop(AF_INET6, &ssmProbeAddr.sin6_addr, tmp, sizeof(tmp));
+			fprintf(fp, " ssmgroup=\"%s/%d\"", tmp, ntohs(ssmProbeAddr.sin6_port));
+		}
+		fprintf(fp, " age=\"%llu\">\n", (now - startTime) / 1000);
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {

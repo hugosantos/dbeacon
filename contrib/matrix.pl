@@ -6,7 +6,7 @@
 # Modifications by Hugo Santos
 
 # change this filename to your dump file
-my $dump_file = "/home/hugo/work/mcast/dbeacon/dump2.xml";
+my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
 
 # Program code follows
 
@@ -27,6 +27,7 @@ if (not $attname) {
 }
 
 my $sessiongroup;
+my $ssm_sessiongroup;
 
 my $current_beacon;
 my $current_source;
@@ -154,32 +155,32 @@ foreach $a (@V) {
 		print "$name <b>R$i</b>";
 		print "</td>";
 		foreach $b (@V) {
-			my $txt;
-			my $txtssm;
-			my $tdclass = "blackhole";
-			my $tdclasssm = "blackhole";
 			if ($g->has_edge($b, $a)) {
+				my $txt;
+				my $txtssm;
+				my $tdclass = "adjacent";
+				my $tdclasssm = "adjacent";
 				$txt = $g->get_edge_attribute($b, $a, $attname);
 				$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
-				if ($txt ge 0) {
-					$tdclass = "adjacent";
+				if (($txt eq "") and ($txtssm eq "")) {
+					print "<td colspan=\"2\" class=\"noinfo\">N/A</td>";
 				} else {
-					$txt = "N/A";
-					$tdclass = "noinfo";
-				}
-				if ($txtssm ge 0) {
-					$tdclasssm = "adjacent";
-				} else {
-					$txtssm = "-";
-					$tdclasssm = "nossminfo";
+					if ($txt eq "") {
+						$txt = "-";
+						$tdclass = "nossminfo";
+					} elsif ($txtssm eq "") {
+						$txtssm = "-";
+						$tdclasssm = "nossminfo";
+					}
+					print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\" edge>$txtssm</td>";
 				}
 			} else {
 				if ($a eq $b) {
-					$tdclass = "corner";
-					$tdclasssm = "corner";
+					print "<td colspan=\"2\" class=\"corner\"></td>";
+				} else {
+					print "<td colspan=\"2\" class=\"blackhole\"></td>";
 				}
 			}
-			print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\">$txtssm</td>";
 		}
 		print "<tr>";
 		print "\n";
@@ -222,7 +223,11 @@ print "</table>";
 print "<br /><br />";
 
 print "<p>If you wish to add a beacon to your site, you may use dbeacon with the following parameters:</p>\n";
-print "<p><code>./dbeacon -P -n NAME -b $sessiongroup -a CONTACT</code></p>\n";
+print "<p><code>./dbeacon -P -n NAME -b $sessiongroup";
+if ($ssm_sessiongroup) {
+	print " -S $ssm_sessiongroup";
+}
+print " -a CONTACT</code></p>\n";
 
 print "</body>";
 print "</html>";
@@ -246,8 +251,10 @@ sub start_handler {
 				$faddr = $value;
 			} elsif ($name eq "age") {
 				$fage = $value;
-			} elsif ($name = "group") {
+			} elsif ($name eq "group") {
 				$sessiongroup = $value;
+			} elsif ($name eq "ssmgroup") {
+				$ssm_sessiongroup = $value;
 			}
 		}
 
