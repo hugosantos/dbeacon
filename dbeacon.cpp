@@ -34,6 +34,9 @@
 #define IP_RECVTTL 12
 #endif
 
+// change this to uint8_t on solaris, etc
+#define TTLType		int
+
 #if __linux__ || (__FreeBSD_version > 500042)
 
 #if !defined(MCAST_JOIN_GROUP)
@@ -579,19 +582,27 @@ int main(int argc, char **argv) {
 	socklen_t addrlen = probeAddr.sockaddr_len();
 
 	if (beaconUnicastAddr.is_unspecified()) {
-		if (connect(mcastSock, (sockaddr *)&probeAddr, addrlen) != 0) {
+		int tmpSock = socket(probeAddr.ss_family, SOCK_DGRAM, 0);
+		if (tmpSock < 0) {
+			perror("Failed to create socket to discover local addr");
+			return -1;
+		}
+
+		if (connect(tmpSock, (sockaddr *)&probeAddr, addrlen) != 0) {
 			perror("Failed to connect multicast socket");
 			return -1;
 		}
-	} else {
-		if (bind(mcastSock, (sockaddr *)&beaconUnicastAddr, addrlen) != 0) {
-			perror("Failed to bind local socket");
+
+		if (getsockname(tmpSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
+			perror("getsockname");
 			return -1;
 		}
+
+		close(tmpSock);
 	}
 
-	if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
-		perror("getsockname");
+	if (bind(mcastSock, (sockaddr *)&beaconUnicastAddr, addrlen) != 0) {
+		perror("Failed to bind local socket");
 		return -1;
 	}
 
@@ -1735,14 +1746,16 @@ int SetupSocket(const address &addr, bool shouldbind, bool needTSHL, bool ssm) {
 		}
 	}
 
+#if 0
 	on = 1;
 
 	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_LOOP : IP_MULTICAST_LOOP, &on, sizeof(on)) != 0) {
 		perror("setting multicast loop setsockopt()");
 		return -1;
 	}
+#endif
 
-	int ttl = 127;
+	TTLType ttl = 127;
 
 	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_HOPS : IP_MULTICAST_TTL, &ttl, sizeof(ttl)) != 0) {
 		perror("setsockopt(IPV6_MULTICAST_HOPS)");
