@@ -1249,9 +1249,11 @@ void beaconMcastState::refresh(uint32_t seq, uint64_t now) {
 // logic adapted from java beacon
 
 void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t _now) {
-	uint64_t now = (uint32_t)_now;
+	int64_t now = (uint32_t)_now;
 
-	int64_t diff = udiff(now, timestamp);
+	//int64_t diff = udiff(now, timestamp);
+	int64_t diff = now - timestamp;
+	int64_t absdiff = abs(diff);
 
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
 		refresh(seqnum - 1, now);
@@ -1287,8 +1289,8 @@ void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, 
 
 		lastdelay += diff;
 
-		int newjitter = diff - lastjitter;
-		lastjitter = diff;
+		int newjitter = absdiff - lastjitter;
+		lastjitter = absdiff;
 		if (newjitter < 0)
 			newjitter = -newjitter;
 		s.avgjitter = 15/16. * s.avgjitter + 1/16. * newjitter;
@@ -1542,7 +1544,10 @@ void dumpStats(FILE *fp, const char *tag, const Stats &s, uint64_t now, int sttl
 		fprintf(fp, " ttl=\"%i\"", sttl - s.rttl);
 	fprintf(fp, " rptage=\"%u\"", (uint32_t)((now - s.lastupdate) / 1000));
 	fprintf(fp, " loss=\"%.1f\"", s.avgloss);
-	fprintf(fp, " delay=\"%.3f\"", s.avgdelay);
+	fprintf(fp, " delay=\"%.3f\"", fabs(s.avgdelay));
+	if (s.avgdelay < 0) {
+		fprintf(fp, " future=\"true\"");
+	}
 	fprintf(fp, " jitter=\"%.3f\"", s.avgjitter);
 	fprintf(fp, " ooo=\"%.3f\"", s.avgooo);
 	fprintf(fp, " dup=\"%.3f\"", s.avgdup);
