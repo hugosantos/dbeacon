@@ -5,20 +5,22 @@
 # Originally by Hoerdt Mickaël
 # Modifications by Hugo Santos
 
-# change this filename to your dump file
-my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
-
-# Program code follows
-
 use CGI;
-
 use Graph::Directed;
 use XML::Parser;
 use Switch;
 use integer;
 use strict;
 
+# change this filename to your dump file
+my $dump_file = "/home/hugo/work/mcast/dbeacon/dump.xml";
+
 my $page = new CGI;
+my $url = $page->script_name();
+
+# if matrix.pl is being served as matrix/, history will be matrix/history/
+# my $history = $url . "history/";
+my $history = undef;
 
 print $page->header;
 
@@ -48,6 +50,12 @@ start_document();
 
 build_header();
 
+my $what_td = "colspan=\"2\"";
+
+if ($page->param("what") eq "asm") {
+	$what_td = "";
+}
+
 print "<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" class=\"adjr\" id=\"adj\">\n";
 
 my $c;
@@ -66,12 +74,41 @@ foreach $c (@V) {
 	} elsif (not $g->get_vertex_attribute($c, "goodedge")) {
 		push (@problematic, $c);
 	} else {
-		print "<td colspan=\"2\"><b>S$i</b></td>";
+		print "<td $what_td><b>S$i</b></td>";
 		$g->set_vertex_attribute($c, "id", $i);
 		$i++;
 	}
 }
 print "</tr>\n";
+
+# this should be in a package
+sub make_history_url {
+	my ($dst, $src, $type) = @_;
+
+	my $dstbeacon = $dst->[0];
+	my $srcbeacon = $src->[0];
+
+	$dstbeacon =~ s/\/\d+$//;
+        $srcbeacon =~ s/\/\d+$//;
+
+	return "$history?src=" . $dst->[1] . ".$dstbeacon.$type&dst=" . $src->[1] . ".$srcbeacon";
+}
+
+sub build_name {
+	my ($a) = @_;
+
+	return [$a, $g->get_vertex_attribute($a, "name")];
+}
+
+sub make_history_link {
+	my ($dst, $src, $type, $txt, $class) = @_;
+
+	if ($history) {
+		print "<a class=\"$class\" href=\"" . make_history_url(build_name($dst), build_name($src), $type) . "\">$txt</a>";
+	} else {
+		print $txt;
+	}
+}
 
 foreach $a (@V) {
 	my $id = $g->get_vertex_attribute($a, "id");
@@ -81,29 +118,44 @@ foreach $a (@V) {
 		foreach $b (@V) {
 			if ($g->get_vertex_attribute($b, "id") >= 1) {
 				if ($b ne $a and $g->has_edge($b, $a)) {
-					my $txt;
-					my $txtssm;
-					my $tdclass = "adjacent";
-					my $tdclasssm = "ssmadjacent";
-					$txt = $g->get_edge_attribute($b, $a, $attname);
-					$txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
-					if (($txt eq "") and ($txtssm eq "")) {
-						print "<td colspan=\"2\" class=\"noinfo\">N/A</td>";
-					} else {
+					my $txt = $g->get_edge_attribute($b, $a, $attname);
+
+					if ($page->param("what") eq "asm") {
 						if ($txt eq "") {
-							$txt = "-";
-							$tdclass = "noasminfo";
-						} elsif ($txtssm eq "") {
-							$txtssm = "-";
-							$tdclasssm = "nossminfo";
+							print "<td class=\"noinfo\">N/A</td>";
+						} else {
+							print "<td class=\"fulladjacent\">";
+							make_history_link($b, $a, "asm", $txt, "historyurl");
+							print "</td>";
 						}
-						print "<td class=\"$tdclass\">$txt</td><td class=\"$tdclasssm\">$txtssm</td>";
+					} else {
+						my $tdclass = "adjacent";
+						my $txtssm = $g->get_edge_attribute($b, $a, "ssm_" . $attname);
+						my $tdclasssm = "ssmadjacent";
+
+						if (($txt eq "") and ($txtssm eq "")) {
+							print "<td colspan=\"2\" class=\"noinfo\">N/A</td>";
+						} else {
+							if ($txt eq "") {
+								$txt = "-";
+								$tdclass = "noasminfo";
+							} elsif ($txtssm eq "") {
+								$txtssm = "-";
+								$tdclasssm = "nossminfo";
+							}
+							print "<td class=\"$tdclass\">";
+							make_history_link($b, $a, "asm", $txt, "historyurl");
+							print "</td>";
+							print "<td class=\"$tdclasssm\">";
+							make_history_link($b, $a, "ssm", $txtssm, "historyurl");
+							print "</td>";
+						}
 					}
 				} else {
 					if ($a eq $b) {
-						print "<td colspan=\"2\" class=\"corner\">&nbsp;</td>";
+						print "<td $what_td class=\"corner\">&nbsp;</td>";
 					} else {
-						print "<td colspan=\"2\" class=\"blackhole\">XX</td>";
+						print "<td $what_td class=\"blackhole\">XX</td>";
 					}
 				}
 			}
@@ -342,7 +394,7 @@ table.adjr td {
 	padding: 3px;
 	border-bottom: 0.1em solid white;
 }
-table#adj td.adjacent, table#adj td.ssmadjacent {
+table#adj td.fulladjacent, table#adj td.adjacent, table#adj td.ssmadjacent {
 	background-color: #96ef96;
 	width: 20px;
 }
@@ -365,7 +417,7 @@ table#adj td.adjacent {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.blackhole, table#adj td.noinfo, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
+table#adj td.blackhole, table#adj td.noinfo, table#adj td.fulladjacent, table#adj td.ssmadjacent, table#adj td.corner, table#adj td.nossminfo {
 	border-right: 0.2em solid white;
 }
 
@@ -411,6 +463,11 @@ ul#view li {
 	border-bottom: 1px dotted black;
 }
 
+a.historyurl, a.historyurl:visited {
+	color: black;
+	text-decoration: none;
+}
+
 \t</style>
 </head>\n";
 
@@ -428,7 +485,6 @@ sub build_header {
 	}
 	print "<br /><br />\n";
 
-	my $url = $page->script_name();
 	my $hideatt;
 
 	if ($atthideinfo) {
