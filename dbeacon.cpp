@@ -175,7 +175,8 @@ enum {
 static vector<pair<address, content_type> > mcastListen;
 static vector<pair<int, content_type> > mcastSocks;
 
-static vector<pair<int, string> > webSites;
+typedef map<int, string> WebSites;
+static WebSites webSites;
 
 static vector<address> redist;
 
@@ -249,6 +250,8 @@ struct beaconSource {
 	ExternalSources externalSources;
 
 	beaconExternalStats &getExternal(const beaconSourceAddr &, uint64_t);
+
+	WebSites webSites;
 };
 
 typedef map<beaconSourceAddr, beaconSource> Sources;
@@ -450,7 +453,7 @@ int main(int argc, char **argv) {
 				type = T_WEBSITE_MATRIX;
 				optarg += 7;
 			}
-			webSites.push_back(make_pair(type, optarg));
+			webSites[type] = optarg;
 		} else if (res == 'i') {
 			intf = optarg;
 		} else if (res == 'h') {
@@ -943,6 +946,8 @@ void handle_nmsg(address *from, uint64_t recvdts, int ttl, uint8_t *buff, int le
 				// trigger local SSM join
 				if (!addr.is_equal(beaconUnicastAddr))
 					getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts).adminContact = stats.contact;
+			} else if (hd[0] == T_WEBSITE_GENERIC || hd[0] == T_WEBSITE_LG || hd[0] == T_WEBSITE_MATRIX) {
+				src.webSites[hd[0]] = string((char *)hd + 2, hd[1]);
 			}
 		}
 	}
@@ -1208,7 +1213,7 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 			int contactlen = i->second.adminContact.size();
 			len += 2 + namelen + 2 + contactlen;
 		} else if (type == WEBSITE_REPORT_EVENT) {
-			for (vector<pair<int, string> >::const_iterator j = webSites.begin(); j != webSites.end(); j++)
+			for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
 				len += 2 + j->second.size();
 		} else {
 			len += (i->second.ASM.s.valid ? 22 : 0) + (i->second.SSM.s.valid ? 22 : 0);
@@ -1237,7 +1242,7 @@ int build_nreport(uint8_t *buff, int maxlen, int type) {
 			write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
 			write_tlv_string(buff, maxlen, ptr, T_ADMIN_CONTACT, i->second.adminContact.c_str());
 		} else if (type == WEBSITE_REPORT_EVENT) {
-			for (vector<pair<int, string> >::const_iterator j = webSites.begin(); j != webSites.end(); j++)
+			for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++)
 				write_tlv_string(buff, maxlen, ptr, j->first, j->second.c_str());
 		} else {
 			uint32_t age = (now - i->second.creation) / 1000;
@@ -1348,7 +1353,7 @@ void do_dump() {
 		}
 		fprintf(fp, " age=\"%llu\" lastupdate=\"0\">\n", (now - startTime) / 1000);
 
-		for (vector<pair<int, string> >::const_iterator j = webSites.begin(); j != webSites.end(); j++) {
+		for (WebSites::const_iterator j = webSites.begin(); j != webSites.end(); j++) {
 			const char *typnam = j->first == T_WEBSITE_GENERIC ? "generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
 			fprintf(fp, "\t\t<website type=\"%s\" url=\"%s\" />\n", typnam, j->second.c_str());
 		}
@@ -1366,15 +1371,19 @@ void do_dump() {
 				fprintf(fp, " age=\"%llu\"\n\t\t\t\t", (now - i->second.creation) / 1000);
 				if (i->second.ASM.s.valid)
 					dumpStats(fp, i->second.ASM.s, now, i->second.sttl, true);
-				if (i->second.SSM.s.valid) {
-					fprintf(fp, ">\n");
+				fprintf(fp, ">\n");
 
-					fprintf(fp, "\t\t\t\t\t<ssm");
+				for (WebSites::const_iterator j = i->second.webSites.begin(); j != i->second.webSites.end(); j++) {
+					const char *typnam = j->first == T_WEBSITE_GENERIC ? "generic" : (j->first == T_WEBSITE_LG ? "lg" : "matrix");
+					fprintf(fp, "\t\t\t\t<website type=\"%s\" url=\"%s\" />\n", typnam, j->second.c_str());
+				}
+
+				if (i->second.SSM.s.valid) {
+					fprintf(fp, "\t\t\t\t<ssm");
 					dumpStats(fp, i->second.SSM.s, now, i->second.sttl, true);
-					fprintf(fp, " /></source>\n");
-				} else {
 					fprintf(fp, " />\n");
 				}
+				fprintf(fp, "\t\t\t</source>\n");
 			}
 		}
 
