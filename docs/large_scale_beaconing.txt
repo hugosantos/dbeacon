@@ -1,0 +1,80 @@
+Large scale interdomain beaconing - draft document
+
+This document brainstorm various ideas about how to run the distributed beacon
+tool on a large scale Internet. It does not discuss how to display the
+informations gathered by beacons but only protocol and infrastructure issues.
+
+1. Hypothesis
+
+We assume that each domains enabled ASM internally (aka they setup a PIM-SM RP)
+in their domains and that they want to test SSM reachability between sources
+distributed in various domains of the Internet : ASM is enabled in intra domain,
+and SSM is enabled in interdomain. A same domain may be distributed
+geographically.
+
+
+2. Objectives
+
+dbeacon protocol must scale at the interdomain level, this means that it should be
+possible to stress it with the following hypothesis :
+
+- A large number of beacons can be run simultaneously : a number of 10 beacons
+  per domain with 100 domains should be easily reachable.
+- Theses 1000 potential beacons must belong to the same logical beacon
+  session and must be manageable easily in a distributed way.
+  
+3. Solutions
+
+3.1 Distributed dbeacon management
+
+We believe that a large part of the interdomain beaconing rely on infrastructure
+and management problems.  Each domains must be responsible of its internal sets of
+beacons and provide reachability informations to others domains. 
+
+	- The rules to adversize reachability information about internals beacon
+	  still needs to be determined, but could be based on political or
+	  technical aspects.
+
+3.2 One ASM group per domain
+
+Each domains should allocate internally one group address used to send and receive beacon
+probes. This allow a plug and play feature of beacons inside the domain. One
+still have to setup an (http) server to be able to read the information on a
+nice web page. They may be intra domain problems and only a subset of the domain
+may be reachable in interdomain during a period of time. This must be solved.
+
+3.3 One multi-source SSM session between domains
+
+Each domains will have their set of border beacon. Theses beacons registered to
+their internal group and to the interdomain SSM session group. The problem is
+how to bootstrap the border beacons as SSM do not provide an in-band source
+discovery mechanism. We suppose that border beacons are quite stable, and that
+once a border beacon boostrapped the SSM group session, it receive interdomain
+multicast reachability via this session.
+
+	- A seed node is required to boostrab a border beacon, this seed node is
+	  another already active beacon sending toward a well known SSM channel
+	  used to propagate session information. This seed active node can be
+	  found on a web page.
+
+As SSM is used between domains, communication between border beacons can only be
+done unidirectionnaly in multicast. When a new beacon appears it must then be
+announced to others border beacons via unicast. After having being announced a
+border beacon can check that it is effectivelly announced by listening to the
+session itself. 
+
+No special protocol have to be designed between border beacons, it is more a
+problem of border router discovery and SSM channel setup. Border beacons are
+point of convergence in the infrastructure in the sense that they know about
+intra and inter domain stats. So to see if a domain can reach a extra domain
+source it must be possible to ask it to the respective border domain, maybe by
+looking at the border domain beacon web page.
+
+3.4 Security
+
+One must cope with possible bad seed nodes announcing wrong informations about
+the session. We assume that most of the border beacons are "good" beacons and
+announce good information. One solution to detect bad beacons or bad announced
+SSM source would be to register to them one by one and check them against others
+information present in the session. By building a kind of "trust" multicast
+session between border beacon, the security can be improved.
