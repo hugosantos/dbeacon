@@ -528,7 +528,6 @@ int main(int argc, char **argv) {
 
 		insert_event(SENDING_EVENT, 100);
 		insert_event(REPORT_EVENT, 10000);
-		insert_event(SSM_REPORT_EVENT, 15000);
 		insert_event(MAP_REPORT_EVENT, 30000);
 		insert_event(WEBSITE_REPORT_EVENT, 120000);
 
@@ -597,6 +596,7 @@ int main(int argc, char **argv) {
 		if (i->second == NSSMPROBE) {
 			ssmMcastSock = sock;
 			insert_event(SSM_SENDING_EVENT, 100);
+			insert_event(SSM_REPORT_EVENT, 15000);
 		}
 	}
 
