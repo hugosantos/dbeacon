@@ -559,6 +559,11 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
+	if (getsockname(mcastSock, (sockaddr *)&beaconUnicastAddr, &addrlen) != 0) {
+		perror("getsockname");
+		return -1;
+	}
+
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
 		int sock = SetupSocket(i->first, true, i->second == NPROBE || i->second == NSSMPROBE, i->second == NSSMPROBE);
 		if (sock < 0)
