@@ -248,6 +248,7 @@ static address probeAddr;
 static const char *probeAddrLiteral = 0;
 static address beaconUnicastAddr;
 static const char *probeSSMAddrLiteral = 0;
+static bool useSSM = false;
 static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
 static int largestSock = 0;
@@ -282,7 +283,7 @@ static uint64_t lastDumpDumpBwTS = 0;
 
 static int dumpInterval = 5;
 static const char *multicastInterface = 0;
-static int forceVersion = 0;
+static int forceFamily = AF_UNSPEC;
 
 static void next_event(struct timeval *);
 static void insert_event(uint32_t, uint32_t);
@@ -347,7 +348,7 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 	addrinfo hint, *res;
 	memset(&hint, 0, sizeof(hint));
 
-	hint.ai_family = forceVersion == 4 ? AF_INET : forceVersion == 6 ? AF_INET6 : AF_UNSPEC;
+	hint.ai_family = forceFamily;
 	hint.ai_socktype = SOCK_DGRAM;
 
 	if ((cres = getaddrinfo(tmp, port, &hint, &res)) != 0) {
@@ -508,13 +509,6 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if (probeSSMAddrLiteral) {
-		if (!ssmProbeAddr.parse(probeSSMAddrLiteral, true)) {
-			fprintf(stderr, "Bad address format for SSM channel.\n");
-			return -1;
-		}
-	}
-
 	if (probeAddrLiteral) {
 		if (!probeAddr.parse(probeAddrLiteral, true)) {
 			return -1;
@@ -541,8 +535,26 @@ int main(int argc, char **argv) {
 
 		redist.push_back(probeAddr);
 
-		if (!ssmProbeAddr.is_unspecified()) {
-			mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
+		if (useSSM) {
+			if (!probeSSMAddrLiteral) {
+				int family = forceFamily;
+
+				if (family == AF_UNSPEC) {
+					family = probeAddr.ss_family;
+				}
+				if (family == AF_INET) {
+					probeSSMAddrLiteral = defaultIPv4SSMChannel;
+				} else {
+					probeSSMAddrLiteral = defaultIPv6SSMChannel;
+				}
+			}
+
+			if (!ssmProbeAddr.parse(probeSSMAddrLiteral, true)) {
+				fprintf(stderr, "Bad address format for SSM channel.\n");
+				return -1;
+			} else if (!ssmProbeAddr.is_unspecified()) {
+				mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
+			}
 		}
 	} else {
 		if (mcastListen.empty()) {
@@ -704,7 +716,10 @@ int parse_arguments(int argc, char **argv) {
 			}
 			redist.push_back(addr);
 		} else if (res == 'S') {
-			probeSSMAddrLiteral = optarg ? optarg : (forceVersion == 4 ? defaultIPv4SSMChannel : defaultIPv6SSMChannel);
+			if (optarg) {
+				probeSSMAddrLiteral = optarg;
+			}
+			useSSM = true;
 		} else if (res == 's') {
 			if (!beaconUnicastAddr.parse(optarg, false, false)) {
 				fprintf(stderr, "Bad address format.\n");
@@ -754,9 +769,9 @@ int parse_arguments(int argc, char **argv) {
 		} else if (res == 'U') {
 			dumpBwReport = true;
 		} else if (res == '4') {
-			forceVersion = 4;
+			forceFamily = AF_INET;
 		} else if (res == '6') {
-			forceVersion = 6;
+			forceFamily = AF_INET6;
 		} else if (res == 'V') {
 			show_version();
 		} else if (res == -1) {
