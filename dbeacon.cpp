@@ -21,11 +21,11 @@
  * Authors:	Hugo Santos <hsantos@av.it.pt>
  */
 
-#if __FreeBSD_version <= 500042
-#include <inttypes.h>
-#else
-#include <stdint.h>
-#endif
+#include "dbeacon.h"
+#include "address.h"
+#include "msocket.h"
+#include "protocol.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,18 +45,12 @@
 #include <signal.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <netdb.h>
 
 #include <map>
 #include <string>
 #include <iostream>
 #include <list>
 #include <vector>
-
-#include "dbeacon.h"
-#include "address.h"
-#include "msocket.h"
-#include "protocol.h"
 
 using namespace std;
 
@@ -69,6 +63,12 @@ static const char *defaultIPv4SSMChannel = "232.2.3.2";
 const char *defaultPort = "10000";
 const TTLType defaultTTL = 127;
 static const char *defaultDumpFile = "dump.xml";
+
+static const int timeOutI = 6;
+static const int reportI = 2;
+static const int ssmReportI = 3;
+static const int mapReportI = 6;
+static const int websiteReportI = 24;
 
 enum content_type {
 	NPROBE,
@@ -97,8 +97,6 @@ enum {
 };
 
 static uint32_t timeFact(int val, bool random = false);
-
-bool beaconSource::rxlocal(uint64_t now) const { return (now - lastlocalevent) < timeFact(6); }
 
 string beaconName, adminContact, twoLetterCC;
 Sources sources;
@@ -610,13 +608,13 @@ void handle_event() {
 	} else if (t.type == SSM_SENDING_EVENT && send_ssm_count == NEW_BEAC_PCOUNT) {
 		insert_event(WILLSEND_SSM_EVENT, timeFact(1, true));
 	} else if (t.type == REPORT_EVENT) {
-		insert_event(REPORT_EVENT, timeFact(2));
+		insert_event(REPORT_EVENT, timeFact(reportI));
 	} else if (t.type == SSM_REPORT_EVENT) {
-		insert_event(SSM_REPORT_EVENT, timeFact(3));
+		insert_event(SSM_REPORT_EVENT, timeFact(ssmReportI));
 	} else if (t.type == MAP_REPORT_EVENT) {
-		insert_event(MAP_REPORT_EVENT, timeFact(6));
+		insert_event(MAP_REPORT_EVENT, timeFact(mapReportI));
 	} else if (t.type == WEBSITE_REPORT_EVENT) {
-		insert_event(WEBSITE_REPORT_EVENT, timeFact(24));
+		insert_event(WEBSITE_REPORT_EVENT, timeFact(websiteReportI));
 	} else {
 		insert_sorted_event(t);
 	}
@@ -629,7 +627,7 @@ void handle_gc() {
 
 	while (i != sources.end()) {
 		bool remove = false;
-		if ((now - i->second.lastevent) > timeFact(6)) {
+		if ((now - i->second.lastevent) > timeFact(timeOutI)) {
 			remove = true;
 		}
 		if (!remove) {
@@ -638,7 +636,7 @@ void handle_gc() {
 
 			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
 			while (j != i->second.externalSources.end()) {
-				if ((now - j->second.lastupdate) > timeFact(6)) {
+				if ((now - j->second.lastupdate) > timeFact(timeOutI)) {
 					beaconSource::ExternalSources::iterator k = j;
 					j++;
 					i->second.externalSources.erase(k);
@@ -701,7 +699,7 @@ Stats::Stats() {
 }
 
 void Stats::check_validity(uint64_t now) {
-	if ((now - lastupdate) > timeFact(6))
+	if ((now - lastupdate) > timeFact(timeOutI))
 		valid = false;
 }
 
@@ -820,6 +818,10 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 	beaconMcastState *st = ssm ? &SSM : &ASM;
 
 	st->update(ttl, seqnum, timestamp, now);
+}
+
+bool beaconSource::rxlocal(uint64_t now) const {
+	return (now - lastlocalevent) < timeFact(timeOutI);
 }
 
 beaconMcastState::beaconMcastState() {
