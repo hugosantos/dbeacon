@@ -333,7 +333,7 @@ bool address::is_multicast() const {
 	if (ss_family == AF_INET6)
 		return IN6_IS_ADDR_MULTICAST(&v6()->sin6_addr);
 	else if (ss_family == AF_INET)
-		return IN_CLASSD(&v4()->sin_addr.s_addr);
+		return IN_CLASSD(htonl(v4()->sin_addr.s_addr));
 	return false;
 }
 
