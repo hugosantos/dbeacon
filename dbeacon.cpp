@@ -157,6 +157,8 @@ static bool parse_addr_port(const char *str, sockaddr_in6 *addr) {
 int main(int argc, char **argv) {
 	int res;
 
+	srand(time(NULL));
+
 	memset(&probeAddr, 0, sizeof(probeAddr));
 	probeAddr.sin6_family = AF_INET6;
 
@@ -685,7 +687,7 @@ void updateStats(const char *name, const in6_addr *from, int ttl, uint32_t seqnu
 }
 
 int send_probe() {
-	static uint32_t seq = 0;
+	static uint32_t seq = rand();
 	int len;
 
 	len = build_probe(buffer, sizeof(buffer), seq, get_timestamp());
