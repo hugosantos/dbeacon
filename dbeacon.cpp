@@ -112,6 +112,23 @@ struct Stats {
 	uint8_t rttl;
 };
 
+struct beaconMcastState {
+	uint32_t lastseq;
+	uint64_t lasttimestamp;
+
+	uint32_t packetcount, packetcountreal;
+	uint32_t pointer;
+
+	int lastdelay, lastjitter, lastloss, lastdup, lastooo;
+
+	Stats s;
+
+	uint32_t cacheseqnum[PACKETS_PERIOD+1];
+
+	void refresh(uint32_t, uint64_t);
+	void update(uint8_t, uint32_t, uint64_t, uint64_t);
+};
+
 struct beaconSource {
 	beaconSource();
 
@@ -122,24 +139,13 @@ struct beaconSource {
 
 	uint64_t creation;
 
-	uint64_t lastevent;
-
-	uint32_t lastseq;
-	uint64_t lasttimestamp;
-
 	int sttl;
 
-	uint32_t packetcount, packetcountreal;
-	uint32_t pointer;
+	uint64_t lastevent;
 
-	int lastdelay, lastjitter, lastloss, lastdup, lastooo;
-
-	Stats s, s_ssm;
-
-	uint32_t cacheseqnum[PACKETS_PERIOD+1];
+	beaconMcastState ASM, SSM;
 
 	void setName(const string &);
-	void refresh(uint32_t, uint64_t);
 	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
 
 	typedef map<beaconSourceAddr, beaconExternalStats> ExternalSources;
@@ -615,8 +621,8 @@ void handle_gc() {
 	while (i != sources.end()) {
 		bool remove = false;
 		if ((now - i->second.lastevent) > 60000) {
-			if (i->second.s.valid) {
-				i->second.s.valid = false;
+			if (i->second.ASM.s.valid) {
+				i->second.ASM.s.valid = false;
 				i->second.lastevent = now;
 			} else {
 				remove = true;
@@ -994,7 +1000,7 @@ uint64_t get_timestamp() {
 
 beaconSource::beaconSource()
 	: identified(false) {
-	refresh(0, 0);
+	sttl = 0;
 }
 
 void beaconSource::setName(const string &n) {
@@ -1018,12 +1024,24 @@ beaconExternalStats &beaconSource::getExternal(const in6_addr &addr, uint16_t po
 	return stats;
 }
 
-void beaconSource::refresh(uint32_t seq, uint64_t now) {
+template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; }
+
+void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now, bool ssm) {
+	if (verbose > 2)
+		fprintf(stderr, "beacon(%s%s) update %u, %llu, %llu\n", name.c_str(), (ssm ? "/SSM" : ""), seqnum, timestamp, now);
+
+	beaconMcastState *st = ssm ? &SSM : &ASM;
+
+	st->update(ttl, seqnum, timestamp, now);
+
+	// if (verbose && st->s.avgloss < 1) {
+	//	cout << "Updating " << name << (ssm ? " (SSM)" : "") << ": " << st->s.avgdelay << ", " << st->s.avgloss << ", " << st->s.avgooo << ", " << st->s.avgdup << endl;
+	// }
+}
+
+void beaconMcastState::refresh(uint32_t seq, uint64_t now) {
 	lastseq = seq;
 	lasttimestamp = 0;
-	lastevent = now;
-
-	sttl = -1;
 
 	packetcount = packetcountreal = 0;
 	pointer = 0;
@@ -1033,17 +1051,12 @@ void beaconSource::refresh(uint32_t seq, uint64_t now) {
 	s.valid = false;
 }
 
-template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; }
-
-void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now, bool ssm) {
+void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now) {
 	int64_t diff = udiff(now, timestamp);
 
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
 		refresh(seqnum - 1, now);
 	}
-
-	if (verbose > 2)
-		fprintf(stderr, "beacon(%s) update %u, %llu, %llu\n", name.c_str(), seqnum, timestamp, now);
 
 	if (seqnum < lastseq && (lastseq - seqnum) >= packetcount)
 		return;
@@ -1063,9 +1076,7 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 		}
 	}
 
-	Stats *st = ssm ? &s_ssm: &s;
-
-	st->rttl = ttl;
+	s.rttl = ttl;
 
 	if (dup) {
 		lastdup ++;
@@ -1080,7 +1091,7 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 		lastjitter = diff;
 		if (newjitter < 0)
 			newjitter = -newjitter;
-		st->avgjitter = 15/16. * st->avgjitter + 1/16. * newjitter;
+		s.avgjitter = 15/16. * s.avgjitter + 1/16. * newjitter;
 
 		if (expectseq == seqnum) {
 			packetcount ++;
@@ -1099,12 +1110,12 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 	}
 
 	if (packetcount >= PACKETS_PERIOD) {
-		st->avgdelay = lastdelay / (float)packetcountreal;
-		st->avgloss = lastloss / (float)packetcount;
-		st->avgooo = lastooo / (float)packetcount;
-		st->avgdup = lastdup / (float)packetcount;
+		s.avgdelay = lastdelay / (float)packetcountreal;
+		s.avgloss = lastloss / (float)packetcount;
+		s.avgooo = lastooo / (float)packetcount;
+		s.avgdup = lastdup / (float)packetcount;
 
-		st->valid = true;
+		s.valid = true;
 
 		lastdelay = 0;
 		lastloss = 0;
@@ -1113,10 +1124,6 @@ void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint
 		packetcount = 0;
 		packetcountreal = 0;
 		pointer = 0;
-
-		if (verbose && st->avgloss < 1) {
-			cout << "Updating " << name << (ssm ? " (SSM)" : "") << ": " << st->avgdelay << ", " << st->avgloss << ", " << st->avgooo << ", " << st->avgdup << endl;
-		}
 	}
 }
 
@@ -1191,7 +1198,7 @@ int build_nreport(uint8_t *buff, int maxlen) {
 	uint64_t now = get_timestamp();
 
 	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-		if (!i->second.s.valid || !i->second.identified)
+		if (!i->second.ASM.s.valid || !i->second.identified)
 			continue;
 
 		int plen = 4 + 4 + 1 + 4 * 2 + 3;
@@ -1203,17 +1210,17 @@ int build_nreport(uint8_t *buff, int maxlen) {
 
 		ptr += 18;
 
-		*((uint32_t *)ptr) = htonl((uint32_t)i->second.lasttimestamp);
+		*((uint32_t *)ptr) = htonl((uint32_t)i->second.ASM.lasttimestamp);
 		*((uint32_t *)(ptr + 4)) = htonl((uint32_t)((now - i->second.creation) / 1000));
-		ptr[8] = i->second.sttl - i->second.s.rttl;
+		ptr[8] = i->second.sttl - i->second.ASM.s.rttl;
 
 		uint32_t *stats = (uint32_t *)(ptr + 9);
-		stats[0] = htonl(*((uint32_t *)&i->second.s.avgdelay));
-		stats[1] = htonl(*((uint32_t *)&i->second.s.avgjitter));
+		stats[0] = htonl(*((uint32_t *)&i->second.ASM.s.avgdelay));
+		stats[1] = htonl(*((uint32_t *)&i->second.ASM.s.avgjitter));
 
-		ptr[17] = (uint8_t)(i->second.s.avgloss * 0xff);
-		ptr[18] = (uint8_t)(i->second.s.avgdup * 0xff);
-		ptr[19] = (uint8_t)(i->second.s.avgooo * 0xff);
+		ptr[17] = (uint8_t)(i->second.ASM.s.avgloss * 0xff);
+		ptr[18] = (uint8_t)(i->second.ASM.s.avgdup * 0xff);
+		ptr[19] = (uint8_t)(i->second.ASM.s.avgooo * 0xff);
 
 		ptr += plen;
 		len += 18 + plen;
@@ -1286,21 +1293,21 @@ int build_jreport(uint8_t *buffer, int maxlen) {
 		return -1;
 
 	for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-		if (!i->second.s.valid)
+		if (!i->second.ASM.s.valid)
 			continue;
 		if (!buf.write_string(i->second.name))
 			return -1;
-		if (!buf.write_longlong(i->second.lasttimestamp))
+		if (!buf.write_longlong(i->second.ASM.lasttimestamp))
 			return -1;
-		if (!buf.write_float(i->second.s.avgdelay)) // 0
+		if (!buf.write_float(i->second.ASM.s.avgdelay)) // 0
 			return -1;
-		if (!buf.write_float(i->second.s.avgjitter)) // 1
+		if (!buf.write_float(i->second.ASM.s.avgjitter)) // 1
 			return -1;
-		if (!buf.write_float(i->second.s.avgloss)) // 2
+		if (!buf.write_float(i->second.ASM.s.avgloss)) // 2
 			return -1;
-		if (!buf.write_float(i->second.s.avgooo)) // 3
+		if (!buf.write_float(i->second.ASM.s.avgooo)) // 3
 			return -1;
-		if (!buf.write_float(i->second.s.avgdup)) // 3
+		if (!buf.write_float(i->second.ASM.s.avgdup)) // 3
 			return -1;
 	}
 
@@ -1412,20 +1419,21 @@ void do_dump() {
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-			if (i->second.s.valid && i->second.identified) {
+			if (i->second.ASM.s.valid && i->second.identified) {
 				inet_ntop(AF_INET6, &i->first.first, tmp, sizeof(tmp));
 				fprintf(fp, "\t\t\t<source");
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
 					fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 				fprintf(fp, " addr=\"%s/%d\"", tmp, i->first.second);
-				fprintf(fp, " age=\"%llu\"\n\t\t\t", (now - i->second.creation) / 1000);
-				dumpStats(fp, i->second.s, i->second.sttl, true);
-				if (i->second.s_ssm.valid) {
+				fprintf(fp, " age=\"%llu\"\n\t\t\t\t", (now - i->second.creation) / 1000);
+				if (i->second.ASM.s.valid)
+					dumpStats(fp, i->second.ASM.s, i->second.sttl, true);
+				if (i->second.SSM.s.valid) {
 					fprintf(fp, ">\n");
 
-					fprintf(fp, "<ssm");
-					dumpStats(fp, i->second.s_ssm, i->second.sttl, true);
+					fprintf(fp, "\t\t\t\t\t<ssm");
+					dumpStats(fp, i->second.SSM.s, i->second.sttl, true);
 					fprintf(fp, " /></source>\n");
 				} else {
 					fprintf(fp, " />\n");
