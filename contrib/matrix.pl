@@ -112,7 +112,11 @@ my $now = localtime();
 
 print "<h4>Current Server time is $now</h4>\n";
 
-print "<h4>Current stats for $sessiongroup</h4>\n";
+print "<h4>Current stats for $sessiongroup";
+if ($ssm_sessiongroup) {
+	print " (SSM: $ssm_sessiongroup)";
+}
+print "</h4>\n";
 
 switch ($attname)
 {
