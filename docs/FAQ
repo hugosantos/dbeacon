@@ -152,6 +152,12 @@ Frequently Asked Questions (FAQ)
     For a detailed explanation on dbeacon's protocol read the included PROTOCOL
     file.
 
+  * What does the sign '#' means in the source info listing ?
+
+    This means that the source is ssmpingable : you can ssmping it with the
+    ssmping tool from http://www.venaas.no/multicast/ssmping/ . To announce to
+    others beacons that you are ssmpingabe, use the option -F ssmping.
+
   * I didn't found a response in the FAQ, what should I do?
 
     Either join #m6bone in the irc.freenode.net network or mail one of the
@@ -194,5 +200,5 @@ Frequently Asked Questions (FAQ)
 
 -------------------------------------------------------------------------------
 
-                 $Id: FAQ.html 287 2005-04-05 00:01:10Z hugo $
+                $Id: FAQ.html 309 2005-04-06 16:18:01Z hoerdt $
 
