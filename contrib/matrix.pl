@@ -25,6 +25,7 @@ our $default_hideinfo = 0;	# one of '0', '1'
 our $default_what = "both";	# one of 'both', 'asm'
 our $history_enabled = 1;
 our $css_file;
+our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
 
 do("matrix.conf");
 
@@ -89,6 +90,16 @@ sub parse_dump_file {
 	my $parser = new XML::Parser(Style => 'Tree');
 	$parser->setHandlers(Start => \&start_handler);
 	my $tree = $parser->parsefile($dump);
+}
+
+sub check_outdated_dump {
+	my $last_update_time = (stat($dumpfile))[9];
+
+	if ($last_update_time+($dump_update_delay*2) < time()) {
+		return $last_update_time;
+	} else {
+		return 0;
+	}
 }
 
 sub beacon_name {
@@ -249,6 +260,11 @@ sub start_document {
 	print "<h1 style=\"margin: 0\">$title</h1>\n";
 
 	print "<small>Current server time is " . localtime() . "</small><br />\n";
+
+	my $last_update_time = check_outdated_dump();
+	if ($last_update_time) {
+		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
+	}
 }
 
 sub build_header {
@@ -548,6 +564,10 @@ sub render_matrix {
 }
 
 sub store_data {
+
+	if (check_outdated_dump()) {
+		die "Outdated dumpfile\n";
+	}
 	parse_dump_file(@_);
 
 	my @verts = $g->vertices();
