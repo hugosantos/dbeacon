@@ -22,7 +22,7 @@ our $verbose = 1;
 our $title = "IPv6 Multicast Beacon";
 our $page_title = $title;
 our $default_hideinfo = 0;	# one of '0', '1'
-our $default_what = "both";	# one of 'both', 'asm'
+our $default_what = "ssmorasm";	# one of 'ssmorasm', 'both', 'asm'
 our $history_enabled = 1;
 our $css_file;
 our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
@@ -314,11 +314,13 @@ sub parse_stats {
 }
 
 sub start_document {
+	my ($additionalinfo) = @_;
+
 	start_base_document();
 
 	print "<h1 style=\"margin: 0\">$title</h1>\n";
 
-	print "<small>Current server time is " . localtime() ."</small><br />\n";
+	print "<small>Current server time is " . localtime() ."$additionalinfo</small><br />\n";
 }
 
 sub build_header {
@@ -326,8 +328,7 @@ sub build_header {
 
 	if (defined($step)) { # From history
 		print "<br /><b>Snapshot stats at ".localtime($start)."</b> ($step seconds average) ";
-		print "<a href=\"$url?what=$attwhat&att=$attname\">Back to Live</a><br />";
-		print "<br />";
+		print "<br /><br />\n";
 
 		print '<form name="timenavigator">';
 		print 'Time navigation: ';
@@ -355,24 +356,25 @@ sub build_header {
 
 		print "</select>";
 
-		print '<a href="javascript:move(1)">&gt; <small>Move forward</small></a>'; 
+		print '<a href="javascript:move(1)">&gt; <small>Move forward</small></a>';
 		print '<br />';
 		print '</form>';
-	
+
 	} else {
 	print "<br /><b>Current stats for</b> <code>$sessiongroup</code>";
 	if ($ssm_sessiongroup) {
 		print " (SSM: <code>$ssm_sessiongroup</code>)";
 	}
-	print " <a href=\"$url?what=$attwhat&att=$attname&at=".time()."\">Go to past</a><br />";
+
+	print "<br />";
 
 	my $last_update_time = check_outdated_dump();
 	if ($last_update_time) {
 		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n";
 	}
-}
-print "<br />\n";
 
+	print "<br />";
+}
 my $hideatt;
 
 if ($atthideinfo) {
@@ -474,7 +476,15 @@ sub render_matrix {
 		$what_td = "";
 	}
 
-	start_document();
+	my $attat = $page->param('at');
+	my $addinfo;
+	if ($attat > 0) {
+		$addinfo = " (<a href=\"$url?what=$attwhat&att=$attname\">Live stats</a>)";
+	} else {
+		$addinfo = " (<a href=\"$url?what=$attwhat&att=$attname&at=".time()."\">Past stats</a>)"
+	}
+
+	start_document($addinfo);
 
 	build_header($attname, $atthideinfo, $attwhat, $start, $step);
 
@@ -529,7 +539,7 @@ sub render_matrix {
 								if (defined($txtssm)) {
 									$txt = $txtssm;
 									$whattype = "ssm";
-								} else {
+								} elsif (defined($txt)) {
 									$cssclass = "nossm_fulladjacent";
 									$txt = "<i>$txt</i>";
 								}
@@ -994,7 +1004,10 @@ sub graphthumb {
 }
 
 sub list_graph {
-	start_document();
+	start_document(" (<a href=\"$url\">Live stats</a>)");
+
+	print "<br />\n";
+
         if (defined($dst)) {
                print "To ";
 
