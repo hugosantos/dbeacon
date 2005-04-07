@@ -609,7 +609,7 @@ sub render_matrix {
 					my $cssclass = 'fulladjacent';
 					if ($attwhat eq 'ssmorasm') {
 						if (defined $txtssm) {
-							if (!defined $txt) {
+							if (not defined $txt) {
 								$cssclass = 'ssmonly_fulladjacent';
 								$txt = "<i>$txtssm</i>";
 							} else {

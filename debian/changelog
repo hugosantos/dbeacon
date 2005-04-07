@@ -1,14 +1,20 @@
+dbeacon (0.3.2) unstable; urgency=low
+
+  * Another version bump.
+
+ -- Hugo Santos <hsantos@av.it.pt>  Thu,  7 Apr 2005 12:42:18 +0100
+
 dbeacon (0.3.1) unstable; urgency=low
 
   * Bumped version
 
- -- Hugo Santos <hugo@innerghost.net>  Wed,  6 Apr 2005 02:25:01 +0100
+ -- Hugo Santos <hsantos@av.it.pt>  Wed,  6 Apr 2005 02:25:01 +0100
 
 dbeacon (0.3) unstable; urgency=low
 
   * Bumped version
 
- -- Hugo Santos <hugo@innerghost.net>  Tue,  5 Apr 2005 01:39:52 +0100
+ -- Hugo Santos <hsantos@av.it.pt>  Tue,  5 Apr 2005 01:39:52 +0100
 
 dbeacon (0.1-1) unstable; urgency=low
 
