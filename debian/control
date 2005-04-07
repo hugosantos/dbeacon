@@ -2,11 +2,18 @@ Source: dbeacon
 Section: base
 Priority: optional
 Maintainer: Hugo Santos <hsantos@av.it.pt>
-Build-Depends: debhelper (>= 4.0.0)
-Standards-Version: 3.6.0
+Build-Depends: debhelper (>= 4)
+Standards-Version: 3.6.1.1
 
 Package: dbeacon
 Architecture: any
 Depends: ${shlibs:Depends}
 Description: A Multicast Beacon
+
+Package: dbeacon-matrix
+Architecture: all
+Section: perl
+Depends: ${perl:Depends}
+Recommends: dbeacon (>= ${Source-Version})
+Description: dbeacon's Matrix script
 
