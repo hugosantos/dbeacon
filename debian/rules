@@ -46,6 +46,7 @@ install: build
 	install -D contrib/matrix.pl $(DESTDIR_MATRIX)/usr/share/dbeacon-matrix/matrix.pl
 	dh_installman -p dbeacon-matrix $(CURDIR)/docs/matrix.conf.5
 	dh_installexamples -p dbeacon-matrix $(CURDIR)/contrib/matrix.conf.sample
+	dh_installexamples -p dbeacon-matrix $(CURDIR)/contrib/apache-matrix-conf
 
 # Build architecture-independent files here.
 binary-indep: build install

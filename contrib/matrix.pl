@@ -34,7 +34,13 @@ our $matrix_link_title = 0;
 our $default_full_matrix = 0;
 our $faq_page = 'http://artemis.av.it.pt/~hsantos/dbeacon/FAQ.html';
 
-do 'matrix.conf';
+if (-f '/etc/dbeacon/matrix.conf') {
+	do '/etc/dbeacon/matrix.conf';
+}
+
+if (-f 'matrix.conf') {
+	do 'matrix.conf';
+}
 
 if ($history_enabled) {
 	use RRDs;
