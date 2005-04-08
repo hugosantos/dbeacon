@@ -204,13 +204,19 @@ int SetupSocket(const address &addr, bool shouldbind, bool ssm) {
 		return -1;
 	}
 
-	TTLType ttl = defaultTTL;
+	if (level == IPPROTO_IPV6) {
+		int ttl = defaultTTL;
+		if (setsockopt(sock, level, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
+			perror("setsockopt(IPV6_MULTICAST_HOPS)");
+			return -1;
+		}
+	} else {
+		TTLType ttl = defaultTTL;
 
-	if (setsockopt(sock, level, level == IPPROTO_IPV6 ? IPV6_MULTICAST_HOPS : IP_MULTICAST_TTL, &ttl, sizeof(ttl)) != 0) {
-		perror(level == IPPROTO_IPV6 ?
-			"setsockopt(IPV6_MULTICAST_HOPS)"
-			: "setsockopt(IP_MULTICAST_TTL)");
-		return -1;
+		if (setsockopt(sock, level, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) != 0) {
+			perror("setsockopt(IP_MULTICAST_TTL)");
+			return -1;
+		}
 	}
 
 	if (!ssm && addr.is_multicast()) {

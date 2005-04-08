@@ -36,7 +36,7 @@
 #include "address.h"
 #include "ptime.h"
 
-#ifdef __sun__
+#ifdef SOLARIS
 #define TTLType		uint8_t
 #else
 #define TTLType		int

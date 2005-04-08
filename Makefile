@@ -8,6 +8,7 @@ OBJS = dbeacon.o dbeacon_posix.o protocol.o
 OS = $(shell uname -s)
 
 ifeq ($(OS), SunOS)
+	CXXFLAGS += -DSOLARIS
 	LDFLAGS = -lnsl -lsocket
 endif
 
