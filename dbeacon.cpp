@@ -45,10 +45,6 @@
 #include <signal.h>
 #include <libgen.h>
 
-#ifndef __sun__
-#include <getopt.h>
-#endif
-
 #include <map>
 #include <string>
 #include <iostream>
