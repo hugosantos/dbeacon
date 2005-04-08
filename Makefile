@@ -32,6 +32,9 @@ protocol.o: protocol.cpp dbeacon.h protocol.h
 install: dbeacon
 	install -D dbeacon $(DESTDIR)$(PREFIX)/bin/dbeacon
 
+install_mans:
+	install -D docs/dbeacon.1 $(DESTDIR)$(PREFIX)/share/man/man1/dbeacon.1
+
 clean:
 	rm -f dbeacon $(OBJS)
 
