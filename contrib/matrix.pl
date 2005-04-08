@@ -242,7 +242,7 @@ sub make_matrix_cell {
 	if (not defined($txt)) {
 		print '<td class="noinfo_', $type, '">-</td>';
 	} else {
-		print '<td class="adjacent_', $type, '">';
+		print '<td class="A_', $type, '">';
 		make_history_link($dst, $src, $type, $txt, $class);
 		print '</td>';
 	}
@@ -612,19 +612,16 @@ sub render_matrix {
 
 				if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
 					my $whattype = 'asm';
-					my $cssclass = 'fulladjacent';
+					my $cssclass = 'AAS';
 					if ($attwhat eq 'ssmorasm') {
 						if (defined $txtssm) {
 							if (not defined $txt) {
-								$cssclass = 'ssmonly_fulladjacent';
-								$txt = "<i>$txtssm</i>";
-							} else {
-								$txt = $txtssm;
+								$cssclass = 'AS';
 							}
+							$txt = $txtssm;
 							$whattype = 'ssm';
 						} elsif (defined $txt) {
-							$cssclass = 'nossm_fulladjacent';
-							$txt = "<i>$txt</i>";
+							$cssclass = 'AA';
 						}
 					}
 
@@ -802,9 +799,9 @@ sub render_matrix {
 
 				print '<td class="infocol">';
 				if ($adj{$a}[SSM_PING]) {
-					print '#';
+					print '&bull;';
 				} else {
-					print '-';
+					print '&nbsp;';
 				}
 				print '</td>';
 
@@ -1261,19 +1258,16 @@ table.adjr td {
 	padding: 3px;
 	border-bottom: 0.1em solid white;
 }
-table#adj td.fulladjacent, table#adj td.adjacent_asm, table#adj td.adjacent_ssm {
+table#adj td.AAS, table#adj td.A_asm, table#adj td.A_ssm {
 	background-color: #96ef96;
-	width: 20px;
 }
 
-table#adj td.nossm_fulladjacent {
+table#adj td.AA {
 	background-color: #c0ffc0;
-	width: 20px;
 }
 
-table#adj td.ssmonly_fulladjacent {
+table#adj td.AS {
 	background-color: #96d396;
-	width: 20px;
 }
 
 table#adj td.noreport {
@@ -1284,19 +1278,15 @@ table#adj td.blackhole {
 	background-color: #000000;
 }
 
-table#adj td.noinfo_asm, table#adj td.noinfo_ssm {
-	background-color: #b6ffb6;
-	width: 20px;
-}
 table#adj td.corner {
 	background-color: #dddddd;
 }
 
-table#adj td.adjacent_asm {
+table#adj td.A_asm {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.noreport, td.blackhole, table#adj td.fulladjacent, table#adj td.nossm_fulladjacent, table#adj td.ssmonly_fulladjacent, table#adj td.adjacent_ssm, table#adj td.corner, table#adj td.noinfo_ssm {
+table#adj td.noreport, td.blackhole, td.AAS, td.AS, td.AA, td.A_ssm, td.corner {
 	border-right: 0.2em solid white;
 }
 
@@ -1333,20 +1323,31 @@ ul#view li {
 	margin: 0;
 }
 
-#view a.viewitem {
-}
-
-#view a.viewitem:visited {
-	color: blue;
-}
-
 #view #currentview {
-	text-decoration: underline;
+	border-bottom: 1px solid #d4d4d4;
+}
+
+a {
+	color: Blue;
+	border-bottom: 1px solid #b0b0b0;
+	text-decoration: none;
+}
+
+a:visited {
+	color: Blue;
+	border-bottom: 1px solid #b0b0b0;
+	text-decoration: none;
+}
+
+a:hover {
+	border-bottom: 1px solid Blue;
+	text-decoration: none;
 }
 
 a.historyurl, a.historyurl:visited {
 	color: black;
 	text-decoration: none;
+	border: 0;
 }
 
 \t</style>";
