@@ -43,7 +43,7 @@
 #endif
 
 extern const char *defaultPort;
-extern const TTLType defaultTTL;
+extern const int defaultTTL;
 
 extern int forceFamily;
 extern int mcastInterface;
