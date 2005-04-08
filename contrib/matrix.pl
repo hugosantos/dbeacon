@@ -95,6 +95,17 @@ my @propersortedages = ('-1m', '-1w', '-1d', '-12h', '-6h', '-1h');
 
 $age ||= '-1d';
 
+my $outb = '';
+
+sub printx {
+	$outb .= join '', @_;
+}
+
+sub send_page {
+	print $page->header(-Content_length => length $outb);
+	print $outb;
+}
+
 if (defined $history_enabled and $history_enabled and defined $page->param('img')) {
 	$|=1;
 	graphgen();
@@ -102,6 +113,7 @@ if (defined $history_enabled and $history_enabled and defined $page->param('img'
 } elsif (defined $history_enabled and $history_enabled and defined $page->param('history')) {
 	list_graph();
 
+	send_page;
 } else {
 	my ($start, $step);
 
@@ -114,6 +126,8 @@ if (defined $history_enabled and $history_enabled and defined $page->param('img'
 	}
 
 	render_matrix($start, $step);
+
+	send_page;
 }
 
 sub build_vertex_from_rrd {
@@ -230,11 +244,11 @@ sub make_history_link {
 	if ($history_enabled) {
 		my $dstname = build_name($dst);
 		my $srcname = build_name($src);
-		print '<a class="', $class, '" href="', make_history_url($dstname, $srcname, $type) . '"';
-		print ' title="', $srcname->[1], ' <- ', $dstname->[1], '"' if $matrix_link_title;
-		print '>', $txt, '</a>';
+		printx '<a class="', $class, '" href="', make_history_url($dstname, $srcname, $type) . '"';
+		printx ' title="', $srcname->[1], ' <- ', $dstname->[1], '"' if $matrix_link_title;
+		printx '>', $txt, '</a>';
 	} else {
-		print $txt;
+		printx $txt;
 	}
 }
 
@@ -242,11 +256,11 @@ sub make_matrix_cell {
 	my ($dst, $src, $type, $txt, $class) = @_;
 
 	if (not defined($txt)) {
-		print '<td class="noinfo_', $type, '">-</td>';
+		printx '<td class="noinfo_', $type, '">-</td>';
 	} else {
-		print '<td class="A_', $type, '">';
+		printx '<td class="A_', $type, '">';
 		make_history_link($dst, $src, $type, $txt, $class);
-		print '</td>';
+		printx '</td>';
 	}
 }
 
@@ -350,19 +364,19 @@ sub start_document {
 
 	start_base_document();
 
-	print '<h1 style="margin: 0">', $title, '</h1>', "\n";
+	printx '<h1 style="margin: 0">', $title, '</h1>', "\n";
 
-	print '<p style="margin: 0"><small>Current server time is ', localtime() . $additionalinfo, '</small></p>', "\n";
+	printx '<p style="margin: 0"><small>Current server time is ', localtime() . $additionalinfo, '</small></p>', "\n";
 }
 
 sub build_header {
 	my ($attname, $atthideinfo, $attwhat, $full_matrix, $show_lastupdate, $start, $step) = @_;
 
 	if (defined $step) { # From history
-		print "<p><b>Snapshot stats at " . localtime($start) . "</b> ($step seconds average)</p>\n";
+		printx "<p><b>Snapshot stats at " . localtime($start) . "</b> ($step seconds average)</p>\n";
 
-		print '<form id="timenavigator" action=";">';
-		print '<script type="text/javascript">
+		printx '<form id="timenavigator" action=";">';
+		printx '<script type="text/javascript">
 			function move(way) {
 				var timenavoff = document.getElementById("timenavigator").offset;
 				var selectedvalue = timenavoff.options[timenavoff.selectedIndex].value;
@@ -372,10 +386,10 @@ sub build_header {
 			}
 			</script>';
 
-		print '<p>Time navigation: ';
-		print '<a href="javascript:move(-1)"><small>Move backward</small> &lt;</a>';
+		printx '<p>Time navigation: ';
+		printx '<a href="javascript:move(-1)"><small>Move backward</small> &lt;</a>';
 
-		print '<select name="offset" style="margin-left: 0.5em; margin-right: 0.5em">'."\n";
+		printx '<select name="offset" style="margin-left: 0.5em; margin-right: 0.5em">'."\n";
 
 		my $ammount = $page->param('ammount');
 		$ammount ||= 60;
@@ -384,26 +398,29 @@ sub build_header {
 		# 7884000 3 months
 
 		foreach my $ammitem (@ammounts) {
-			print '<option value="' . $ammitem->[0] . '"';
-			print ' selected="selected"' if $ammitem->[0] == $ammount;
-			print '> ' . $ammitem->[1] . '</option>';
+			printx '<option value="' . $ammitem->[0] . '"';
+			printx ' selected="selected"' if $ammitem->[0] == $ammount;
+			printx '> ' . $ammitem->[1] . '</option>';
 		}
 
-		print "</select>";
+		printx "</select>";
 
-		print '<a href="javascript:move(1)">&gt; <small>Move forward</small></a>';
-		print '</p></form>';
+		printx '<a href="javascript:move(1)">&gt; <small>Move forward</small></a>';
+		printx '</p></form>';
 
 	} else {
 		my $last_update = last_dump_update;
 
-		print '<p><b>Current stats for</b> <code>', $sessiongroup, '</code>';
-		print ' (SSM: <code>', $ssm_sessiongroup, '</code>)' if $ssm_sessiongroup;
-		print ' <small>[Last update: ', format_date(time - $last_update), ' ago]</small>' if $show_lastupdate;
+		printx '<p><b>Current stats for</b> <code>', $sessiongroup, '</code>';
+		printx ' (SSM: <code>', $ssm_sessiongroup, '</code>)' if $ssm_sessiongroup;
+		printx ' <small>[Last update: ', format_date(time - $last_update), ' ago]</small>' if $show_lastupdate;
+		printx '</p>';
 
 		my $last_update_time = check_outdated_dump;
-		print '<font color="#ff0000">Warning: outdated informations, last dump was updated ' . localtime($last_update_time) . "</font><br />\n" if $last_update_time;
-		print '</p>';
+		if ($last_update_time) {
+			printx '<p style="color: red">Warning: outdated informations, last dump was updated ';
+			printx localtime($last_update_time) . "</p>\n";
+		}
 	}
 
 	my $hideatt;
@@ -420,7 +437,7 @@ sub build_header {
 	my $view_len = scalar(@view);
 	my $i;
 
-	print '<p style="margin: 0"><span style="float: left"><b>View</b>';
+	printx '<p style="margin: 0"><span style="float: left"><b>View</b>';
 
 	do_faq_qlink('views');
 
@@ -428,66 +445,66 @@ sub build_header {
 	$hideatt ||= '';
 	$at ||= '';
 
-	print ' <small>(';
+	printx ' <small>(';
 
 	if (not $atthideinfo) {
-		print "<a href=\"$url?hideinfo=1&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
+		printx "<a href=\"$url?hideinfo=1&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
 	} else {
-		print "<a href=\"$url?hideinfo=0&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Show Source Info</a>";
+		printx "<a href=\"$url?hideinfo=0&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Show Source Info</a>";
 	}
 
-	print ", <a href=\"$url?$hideatt&amp;$whatatt&amp;att=$attname&amp;at=$at&amp;full=" . (!$full_matrix) . '">' . ($full_matrix ? 'Condensed' : 'Full') . '</a>';
+	printx ", <a href=\"$url?$hideatt&amp;$whatatt&amp;att=$attname&amp;at=$at&amp;full=" . (!$full_matrix) . '">' . ($full_matrix ? 'Condensed' : 'Full') . '</a>';
 
 	if ($attwhat eq "asm") {
-		print ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		print ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
 	} elsif ($attwhat eq "ssmorasm") {
-		print ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		print ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	} else {
-		print ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
-		print ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	}
 
-	print ')</small>:</span></p>';
+	printx ')</small>:</span></p>';
 
-	print '<ul id="view" style="float: left">', "\n";
+	printx '<ul id="view" style="float: left">', "\n";
 	for ($i = 0; $i < $view_len; $i++) {
 		my $att = $view[$i];
 		my $attn = $view_name[$i];
-		print '<li>';
+		printx '<li>';
 		if ($attname eq $att) {
-			print '<span class="viewitem" id="currentview">', $attn, '</span>';
+			printx '<span class="viewitem" id="currentview">', $attn, '</span>';
 		} else {
-			print "<a class=\"viewitem\" href=\"$url?$hideatt$fullatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
+			printx "<a class=\"viewitem\" href=\"$url?$hideatt$fullatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
 		}
-		print ' <small>(', $view_type[$i], ')</small></li>', "\n";
+		printx ' <small>(', $view_type[$i], ')</small></li>', "\n";
 	}
-	print '</ul>', "\n";
+	printx '</ul>', "\n";
 
-	print '<p style="margin: 0; margin-bottom: 1em">&nbsp;</p>';
+	printx '<p style="margin: 0; margin-bottom: 1em">&nbsp;</p>';
 }
 
 sub end_document {
-	print '<hr />', "\n";
+	printx '<hr />', "\n";
 
 	if ($debug) {
 		my $render_end = [gettimeofday];
 		my $diff = tv_interval $load_start, $render_end;
 
-		print '<p style="margin: 0"><small>Took ', (sprintf "%.3f", $diff), ' seconds from load to end of render';
+		printx '<p style="margin: 0"><small>Took ', (sprintf "%.3f", $diff), ' seconds from load to end of render';
 		if (defined($ended_parsing_dump)) {
 			my $dumpdiff = tv_interval $load_start, $ended_parsing_dump;
-			print ' (', (sprintf "%.3f", $dumpdiff), ' in parsing dump file)';
+			printx ' (', (sprintf "%.3f", $dumpdiff), ' in parsing dump file)';
 		}
-		print '.</small></p>', "\n";
+		printx '.</small></p>', "\n";
 	}
 
-	print '<p style="margin: 0"><small>matrix.pl - a tool for dynamic viewing of ', $dbeacon, ' information and history.';
-	print 'by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>', "\n";
+	printx '<p style="margin: 0"><small>matrix.pl - a tool for dynamic viewing of ', $dbeacon, ' information and history.';
+	printx 'by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>', "\n";
 
-	print '</body>', "\n";
-	print '</html>', "\n";
+	printx '</body>', "\n";
+	printx '</html>', "\n";
 }
 
 sub make_ripe_search_url {
@@ -500,10 +517,10 @@ sub do_faq_link {
 	my ($txt, $ctx) = @_;
 
 	if ($faq_page) {
-		print ' <a style="text-decoration: none" href="', $faq_page, '#', $ctx;
-		print '">', $txt, '</a>';
+		printx ' <a style="text-decoration: none" href="', $faq_page, '#', $ctx;
+		printx '">', $txt, '</a>';
 	} else {
-		print $txt;
+		printx $txt;
 	}
 }
 
@@ -557,8 +574,8 @@ sub render_matrix {
 
 	my %ids;
 
-	print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
-	print '<tr><td>&nbsp;</td>';
+	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
+	printx '<tr><td>&nbsp;</td>';
 
 	my @sortedkeys = sort { $adj{$b}[AGE] <=> $adj{$a}[AGE] } keys %adj;
 
@@ -573,7 +590,7 @@ sub render_matrix {
 		} elsif (not $adj{$c}[IN_EDGE] and not $adj{$c}[OUT_EDGE]) {
 			push (@problematic, $c);
 		} else {
-			print '<td ', $what_td, '><b>S', $i, '</b></td>' if $adj{$c}[OUT_EDGE] > 0;
+			printx '<td ', $what_td, '><b>S', $i, '</b></td>' if $adj{$c}[OUT_EDGE] > 0;
 
 			$ids{$c} = $i;
 			$i++;
@@ -599,11 +616,11 @@ sub render_matrix {
 		}
 	}
 
-	print "</tr>\n";
+	printx "</tr>\n";
 
 	foreach $a (@rx) {
-		print '<tr>';
-		print '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
+		printx '<tr>';
+		printx '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
 		foreach $b (@tx) {
 			if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
 				my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
@@ -630,115 +647,115 @@ sub render_matrix {
 					}
 
 					if (not defined $txt) {
-						print '<td ', $what_td, ' class="blackhole">XX</td>';
+						printx '<td ', $what_td, ' class="blackhole">XX</td>';
 					} else {
-						print '<td class="', $cssclass, '">';
+						printx '<td class="', $cssclass, '">';
 						make_history_link($b, $a, $whattype, $txt, 'historyurl');
-						print '</td>';
+						printx '</td>';
 					}
 				} else {
 					if (not defined $txt and not defined $txtssm) {
-						print '<td ', $what_td, ' class="blackhole">XX</td>';
+						printx '<td ', $what_td, ' class="blackhole">XX</td>';
 					} else {
 						make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
 						make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
 					}
 				}
 			} elsif ($a eq $b) {
-				print '<td ', $what_td, ' class="corner">&nbsp;</td>';
+				printx '<td ', $what_td, ' class="corner">&nbsp;</td>';
 			} elsif ($full_matrix and $adj{$a}[RX_LOCAL] ne 'true') {
-				print '<td ', $what_td, ' class="noreport">N/R</td>';
+				printx '<td ', $what_td, ' class="noreport">N/R</td>';
 			} else {
-				print '<td ', $what_td, ' class="blackhole">XX</td>';
+				printx '<td ', $what_td, ' class="blackhole">XX</td>';
 			}
 		}
-		print '</tr>', "\n";
+		printx '</tr>', "\n";
 	}
-	print '</table>', "\n";
+	printx '</table>', "\n";
 
 	if (scalar(@repnosources) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons that report no received sources';
+		printx '<h4 style="margin-bottom: 0">Beacons that report no received sources';
 		do_faq_qlink('nosources');
-		print '</h4>', "\n";
-		print '<ul>', "\n";
+		printx '</h4>', "\n";
+		printx '<ul>', "\n";
 		foreach $a (@repnosources) {
-			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
-			print ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
-			print '</li>', "\n";
+			printx '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+			printx ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
+			printx '</li>', "\n";
 		}
-		print '</ul>', "\n";
+		printx '</ul>', "\n";
 	}
 
 	if (scalar(@lowrx) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons that report only a small number of received sources';
+		printx '<h4 style="margin-bottom: 0">Beacons that report only a small number of received sources';
 		do_faq_qlink('lowsources');
-		print '</h4>', "\n";
-		print '<ul>', "\n";
+		printx '</h4>', "\n";
+		printx '<ul>', "\n";
 		foreach $a (@lowrx) {
-			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+			printx '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
 
-			print ' <small>Receives</small> { ';
+			printx ' <small>Receives</small> { ';
 
 			my $first = 1;
 
 			foreach $b (keys %{$adj{$a}[NEIGH]}) {
-				print ', ' if not $first;
+				printx ', ' if not $first;
 				$first = 0;
 				if ($ids{$b}) {
-					print '<b>S', $ids{$b}, '</b> ', beacon_name($b);
+					printx '<b>S', $ids{$b}, '</b> ', beacon_name($b);
 				} else {
-					print '<span class="beacon">', $b;
-					print ' (', $adj{$b}[NAME], ')' if $adj{$b}[NAME];
-					print '</span>';
+					printx '<span class="beacon">', $b;
+					printx ' (', $adj{$b}[NAME], ')' if $adj{$b}[NAME];
+					printx '</span>';
 				}
 			}
 
-			print ' }';
+			printx ' }';
 
-			print '</li>', "\n";
+			printx '</li>', "\n";
 		}
-		print '</ul>', "\n";
+		printx '</ul>', "\n";
 	}
 
 	if (scalar(@localnoreceive) > 0) {
-		print '<h4 style="margin-bottom: 0">Beacons not received localy';
+		printx '<h4 style="margin-bottom: 0">Beacons not received localy';
 		do_faq_qlink('localonly');
-		print '</h4>', "\n";
-		print '<ul>', "\n";
+		printx '</h4>', "\n";
+		printx '<ul>', "\n";
 		foreach $a (@localnoreceive) {
-			print '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
-			print ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
-			print '</li>', "\n";
+			printx '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+			printx ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
+			printx '</li>', "\n";
 		}
-		print '</ul>', "\n";
+		printx '</ul>', "\n";
 	}
 
 	if (scalar(@warmingup) > 0) {
-		print '<h4>Beacons warming up (age < 30 secs)';
+		printx '<h4>Beacons warming up (age < 30 secs)';
 		do_faq_qlink('warmingup');
-		print '</h4>', "\n";
-		print '<ul>', "\n";
+		printx '</h4>', "\n";
+		printx '<ul>', "\n";
 		foreach $a (@warmingup) {
-			print '<li>', $a;
-			print ' (', $adj{$a}[NAME], ', ', $adj{$a}[CONTACT], ')' if $adj{$a}[NAME];
-			print '</li>', "\n";
+			printx '<li>', $a;
+			printx ' (', $adj{$a}[NAME], ', ', $adj{$a}[CONTACT], ')' if $adj{$a}[NAME];
+			printx '</li>', "\n";
 		}
-		print '</ul>', "\n";
+		printx '</ul>', "\n";
 	}
 
 	if (scalar(@problematic) ne 0) {
-		print '<h4>Beacons with no connectivity</h4>', "\n";
-		print '<ul>', "\n";
+		printx '<h4>Beacons with no connectivity</h4>', "\n";
+		printx '<ul>', "\n";
 		my $len = scalar(@problematic);
 		for (my $j = 0; $j < $len; $j++) {
 			my $prob = $problematic[$j];
 			my @neighs = keys %{$adj{$prob}[NEIGH]};
 
-			print '<li>', $prob;
+			printx '<li>', $prob;
 			if ($adj{$prob}[NAME]) {
-				print ' (', $adj{$prob}[NAME];
-				print ', ', $adj{$prob}[CONTACT] if $adj{$prob}[CONTACT];
-				print ')';
+				printx ' (', $adj{$prob}[NAME];
+				printx ', ', $adj{$prob}[CONTACT] if $adj{$prob}[CONTACT];
+				printx ')';
 			}
 
 			my $ned = scalar(@neighs);
@@ -748,87 +765,87 @@ sub render_matrix {
 			}
 
 			if ($ned) {
-				print '<ul>Received from:<ul>', "\n";
+				printx '<ul>Received from:<ul>', "\n";
 
 				for (my $l = 0; $l < $k; $l++) {
-					print '<li><span class="beacon">', $neighs[$l];
-					print ' (', $adj{$neighs[$l]}[NAME], ')' if $adj{$neighs[$l]}[NAME];
-					print '</span></li>', "\n";
+					printx '<li><span class="beacon">', $neighs[$l];
+					printx ' (', $adj{$neighs[$l]}[NAME], ')' if $adj{$neighs[$l]}[NAME];
+					printx '</span></li>', "\n";
 				}
 
-				print '<li>and others</li>', "\n" if $k < $ned;
+				printx '<li>and others</li>', "\n" if $k < $ned;
 
-				print '</ul></ul>';
+				printx '</ul></ul>';
 			}
 
-			print '</li>', "\n";
+			printx '</li>', "\n";
 		}
-		print '</ul>', "\n";
+		printx '</ul>', "\n";
 	}
 
 	if (not $atthideinfo) {
-		print '<p></p>', "\n";
-		print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
+		printx '<p></p>', "\n";
+		printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
 
-		print '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td>';
-		print '<td><b>Admin Contact</b></td><td><b>';
+		printx '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td>';
+		printx '<td><b>Admin Contact</b></td><td><b>';
 		do_faq_link('L/M', 'lg_matrix');
-		print '</b></td><td><b><a href="', $ssm_ping_url, '">SSM P</a>';
-		print '</b></td></tr>', "\n";
+		printx '</b></td><td><b><a href="', $ssm_ping_url, '">SSM P</a>';
+		printx '</b></td></tr>', "\n";
 		foreach $a (@sortedkeys) {
 			if ($ids{$a} > 0) {
-				print '<tr>', '<td align="right" class="beacname">';
-				print '<a class="beacon_url" href="', $adj{$a}[URL], '">' if $adj{$a}[URL];
-				print $adj{$a}[NAME];
-				print '</a>' if $adj{$a}[URL];
-				print ' <b>R', $ids{$a}, '</b>', '</td>';
+				printx '<tr>', '<td align="right" class="beacname">';
+				printx '<a class="beacon_url" href="', $adj{$a}[URL], '">' if $adj{$a}[URL];
+				printx $adj{$a}[NAME];
+				printx '</a>' if $adj{$a}[URL];
+				printx ' <b>R', $ids{$a}, '</b>', '</td>';
 
-				print '<td>';
+				printx '<td>';
 				if ($flag_url_format ne "" and $adj{$a}[COUNTRY]) {
-					print '<img src="';
-					printf $flag_url_format, lc $adj{$a}[COUNTRY];
-					print '" alt="', $adj{$a}[COUNTRY], '" style="vertical-align: middle; border: 1px solid black" />';
+					printx '<img src="';
+					printx sprintf $flag_url_format, lc $adj{$a}[COUNTRY];
+					printx '" alt="', $adj{$a}[COUNTRY], '" style="vertical-align: middle; border: 1px solid black" />';
 				}
-				print '</td>';
+				printx '</td>';
 
-				print '<td class="age">', format_date($adj{$a}[AGE]), '</td>';
+				printx '<td class="age">', format_date($adj{$a}[AGE]), '</td>';
 				# Removing port number from id and link toward RIPE whois db
 			        my $ip = $a;
 			        $ip =~ s/\/\d+$//;
-			        print '<td class="addr"><a href="', make_ripe_search_url($ip), '">', $ip, '</a></td>';
-				print '<td class="admincontact">', ($adj{$a}[CONTACT] or '-'), '</td>';
+			        printx '<td class="addr"><a href="', make_ripe_search_url($ip), '">', $ip, '</a></td>';
+				printx '<td class="admincontact">', ($adj{$a}[CONTACT] or '-'), '</td>';
 
 				my $urls;
 				$urls .= " <a href=\"" . $adj{$a}[LG] . "\">L</a>" if $adj{$a}[LG];
 				$urls .= " <a href=\"" . $adj{$a}[MATRIX] . "\">M</a>" if $adj{$a}[MATRIX];
 
-				print '<td class="urls">', ($urls or '-'), '</td>';
+				printx '<td class="urls">', ($urls or '-'), '</td>';
 
-				print '<td class="infocol">';
+				printx '<td class="infocol">';
 				if ($adj{$a}[SSM_PING]) {
-					print '&bull;';
+					printx '&bull;';
 				} else {
-					print '&nbsp;';
+					printx '&nbsp;';
 				}
-				print '</td>';
+				printx '</td>';
 
-				print '</tr>', "\n";
+				printx '</tr>', "\n";
 			}
 		}
-		print '</table>', "\n";
+		printx '</table>', "\n";
 	}
 
-	print '<p><br />If you wish to add a beacon to your site, you may use ', $dbeacon;
+	printx '<p><br />If you wish to add a beacon to your site, you may use ', $dbeacon;
 	if (defined $step) {
-		print '.</p>', "\n";
+		printx '.</p>', "\n";
 	} else {
-		print ' with the following parameters:</p>', "\n";
-		print '<p><code>./dbeacon -n NAME -b ', $sessiongroup;
+		printx ' with the following parameters:</p>', "\n";
+		printx '<p><code>./dbeacon -n NAME -b ', $sessiongroup;
 		if (defined $ssm_sessiongroup) {
-			print ' -S';
-			print ' ', $ssm_sessiongroup if $ssm_sessiongroup ne $default_ssm_group;
+			printx ' -S';
+			printx ' ', $ssm_sessiongroup if $ssm_sessiongroup ne $default_ssm_group;
 		}
-		print ' -a CONTACT</code></p>', "\n";
+		printx ' -a CONTACT</code></p>', "\n";
 	}
 
 	end_document;
@@ -1075,82 +1092,82 @@ sub get_name_from_host {
 sub do_list_beacs {
 	my ($name, $dst, $src, @vals) = @_;
 
-	print '<select name="'.$name.'" onchange="location = this.options[this.selectedIndex].value;">'."\n";
+	printx '<select name="'.$name.'" onchange="location = this.options[this.selectedIndex].value;">'."\n";
 
 	my $def = $name eq 'srcc' ? $src : $dst;
 
 	foreach my $foo (@vals) {
-		print '<option value="'.$url.'?history=1&amp;dst=';
-		print $dst, '&amp;src=' if $name eq 'srcc';
-		print $foo;
-		print '"';
+		printx '<option value="'.$url.'?history=1&amp;dst=';
+		printx $dst, '&amp;src=' if $name eq 'srcc';
+		printx $foo;
+		printx '"';
 
-		print ' selected="selected"' if $foo eq $def;
+		printx ' selected="selected"' if $foo eq $def;
 
-		print ">" . (get_name_from_host($foo))[0];
-		print ' (' . (get_name_from_host($foo))[2] . ')' if $name eq 'srcc';
-		print '</option>', "\n";
+		printx ">" . (get_name_from_host($foo))[0];
+		printx ' (' . (get_name_from_host($foo))[2] . ')' if $name eq 'srcc';
+		printx '</option>', "\n";
 	}
 
-	print '</select>', "\n";
+	printx '</select>', "\n";
 
 }
 
 sub graphthumb {
 	my ($type) = shift;
-	print '<a href="' . full_url0 . "&amp;history=1&amp;type=$type\">\n";
-	print '<img style="margin-right: 0.5em; margin-bottom: 0.5em; border: 0" alt="thumb" src="' . full_url0 . "&amp;type=$type&amp;img=true&amp;thumb=true&amp;age=$age\" /></a><br />\n";
+	printx '<a href="' . full_url0 . "&amp;history=1&amp;type=$type\">\n";
+	printx '<img style="margin-right: 0.5em; margin-bottom: 0.5em; border: 0" alt="thumb" src="' . full_url0 . "&amp;type=$type&amp;img=true&amp;thumb=true&amp;age=$age\" /></a><br />\n";
 }
 
 sub list_graph {
 	start_document(" (<a href=\"$url\">Live stats</a>)");
 
         if (defined $dst) {
-               print "<p>To ";
+               printx "<p>To ";
 
                do_list_beacs("dstc", $dst, undef, get_beacons($historydir));
 
                if (defined $src) {
-                       print "From ";
+                       printx "From ";
                        do_list_beacs("srcc", $dst, $src, get_beacons("$historydir/$dst"));
 
                        if (defined $type) {
-                               print "Type ";
+                               printx "Type ";
 
                                my @types = (["-- All --", "", ""], ["TTL", "ttl", ""], ["Loss", "loss", ""], ["Delay", "delay", ""], ["Jitter", "jitter", ""]);
 
-				print '<select name="type" onchange="location = this.options[this.selectedIndex].value;">'."\n";
+				printx '<select name="type" onchange="location = this.options[this.selectedIndex].value;">'."\n";
 
 				foreach my $foo (@types) {
-					print '<option value="' . full_url0 . '&amp;history=1&amp;type=' . $$foo[1].'"';
-					print ' selected="selected"' if $type eq $$foo[1];
-					print '>'.$$foo[0]."\n";;
+					printx '<option value="' . full_url0 . '&amp;history=1&amp;type=' . $$foo[1].'"';
+					printx ' selected="selected"' if $type eq $$foo[1];
+					printx '>'.$$foo[0]."\n";;
 				}
-				print "</select>\n";
+				printx "</select>\n";
 			}
 		}
 
-		print "</p>";
+		printx "</p>";
 	}
 
 	if (not defined $dst) {
 
 		# List beacon receiving infos
 
-		print '<p>Select a receiver:</p>';
+		printx '<p>Select a receiver:</p>';
 
 		my @beacs = get_beacons($historydir);
 
-		print "<ul>\n";
+		printx "<ul>\n";
 
 		foreach my $beac (@beacs) {
-			print '<li><a href="'.$url.'?history=1&amp;dst=' . $beac . '">' . (get_name_from_host($beac))[0] . "</a></li>\n";
+			printx '<li><a href="'.$url.'?history=1&amp;dst=' . $beac . '">' . (get_name_from_host($beac))[0] . "</a></li>\n";
 		}
 
-		print "</ul>\n";
+		printx "</ul>\n";
 
 	} elsif (not defined $src) {
-		print '<br />Select a source:';
+		printx '<br />Select a source:';
 
 		# List visible src for this beacon
 
@@ -1167,89 +1184,87 @@ sub list_graph {
 			}
 		}
 
-		print "<ul>\n";
+		printx "<ul>\n";
 		foreach my $key (keys %pairs) {
-			print "<li>";
+			printx "<li>";
 
 			if (defined $pairs{$key}[0]) {
-				print '<a href="?history=1&amp;dst=' . $dst . '&amp;src=' . $pairs{$key}[0] . '">';
+				printx '<a href="?history=1&amp;dst=' . $dst . '&amp;src=' . $pairs{$key}[0] . '">';
 			}
 
-			print ((get_name_from_host($key))[0]);
+			printx ((get_name_from_host($key))[0]);
 
 			if (defined $pairs{$key}[0]) {
-				print '</a>';
+				printx '</a>';
 			}
 
 			if (defined $pairs{$key}[1]) {
-				print ' / <a href="?history=1&amp;dst='.$dst.'&amp;src=' . $pairs{$key}[1] . "\">SSM</a>";
+				printx ' / <a href="?history=1&amp;dst='.$dst.'&amp;src=' . $pairs{$key}[1] . "\">SSM</a>";
 			}
 
-			print "</li>\n";
+			printx "</li>\n";
 		}
-		print "</ul>\n";
+		printx "</ul>\n";
 	}  elsif (not defined $type) {
-		print "<div style=\"margin-left: 2em\">\n";
-		print "<h2 style=\"margin-bottom: 0\">History for the last " . $ages{$age} . "</h2>\n";
-		print "<small>Click on a graphic for more detail</small><br />\n";
-		print "<table style=\"margin-top: 0.6em\">";
+		printx "<div style=\"margin-left: 2em\">\n";
+		printx "<h2 style=\"margin-bottom: 0\">History for the last " . $ages{$age} . "</h2>\n";
+		printx "<small>Click on a graphic for more detail</small><br />\n";
+		printx "<table style=\"margin-top: 0.6em\">";
 
 		my $count = 0;
 
 		foreach my $type qw(ttl loss delay jitter) {
-			print '<tr>' if ($count % 2) == 0;
-			print '<td>';
+			printx '<tr>' if ($count % 2) == 0;
+			printx '<td>';
 			graphthumb($type);
-			print '</td>', "\n";
-			print '</tr>', "\n" if ($count %2) == 1;
+			printx '</td>', "\n";
+			printx '</tr>', "\n" if ($count %2) == 1;
 			$count++;
 		}
 
-		print "</table>\n";
+		printx "</table>\n";
 
-		print '<p>Last: ';
+		printx '<p>Last: ';
 
 		foreach my $agen (@propersortedages) {
-			print " <a href=\"" . full_url0 . "&amp;history=1&amp;age=" . $agen . "\">" . $ages{$agen} . "</a>";
+			printx " <a href=\"" . full_url0 . "&amp;history=1&amp;age=" . $agen . "\">" . $ages{$agen} . "</a>";
 		}
 
-		print "</p>\n";
-		print "</div>\n";
+		printx "</p>\n";
+		printx "</div>\n";
 	} else {
-		print "<br />";
-		print "<div style=\"margin-left: 2em\">\n";
+		printx "<br />";
+		printx "<div style=\"margin-left: 2em\">\n";
 		# Dst, src and type selected => Displaying all time range graphs
 		foreach my $age ('-1d','-1w','-1m','-1y') {
-			print "<img style=\"margin-bottom: 0.5em\" src=\"" . full_url . "&amp;age=$age&amp;img=true\" /><br />";
+			printx "<img style=\"margin-bottom: 0.5em\" src=\"" . full_url . "&amp;age=$age&amp;img=true\" /><br />";
 		}
-		print "</div>";
+		printx "</div>";
 	}
 
 	end_document;
 }
 
 sub start_base_document {
-	print $page->header;
+	printx "<?xml version=\"1.0\"?>\n";
+	printx "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
+	printx "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
 
-	print "<?xml version=\"1.0\"?>\n";
-	print "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
-	print "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en\" xml:lang=\"en\">\n";
-
-	print "<head>
+	printx "<head>
 	<title>$page_title</title>
 	<meta http-equiv=\"refresh\" content=\"60\" />\n";
 
 	if ($css_file) {
-		print "\t<link rel=\"stylesheet\" text=\"text/css\" href=\"$css_file\" />\n";
+		printx "\t<link rel=\"stylesheet\" text=\"text/css\" href=\"$css_file\" />\n";
 	} else {
 		print_default_style();
 	}
 
-	print "</head>\n<body>\n";
+	printx "</head>\n<body>\n";
 }
 
 sub print_default_style() {
-	print "\t<style type=\"text/css\">
+	printx "\t<style type=\"text/css\">
 body {
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: 100%;

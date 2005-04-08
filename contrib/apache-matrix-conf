@@ -1,1 +1,10 @@
 ScriptAlias /matrix/ /usr/share/dbeacon-matrix/matrix.pl
+
+#
+# If your Apache 2 has the DEFLATE module you may reduce
+# bw usage with this
+#
+# <Location /matrix/>
+#	SetOutputFilter DEFLATE
+# </Location>
+
