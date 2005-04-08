@@ -5,6 +5,12 @@ PREFIX ?= /usr/local
 
 OBJS = dbeacon.o dbeacon_posix.o protocol.o
 
+OS = $(shell uname -s)
+
+ifeq ($(OS), SunOS)
+	LDFLAGS = -lnsl -lsocket
+endif
+
 all: dbeacon
 
 dbeacon: $(OBJS)
