@@ -192,7 +192,13 @@ int SetupSocket(const address &addr, bool shouldbind, bool ssm) {
 	}
 #endif
 
-	int type = level == IPPROTO_IPV6 ? IPV6_HOPLIMIT :
+	int type = level == IPPROTO_IPV6 ?
+#ifdef IPV6_RECVHOPLIMIT
+				IPV6_RECVHOPLIMIT
+#else
+				IPV6_HOPLIMIT
+#endif
+				:
 #ifdef IP_RECVTTL
 				IP_RECVTTL;
 #else
@@ -253,7 +259,7 @@ int RecvMsg(int sock, address &from, uint8_t *buffer, int buflen, int &ttl, uint
 		return len;
 
 	ts = 0;
-	ttl = -1;
+	ttl = 127;
 
 	if (msg.msg_controllen > 0) {
 		for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
