@@ -34,6 +34,8 @@ our $matrix_link_title = 0;
 our $default_full_matrix = 0;
 our $faq_page = 'http://artemis.av.it.pt/~hsantos/dbeacon/FAQ.html';
 
+my $ssm_ping_url = 'http://www.venaas.no/multicast/ssmping/';
+
 if (-f '/etc/dbeacon/matrix.conf') {
 	do '/etc/dbeacon/matrix.conf';
 }
@@ -500,6 +502,8 @@ sub do_faq_link {
 	if ($faq_page) {
 		print ' <a style="text-decoration: none" href="', $faq_page, '#', $ctx;
 		print '">', $txt, '</a>';
+	} else {
+		print $txt;
 	}
 }
 
@@ -767,7 +771,10 @@ sub render_matrix {
 		print '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
 
 		print '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td>';
-		print '<td><b>Admin Contact</b></td><td><b>L/M</b></td><td><b>S</b></td></tr>', "\n";
+		print '<td><b>Admin Contact</b></td><td><b>';
+		do_faq_link('L/M', 'lg_matrix');
+		print '</b></td><td><b><a href="', $ssm_ping_url, '">SSM P</a>';
+		print '</b></td></tr>', "\n";
 		foreach $a (@sortedkeys) {
 			if ($ids{$a} > 0) {
 				print '<tr>', '<td align="right" class="beacname">';
