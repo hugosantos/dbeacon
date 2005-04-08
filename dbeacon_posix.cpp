@@ -265,8 +265,10 @@ int RecvMsg(int sock, address &from, uint8_t *buffer, int buflen, int &ttl, uint
 		for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
 			if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
 				ttl = *(int *)CMSG_DATA(hdr);
+#ifdef IP_RECVTTL
 			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
 				ttl = *(uint8_t *)CMSG_DATA(hdr);
+#endif
 			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_TTL) {
 				ttl = *(int *)CMSG_DATA(hdr);
 #ifdef SO_TIMESTAMP
