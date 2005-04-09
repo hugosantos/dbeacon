@@ -19,13 +19,13 @@ dbeacon: $(OBJS)
 
 dbeacon.o: dbeacon.cpp dbeacon.h address.h msocket.h protocol.h
 
-dbeacon.h: address.h ptime.h
+dbeacon.h: address.h
 
 msocket.h: address.h
 
 protocol.h: address.h
 
-dbeacon_posix.o: dbeacon_posix.cpp dbeacon.h msocket.h address.h ptime.h
+dbeacon_posix.o: dbeacon_posix.cpp dbeacon.h msocket.h address.h
 
 protocol.o: protocol.cpp dbeacon.h protocol.h
 

@@ -555,7 +555,8 @@ sub render_matrix {
 	if ($attat > 0) {
 		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname\">Live stats</a>)";
 	} elsif ($history_enabled) {
-		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=" . (time - 60) ."\">Past stats</a>)"
+		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=" . (time - 60) ."\">Past stats</a>";
+		$addinfo .= ", <a href=\"$url?history=1\">History</a>)";
 	}
 
 	start_document($addinfo);
@@ -817,6 +818,7 @@ sub render_matrix {
 
 				my $urls;
 				$urls .= " <a href=\"" . $adj{$a}[LG] . "\">L</a>" if $adj{$a}[LG];
+				$urls .= " /" if $adj{$a}[LG] and $adj{$a}[MATRIX];
 				$urls .= " <a href=\"" . $adj{$a}[MATRIX] . "\">M</a>" if $adj{$a}[MATRIX];
 
 				printx '<td class="urls">', ($urls or '-'), '</td>';
@@ -988,6 +990,9 @@ sub storedata {
 
 	print "Updating $dstbeacon <- $srcbeacon with $updatestring\n" if $verbose > 1;
 
+	system("touch $historydir/$dstbeacon/lastupdate");
+	system("touch $historydir/$dstbeacon/lastupdate.$srcbeacon");
+
 	if (!RRDs::update(build_rrd_file_path($historydir, $dstbeacon, $srcbeacon, $asmorssm), $updatestring)) {
 		return 0;
 	}
@@ -1122,10 +1127,10 @@ sub graphthumb {
 sub list_graph {
 	start_document(" (<a href=\"$url\">Live stats</a>)");
 
-        if (defined $dst) {
-               printx "<p>To ";
+	if (defined $dst) {
+		printx '<p>To ';
 
-               do_list_beacs("dstc", $dst, undef, get_beacons($historydir));
+		do_list_beacs("dstc", $dst, undef, get_beacons($historydir));
 
                if (defined $src) {
                        printx "From ";
@@ -1134,7 +1139,11 @@ sub list_graph {
                        if (defined $type) {
                                printx "Type ";
 
-                               my @types = (["-- All --", "", ""], ["TTL", "ttl", ""], ["Loss", "loss", ""], ["Delay", "delay", ""], ["Jitter", "jitter", ""]);
+                               my @types = (["-- All --", "", ""],
+						["TTL", "ttl", ""],
+						["Loss", "loss", ""],
+						["Delay", "delay", ""],
+						["Jitter", "jitter", ""]);
 
 				printx '<select name="type" onchange="location = this.options[this.selectedIndex].value;">'."\n";
 
@@ -1161,7 +1170,15 @@ sub list_graph {
 		printx "<ul>\n";
 
 		foreach my $beac (@beacs) {
-			printx '<li><a href="'.$url.'?history=1&amp;dst=' . $beac . '">' . (get_name_from_host($beac))[0] . "</a></li>\n";
+			printx '<li><a href="', $url, '?history=1&amp;dst=', $beac, '"';
+			printx ' title="', (get_name_from_host($beac))[1], '"';
+			printx '>' . (get_name_from_host($beac))[0];
+			printx '</a>';
+
+			if (-f "$historydir/$beac/lastupdate") {
+				printx ' <small>[Last update ', format_date(time - (stat("$historydir/$beac/lastupdate"))[9]), ' ago]</small>';
+			}
+			printx '</li>', "\n";
 		}
 
 		printx "</ul>\n";
@@ -1200,6 +1217,11 @@ sub list_graph {
 
 			if (defined $pairs{$key}[1]) {
 				printx ' / <a href="?history=1&amp;dst='.$dst.'&amp;src=' . $pairs{$key}[1] . "\">SSM</a>";
+			}
+
+			my $lastupdate = "$historydir/$dst/lastupdate.$key";
+			if (-f $lastupdate) {
+				printx ' <small>[Last update ', format_date(time - (stat($lastupdate))[9]), ' ago]</small>';
 			}
 
 			printx "</li>\n";
