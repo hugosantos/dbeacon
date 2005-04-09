@@ -241,14 +241,22 @@ sub build_name {
 sub make_history_link {
 	my ($dst, $src, $type, $txt, $class) = @_;
 
+	my $dstname = build_name($dst);
+	my $srcname = build_name($src);
+
 	if ($history_enabled) {
-		my $dstname = build_name($dst);
-		my $srcname = build_name($src);
 		printx '<a class="', $class, '" href="', make_history_url($dstname, $srcname, $type) . '"';
-		printx ' title="', $srcname->[1], ' <- ', $dstname->[1], '"' if $matrix_link_title;
-		printx '>', $txt, '</a>';
 	} else {
-		printx $txt;
+		printx '<span';
+	}
+
+	printx ' title="', $srcname->[1], ' <- ', $dstname->[1], '"' if $matrix_link_title;
+	printx '>', $txt;
+
+	if ($history_enabled) {
+		printx '</a>';
+	} else {
+		printx '</span>';
 	}
 }
 
@@ -488,20 +496,20 @@ sub build_header {
 sub end_document {
 	printx '<hr />', "\n";
 
+	printx '<p style="margin: 0"><small>matrix.pl - a tool for dynamic viewing of ', $dbeacon, ' information and history.';
+	printx ' by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>', "\n";
+
 	if ($debug) {
 		my $render_end = [gettimeofday];
 		my $diff = tv_interval $load_start, $render_end;
 
-		printx '<p style="margin: 0"><small>Took ', (sprintf "%.3f", $diff), ' seconds from load to end of render';
+		printx '<p style="margin: 0; color: #888"><small>Took ', (sprintf "%.3f", $diff), ' seconds from load to end of render';
 		if (defined($ended_parsing_dump)) {
 			my $dumpdiff = tv_interval $load_start, $ended_parsing_dump;
 			printx ' (', (sprintf "%.3f", $dumpdiff), ' in parsing dump file)';
 		}
 		printx '.</small></p>', "\n";
 	}
-
-	printx '<p style="margin: 0"><small>matrix.pl - a tool for dynamic viewing of ', $dbeacon, ' information and history.';
-	printx 'by Hugo Santos, Sebastien Chaumontet and Hoerdt Mickaël</small></p>', "\n";
 
 	printx '</body>', "\n";
 	printx '</html>', "\n";
@@ -591,7 +599,7 @@ sub render_matrix {
 		} elsif (not $adj{$c}[IN_EDGE] and not $adj{$c}[OUT_EDGE]) {
 			push (@problematic, $c);
 		} else {
-			printx '<td ', $what_td, '><b>S', $i, '</b></td>' if $adj{$c}[OUT_EDGE] > 0;
+			printx '<td ', $what_td, '><b><span title="', beacon_name($c), '">S', $i, '</span></b></td>' if $adj{$c}[OUT_EDGE] > 0;
 
 			$ids{$c} = $i;
 			$i++;
@@ -837,18 +845,7 @@ sub render_matrix {
 		printx '</table>', "\n";
 	}
 
-	printx '<p><br />If you wish to add a beacon to your site, you may use ', $dbeacon;
-	if (defined $step) {
-		printx '.</p>', "\n";
-	} else {
-		printx ' with the following parameters:</p>', "\n";
-		printx '<p><code>./dbeacon -n NAME -b ', $sessiongroup;
-		if (defined $ssm_sessiongroup) {
-			printx ' -S';
-			printx ' ', $ssm_sessiongroup if $ssm_sessiongroup ne $default_ssm_group;
-		}
-		printx ' -a CONTACT</code></p>', "\n";
-	}
+	printx '<p><i>If you wish to run a beacon in your site check <a href="http://dbeacon.innerghost.net/Running_dbeacon">Running dbeacon</a> at <a href="http://dbeacon.innerghost.net">dbeacon\'s Wiki</a>.</i></p>';
 
 	end_document;
 }
