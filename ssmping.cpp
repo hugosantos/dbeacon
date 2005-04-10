@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2005  Hugo Santos <hsantos@av.it.pt>
- * $Id: dbeacon.cpp 333 2005-04-10 01:17:12Z hugo $
+ * $Id$
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -42,6 +42,11 @@ int SetupSSMPing() {
 		return -1;
 
 	if (!SetHops(ssmPingSocket, addr, 64)) {
+		close(ssmPingSocket);
+		return -1;
+	}
+
+	if (!RequireToAddress(ssmPingSocket, addr)) {
 		close(ssmPingSocket);
 		return -1;
 	}

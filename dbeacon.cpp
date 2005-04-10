@@ -384,11 +384,6 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Tried to bootstrap using SSM when SSM is not enabled.\n");
 	}
 
-	signal(SIGUSR1, dumpBigBwStats);
-	signal(SIGINT, sendLeaveReport);
-
-	signal(SIGCHLD, waitForMe); // bloody fork, we dont want to wait for thee
-
 	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
@@ -406,6 +401,11 @@ int main(int argc, char **argv) {
 
 	fprintf(stdout, "Local name is %s [Beacon group: %s, Local address: %s]\n",
 					beaconName.c_str(), sessionName, tmp);
+
+	signal(SIGUSR1, dumpBigBwStats);
+	signal(SIGINT, sendLeaveReport);
+
+	signal(SIGCHLD, waitForMe); // bloody fork, we dont want to wait for thee
 
 	startTime = lastDumpBwTS = lastDumpDumpBwTS = get_timestamp();
 

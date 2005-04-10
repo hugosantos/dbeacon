@@ -231,6 +231,17 @@ bool SetHops(int sock, const address &addr, int ttl) {
 	return true;
 }
 
+bool RequireToAddress(int sock, const address &addr) {
+#ifdef IPV6_PKTINFO
+	if (addr.family() == AF_INET6) {
+		int on = 1;
+		return setsockopt(sock, IPPROTO_IPV6, IPV6_PKTINFO, &on, sizeof(on)) == 0;
+	}
+#endif
+
+	return true;
+}
+
 int RecvMsg(int sock, address &from, address &to, uint8_t *buffer, int buflen, int &ttl, uint64_t &ts) {
 	int len;
 	struct msghdr msg;
@@ -257,10 +268,20 @@ int RecvMsg(int sock, address &from, address &to, uint8_t *buffer, int buflen, i
 	ts = 0;
 	ttl = 127;
 
+	to = beaconUnicastAddr;
+
 	if (msg.msg_controllen > 0) {
 		for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
 			if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
 				ttl = *(int *)CMSG_DATA(hdr);
+#ifdef IPV6_PKTINFO
+			} else if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_PKTINFO) {
+				if (hdr->cmsg_len == CMSG_LEN(sizeof(in6_pktinfo))) {
+					in6_pktinfo *pktinfo = (in6_pktinfo *)CMSG_DATA(hdr);
+					to.set_family(AF_INET6);
+					to.v6()->sin6_addr = pktinfo->ipi6_addr;
+				}
+#endif
 #ifdef IP_RECVTTL
 			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_RECVTTL) {
 				ttl = *(uint8_t *)CMSG_DATA(hdr);
@@ -282,12 +303,40 @@ int RecvMsg(int sock, address &from, address &to, uint8_t *buffer, int buflen, i
 		ts = get_timestamp();
 	}
 
-	to = beaconUnicastAddr;
-
 	return len;
 }
 
 int SendTo(int sock, const uint8_t *buffer, int len, const address &from, const address &to) {
+#ifdef IPV6_PKTINFO
+	if (from.family() == AF_INET6) {
+		uint8_t ctlbuf[CMSG_SPACE(sizeof(in6_pktinfo))];
+
+		cmsghdr *chdr = (cmsghdr *)ctlbuf;
+		chdr->cmsg_len = CMSG_LEN(sizeof(in6_pktinfo));
+		chdr->cmsg_level = IPPROTO_IPV6;
+		chdr->cmsg_type = IPV6_PKTINFO;
+
+		in6_pktinfo *info = (in6_pktinfo *)CMSG_DATA(chdr);
+		info->ipi6_addr = from.v6()->sin6_addr;
+		info->ipi6_ifindex = 0;
+
+		msghdr msg;
+		iovec iov;
+
+		msg.msg_name = (char *)to.saddr();
+		msg.msg_namelen = to.addrlen();
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
+		msg.msg_control = (char *)ctlbuf;
+		msg.msg_controllen = sizeof(ctlbuf);
+		msg.msg_flags = 0;
+
+		iov.iov_base = (char *)buffer;
+		iov.iov_len = len;
+
+		return sendmsg(sock, &msg, 0);
+	}
+#endif
 	return sendto(sock, buffer, len, 0, to.saddr(), to.addrlen());
 }
 
