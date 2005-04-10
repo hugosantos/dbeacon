@@ -1,3 +1,9 @@
+dbeacon (0.3.5) unstable; urgency=low
+
+  * Upstream version update.
+
+ -- Hugo Santos <hsantos@av.it.pt>  Sun, 10 Apr 2005 02:19:57 +0100
+
 dbeacon (0.3.2) unstable; urgency=low
 
   * Another version bump.

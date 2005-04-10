@@ -1,3 +1,17 @@
+/*
+ * Copyright (C) 2005  Hugo Santos <hsantos@av.it.pt>
+ * $Id: dbeacon.cpp 333 2005-04-10 01:17:12Z hugo $
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 2 of the License, or any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ */
+
 #include "dbeacon.h"
 #include "address.h"
 #include "msocket.h"

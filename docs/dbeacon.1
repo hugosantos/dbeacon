@@ -4,11 +4,11 @@ dbeacon \- Distributed IPv4/IPv6 multicast beacon
 .SH SYNOPSYS
 \fBdbeacon\fR \fB-a \fIMAIL\fR \fB-b \fIBEACON_ADDR\fR[/\fIPORT\fR] [\fB-i\fR
 \fIINTFNAME\fR] [\fB-n\fR \fINAME\fR] [\fB-r\fR \fIREDIST_ADDR\fR[/\fIPORT\fR]]
-[\fB-S\fR [\fIGROUP_ADDR\fR[/\fIPORT\fR]] [\fB-s\fR \fIADDR\fR] [\fB-d\fR
-[\fIFILE\fR]] [\fB-I\fR \fINUMBER\fR] [\fB-l\fR \fILOCAL_ADDR\fR[/\fIPORT\fR]
-[\fB-W\fR \fItype$url\fR] [\fB-L \fIprogram\fR] [\fB-C\fR \fICC\fR]
-[\fB-4\fR][\fB-6\fR][\fB-v\fR][\fB-U\fR][\fB-V\fR][\fB-F\fR \fIflag\fR]
-[\fB-O\fR] [\fB-B\fR \fIADDR\fR]
+[\fB-S\fR [\fIGROUP_ADDR\fR[/\fIPORT\fR]] [\fB-s\fR \fIADDR\fR]
+[\fB-d\fR [\fIFILE\fR]] [\fB-I\fR \fINUMBER\fR] [\fB-W\fR \fItype$url\fR]
+[\fB-L \fIprogram\fR] [\fB-C\fR \fICC\fR] [\fB-4\fR] [\fB-6\fR] [\fB-v\fR]
+[\fB-P\fR] [\fB-U\fR] [\fB-V\fR] [\fB-F\fR \fIflag\fR] [\fB-O\fR]
+[\fB-B\fR \fIADDR\fR]
 .SH DESCRIPTION
 \fBdbeacon\fR is a network level management tool aiming at getting various statistics about multicast connectivity. Its first usage is to check out if you can send/receive toward/from an IPv4/IPv6 multicast network. Its second usage is to gather various statistics by using a known multicast ASM group, for example TTL between each multicast peers, loss or jitter figures. Theses statistics are kept internally but can be dumped periodically in a file in xml format for latter processing. Statistics gathering is completetly distributed and rely on the powerful nature of ASM. No server is required, but maybe a http server for accessing the statistics and build an adjacency matrix of the peers.
 .SH OPTIONS
@@ -39,10 +39,6 @@ can process the dump to create a nice adjacency matrix.
 \fB-I\fR \fINUMBER\fR
 Interval between refresh of the dump file. Defaults to 5 secs if not specified
 .TP
-\fB-l\fR \fILOCAL_ADDR\fR/\fIPORT\fR
-Listen for reports from other probes. This allow you to create a unicast server peer listening for others beacon present on multicast
-islands
-.TP
 \fB-W\fR \fItype$url\fR
 Specify a website to announce. type is one of lg, matrix, if type is not specified a generic url will be announced.
 .TP
@@ -57,6 +53,9 @@ Force IPv6 usage
 .TP
 \fB-v\fR
 verbose mode (use several for more verbosity)
+.TP
+\fB-P\fR
+Enable SSM Ping server capability.
 .TP
 \fB-U\fR
 Dump periodic bandwidth usage reports to stdout
