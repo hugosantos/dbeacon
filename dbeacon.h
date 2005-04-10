@@ -130,12 +130,24 @@ extern Sources sources;
 extern WebSites webSites;
 extern address beaconUnicastAddr;
 
+extern int verbose;
+
 beaconSource &getSource(const address &, const char *name, uint64_t now, bool rxlocal);
 void removeSource(const address &, bool);
 
 uint64_t get_timestamp();
 
-extern int verbose;
+enum content_type {
+	NPROBE,
+	NSSMPROBE,
+	SSMPING
+};
+
+void ListenTo(content_type, int);
+void SetupFDSet(int);
+
+int SetupSSMPing();
+void handle_ssmping(int s, address &, const address &, uint8_t *, int);
 
 #endif
 

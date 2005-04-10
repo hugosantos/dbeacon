@@ -24,8 +24,10 @@ int SSMJoin(int sock, const address &, const address &);
 int SSMLeave(int sock, const address &, const address &);
 
 int SetupSocket(const address &, bool bind, bool ssm);
+bool SetHops(int sock, const address &, int);
 
-int RecvMsg(int, address &from, uint8_t *buffer, int len, int &ttl, uint64_t &ts);
+int RecvMsg(int, address &from, address &to, uint8_t *buffer, int len, int &ttl, uint64_t &ts);
+int SendTo(int, const uint8_t *, int len, const address &from, const address &to);
 
 #endif
 

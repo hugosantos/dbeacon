@@ -3,7 +3,7 @@ CXXFLAGS ?= -g -Wall
 
 PREFIX ?= /usr/local
 
-OBJS = dbeacon.o dbeacon_posix.o protocol.o
+OBJS = dbeacon.o dbeacon_posix.o protocol.o ssmping.o
 
 OS = $(shell uname -s)
 
@@ -28,6 +28,8 @@ protocol.h: address.h
 dbeacon_posix.o: dbeacon_posix.cpp dbeacon.h msocket.h address.h
 
 protocol.o: protocol.cpp dbeacon.h protocol.h
+
+ssmping.o: dbeacon.h address.h msocket.h
 
 install: dbeacon
 	install -D dbeacon $(DESTDIR)$(PREFIX)/bin/dbeacon

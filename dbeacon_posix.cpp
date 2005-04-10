@@ -200,19 +200,9 @@ int SetupSocket(const address &addr, bool shouldbind, bool ssm) {
 		return -1;
 	}
 
-	if (level == IPPROTO_IPV6) {
-		int ttl = defaultTTL;
-		if (setsockopt(sock, level, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
-			perror("setsockopt(IPV6_MULTICAST_HOPS)");
-			return -1;
-		}
-	} else {
-		TTLType ttl = defaultTTL;
-
-		if (setsockopt(sock, level, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) != 0) {
-			perror("setsockopt(IP_MULTICAST_TTL)");
-			return -1;
-		}
+	if (!SetHops(sock, addr, defaultTTL)) {
+		perror("SetHops");
+		return -1;
 	}
 
 	if (!ssm && addr.is_multicast()) {
@@ -225,7 +215,23 @@ int SetupSocket(const address &addr, bool shouldbind, bool ssm) {
 	return sock;
 }
 
-int RecvMsg(int sock, address &from, uint8_t *buffer, int buflen, int &ttl, uint64_t &ts) {
+bool SetHops(int sock, const address &addr, int ttl) {
+	if (addr.optlevel() == IPPROTO_IPV6) {
+		if (setsockopt(sock, addr.optlevel(), IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl)) != 0) {
+			return false;
+		}
+	} else {
+		TTLType _ttl = ttl;
+
+		if (setsockopt(sock, addr.optlevel(), IP_MULTICAST_TTL, &_ttl, sizeof(_ttl)) != 0) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+int RecvMsg(int sock, address &from, address &to, uint8_t *buffer, int buflen, int &ttl, uint64_t &ts) {
 	int len;
 	struct msghdr msg;
 	struct iovec iov;
@@ -276,7 +282,13 @@ int RecvMsg(int sock, address &from, uint8_t *buffer, int buflen, int &ttl, uint
 		ts = get_timestamp();
 	}
 
+	to = beaconUnicastAddr;
+
 	return len;
+}
+
+int SendTo(int sock, const uint8_t *buffer, int len, const address &from, const address &to) {
+	return sendto(sock, buffer, len, 0, to.saddr(), to.addrlen());
 }
 
 address::address() {
@@ -330,7 +342,7 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 	hint.ai_family = forceFamily;
 	hint.ai_socktype = SOCK_DGRAM;
 
-	if ((cres = getaddrinfo(tmp, port, &hint, &rres)) != 0) {
+	if ((cres = getaddrinfo(*tmp ? tmp : 0, port, &hint, &rres)) != 0) {
 		fprintf(stderr, "getaddrinfo failed: %s\n", gai_strerror(cres));
 		return false;
 	}
@@ -348,6 +360,32 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 
 	if (!res) {
 		fprintf(stderr, "No usable records for %s\n", tmp);
+		return false;
+	}
+
+	return true;
+}
+
+bool address::set_addr(const char *addr) {
+	if (stor.ss_family == AF_INET) {
+		if (inet_pton(AF_INET, addr, &v4()->sin_addr) <= 0)
+			return false;
+	} else if (stor.ss_family == AF_INET6) {
+		if (inet_pton(AF_INET6, addr, &v6()->sin6_addr) <= 0)
+			return false;
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+bool address::set_port(int port) {
+	if (stor.ss_family == AF_INET) {
+		v4()->sin_port = htons(port);
+	} else if (stor.ss_family == AF_INET6) {
+		v6()->sin6_port = htons(port);
+	} else {
 		return false;
 	}
 

@@ -64,12 +64,6 @@ static const int ssmReportI = 4;
 static const int mapReportI = 6;
 static const int websiteReportI = 24;
 
-enum content_type {
-	NPROBE,
-	NSSMPROBE,
-	NREPORT
-};
-
 // Timer Events
 enum {
 	GARBAGE_COLLECT_EVENT,
@@ -114,6 +108,7 @@ static const char *probeAddrLiteral = 0;
 static const char *probeSSMAddrLiteral = 0;
 static bool useSSM = false;
 static bool listenForSSM = false;
+static bool useSSMPing = false;
 static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
 static int largestSock = 0;
@@ -151,7 +146,6 @@ int forceFamily = AF_UNSPEC;
 
 static void next_event(timeval *);
 static void insert_event(uint32_t, uint32_t);
-static void handle_probe(int, content_type);
 static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
@@ -193,12 +187,12 @@ void usage() {
 	fprintf(stderr, "  -s ADDR                Bind to local address\n");
 	fprintf(stderr, "  -d [FILE]              Dump periodic reports to dump.xml or specified file\n");
 	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
-	fprintf(stderr, "  -l LOCAL_ADDR[/PORT]   Listen for reports from other probes\n");
 	fprintf(stderr, "  -W URL / type$URL      Specify a website to announce. If type$ (one of lg or matrix) is used\n");
 	fprintf(stderr, "                         will announce an URL for that type instead\n");
 	fprintf(stderr, "  -C CC                  Specify your two letter Country Code\n");
 	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename\n");
 	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announce. Available flags are: ssmping\n");
+	fprintf(stderr, "  -P                     Enable SSM Ping server capability\n");
 	fprintf(stderr, "  -4                     Force IPv4 usage\n");
 	fprintf(stderr, "  -6                     Force IPv6 usage\n");
 	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
@@ -362,12 +356,20 @@ int main(int argc, char **argv) {
 	}
 
 	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
-		int sock = SetupSocketAndFDSet(i->first, true, i->second == NSSMPROBE);
+		int sock = SetupSocket(i->first, true, i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
-		mcastSocks.push_back(make_pair(sock, i->second));
+		ListenTo(i->second, sock);
 		if (i->second == NSSMPROBE) {
 			ssmMcastSock = sock;
+		}
+	}
+
+	if (useSSMPing) {
+		if (SetupSSMPing() < 0) {
+			fprintf(stderr, "Failed to setup SSM Ping\n");
+		} else {
+			flags |= SSMPING_CAPABLE;
 		}
 	}
 
@@ -438,6 +440,12 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
+void ListenTo(content_type content, int sock) {
+	SetupFDSet(sock);
+
+	mcastSocks.push_back(make_pair(sock, content));
+}
+
 void show_version() {
 	fprintf(stderr, "\n");
 	fprintf(stderr, "dbeacon - a Multicast Beacon %s\n", versionInfo);
@@ -457,7 +465,7 @@ void show_version() {
 int parse_arguments(int argc, char **argv) {
 	int res;
 	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::OB:s:d::I:l:L:W:C:F:vUhf46V");
+		res = getopt(argc, argv, "n:a:i:b:r:S::OB:Ps:d::I:L:W:C:F:vUhf46V");
 		if (res == 'n') {
 			if (strlen(optarg) > 254) {
 				fprintf(stderr, "Name is too large.\n");
@@ -494,6 +502,8 @@ int parse_arguments(int argc, char **argv) {
 				return -1;
 			}
 			ssmBootstrap.push_back(addr);
+		} else if (res == 'P') {
+			useSSMPing = true;
 		} else if (res == 's') {
 			if (!beaconUnicastAddr.parse(optarg, false, false)) {
 				fprintf(stderr, "Bad address format.\n");
@@ -508,13 +518,6 @@ int parse_arguments(int argc, char **argv) {
 				fprintf(stderr, "Bad interval.\n");
 				return -1;
 			}
-		} else if (res == 'l') {
-			address addr;
-			if (!addr.parse(optarg, false, true)) {
-				fprintf(stderr, "Bad address format.\n");
-				return -1;
-			}
-			mcastListen.push_back(make_pair(addr, NREPORT));
 		} else if (res == 'L') {
 			launchSomething = optarg;
 		} else if (res == 'W') {
@@ -701,13 +704,13 @@ void handle_gc() {
 	}
 }
 
-void handle_probe(int sock, content_type type) {
-	address from;
+void handle_mcast(int sock, content_type type) {
+	address from, to;
 
 	uint64_t recvdts;
 	int ttl;
 
-	int len = RecvMsg(sock, from, buffer, bufferLen, ttl, recvdts);
+	int len = RecvMsg(sock, from, to, buffer, bufferLen, ttl, recvdts);
 	if (len < 0)
 		return;
 
@@ -720,17 +723,12 @@ void handle_probe(int sock, content_type type) {
 		fprintf(stderr, "RecvMsg(%s): len = %u\n", tmp, len);
 	}
 
-	bytesReceived += len;
+	if (type == SSMPING) {
+		handle_ssmping(sock, from, to, buffer, len);
+	} else if (type == NPROBE || type == NSSMPROBE) {
+		bytesReceived += len;
 
-	if (type != NPROBE && type != NSSMPROBE)
-		return;
-
-	handle_nmsg(from, recvdts, ttl, buffer, len, type == NSSMPROBE);
-}
-
-void handle_mcast(int sock, content_type cnt) {
-	if (cnt == NPROBE || cnt == NSSMPROBE) {
-		handle_probe(sock, cnt);
+		handle_nmsg(from, recvdts, ttl, buffer, len, type == NSSMPROBE);
 	}
 }
 
@@ -1248,14 +1246,18 @@ void sendLeaveReport(int) {
 	exit(0);
 }
 
+void SetupFDSet(int sock) {
+	if (sock > largestSock)
+		largestSock = sock;
+
+	FD_SET(sock, &readSet);
+}
+
 int SetupSocketAndFDSet(const address &addr, bool shouldbind, bool ssm) {
 	int sock = SetupSocket(addr, shouldbind, ssm);
 
 	if (sock > 0) {
-		if (sock > largestSock)
-			largestSock = sock;
-
-		FD_SET(sock, &readSet);
+		SetupFDSet(sock);
 	}
 
 	return sock;

@@ -40,6 +40,8 @@ struct address {
 	int addrlen() const;
 
 	bool parse(const char *, bool multicast = true, bool addport = true);
+	bool set_addr(const char *);
+	bool set_port(int);
 
 	bool is_multicast() const;
 	bool is_unspecified() const;
