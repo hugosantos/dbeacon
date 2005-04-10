@@ -168,10 +168,8 @@ static inline double Exprnd(double mean) {
 	return -mean * log(1 - Rand());
 }
 
-static const int bufferLen = 2048;
+static const int bufferLen = 8192;
 static uint8_t buffer[bufferLen];
-
-extern char *optarg;
 
 void usage() {
 	fprintf(stderr, "Usage: dbeacon [OPTIONS...]\n\n");
@@ -179,7 +177,6 @@ void usage() {
 	fprintf(stderr, "  -a MAIL                Supply administration contact\n");
 	fprintf(stderr, "  -i INTFNAME            Use INTFNAME instead of the default interface for multicast\n");
 	fprintf(stderr, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
-	fprintf(stderr, "  -r REDIST_ADDR[/PORT]  Redistribute reports to the supplied host/port. Multiple may be supplied\n");
 	fprintf(stderr, "  -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
 	fprintf(stderr, "  -O                     Disables the joining of SSM groups but still sends via SSM.\n");
 	fprintf(stderr, "                         Use this option if your operating system has problems with SSM\n");
@@ -464,103 +461,199 @@ void show_version() {
 	exit(1);
 }
 
+enum {
+	NAME = 1,
+	CONTACT,
+	INTERFACE,
+	BEACONADDR,
+	SSMADDR,
+	SSMSENDONLY,
+	BOOTSTRAP,
+	ENABLESSMPING,
+	SOURCEADDR,
+	DUMP,
+	DUMPINTERVAL,
+	DUMPEXEC,
+	SPECWEBSITE,
+	COUNTRY,
+	SPECFLAG,
+	VERBOSE,
+	DUMPBW,
+	HELP,
+	FORCEv4,
+	FORCEv6,
+	SHOWVERSION
+};
+
+static const struct param_tok {
+	int name;
+	const char *sf, *lf;
+	int param;
+} param_format[] = {
+	{ NAME,		"n", "name", 1 },
+	{ CONTACT,	"a", 0, 1 },
+	{ INTERFACE,	"i", "interface", 1 },
+	{ BEACONADDR,	"b", 0, 1 },
+	{ SSMADDR,	"S", 0, 2 },
+	{ SSMSENDONLY,	"O", 0, 0 },
+	{ BOOTSTRAP,	"B", "bootstrap", 1 },
+	{ ENABLESSMPING,"P", "ssmping", 0 },
+	{ SOURCEADDR,	"s", 0, 1 },
+	{ DUMP,		"d", "dump", 2 },
+	{ DUMPINTERVAL,	"I", "interval", 1 },
+	{ DUMPEXEC,	"L", "exec", 1 },
+	{ SPECWEBSITE,	"W", 0, 1 },
+	{ COUNTRY,	"C", "CC", 1 },
+	{ SPECFLAG,	"F", "flag", 1 },
+	{ VERBOSE,	"v", "verbose", 0 },
+	{ DUMPBW,	"U", "dump-bw", 0 },
+	{ HELP,		"h", "help", 0 },
+	{ FORCEv4,	"4", "ipv4", 0 },
+	{ FORCEv6,	"6", "ipv6", 0 },
+	{ SHOWVERSION,	"V", "version", 0 },
+	{ 0, 0, 0, 0 }
+};
+
 int parse_arguments(int argc, char **argv) {
-	int res;
-	while (1) {
-		res = getopt(argc, argv, "n:a:i:b:r:S::OB:Ps:d::I:L:W:C:F:vUhf46V");
-		if (res == 'n') {
-			if (strlen(optarg) > 254) {
-				fprintf(stderr, "Name is too large.\n");
+	vector< pair<const char *, const char *> > args;
+	vector<const char *> stray;
+
+	for (int i = 1; i < argc; i++) {
+		if (argv[i][0] == '-') {
+			const char *mast = argv[i];
+			const char *arg = 0;
+			if ((i + 1) < argc && argv[i+1][0] != '-') {
+				arg = argv[i+1];
+				i++;
+			}
+			args.push_back(make_pair(mast + 1, arg));
+		} else {
+			stray.push_back(argv[i]);
+		}
+	}
+
+	for (vector< pair<const char *, const char *> >::const_iterator i = args.begin();
+							i != args.end(); i++) {
+		const param_tok *tok = 0;
+		int j;
+		for (j = 0; !tok && param_format[j].name; j++) {
+			if ((param_format[j].sf && !strcmp(i->first, param_format[j].sf))
+				|| (param_format[j].lf && !strcmp(i->first, param_format[j].lf))) {
+				tok = &param_format[j];
+			}
+		}
+		if (!tok) {
+			fprintf(stderr, "Unknown parameter `%s`\n", i->first);
+		} else {
+			if (tok->param == 1 && !i->second) {
+				fprintf(stderr, "Parameter `%s` requires an argument\n", i->first);
 				return -1;
+			} else if (tok->param == 0 && i->second) {
+				fprintf(stderr, "Parameter `%s` doesn't require an argument, ignoring.\n", i->first);
 			}
-			beaconName = optarg;
-		} else if (res == 'a') {
-			if (!strchr(optarg, '@')) {
-				fprintf(stderr, "Not a valid email address.\n");
+
+			switch (tok->name) {
+			case NAME:
+				beaconName = i->second;
+				break;
+			case CONTACT:
+				if (!strchr(i->second, '@')) {
+					fprintf(stderr, "Not a valid email address.\n");
+					return -1;
+				}
+				adminContact = i->second;
+				break;
+			case BEACONADDR:
+				probeAddrLiteral = i->second;
+				break;
+			case SSMADDR:
+				if (i->second) {
+					probeSSMAddrLiteral = i->second;
+				}
+				useSSM = true;
+				listenForSSM = true;
+				break;
+			case SSMSENDONLY:
+				useSSM = true;
+				listenForSSM = false;
+				break;
+			case BOOTSTRAP:
+				{
+					address addr;
+					if (!addr.parse(i->second, false)) {
+						fprintf(stderr, "Bad address format.\n");
+						return -1;
+					}
+					ssmBootstrap.push_back(addr);
+				}
+				break;
+			case ENABLESSMPING:
+				useSSMPing = true;
+				break;
+			case SOURCEADDR:
+				if (!beaconUnicastAddr.parse(i->second, false, false)) {
+					fprintf(stderr, "Bad address format.\n");
+					return -1;
+				}
+				break;
+			case DUMP:
+				dumpFile = i->second ? i->second : defaultDumpFile;
+				break;
+			case DUMPINTERVAL:
+				{
+					char *end;
+					dumpInterval = strtoul(i->second, &end, 10);
+					if (*end || dumpInterval < 5) {
+						fprintf(stderr, "Bad interval.\n");
+						return -1;
+					}
+				}
+				break;
+			case DUMPEXEC:
+				launchSomething = i->second;
+				break;
+			case SPECWEBSITE:
+				if (strncmp(i->second, "lg$", 3) == 0) {
+					webSites[T_WEBSITE_LG] = i->second + 3;
+				} else if (strncmp(i->second, "matrix$", 7) == 0) {
+					webSites[T_WEBSITE_MATRIX] = i->second + 7;
+				} else {
+					webSites[T_WEBSITE_GENERIC] = i->second;
+				}
+				break;
+			case COUNTRY:
+				if (strlen(i->second) != 2) {
+					fprintf(stderr, "Bad country code.\n");
+					return -1;
+				}
+				twoLetterCC = i->second;
+				break;
+			case SPECFLAG:
+				if (!strcmp(i->second, "ssmping")) {
+					flags |= SSMPING_CAPABLE;
+				} else {
+					fprintf(stderr, "Unknown flag \"%s\"\n", i->second);
+				}
+				break;
+			case VERBOSE:
+				verbose ++;
+				break;
+			case DUMPBW:
+				dumpBwReport = true;
+				break;
+			case HELP:
+				usage();
 				return -1;
+			case FORCEv4:
+				forceFamily = AF_INET;
+				break;
+			case FORCEv6:
+				forceFamily = AF_INET6;
+				break;
+			case SHOWVERSION:
+				show_version();
+				break;
 			}
-			adminContact = optarg;
-		} else if (res == 'b') {
-			probeAddrLiteral = optarg;
-		} else if (res == 'r') {
-			address addr;
-			if (!addr.parse(optarg)) {
-				return -1;
-			}
-			redist.push_back(addr);
-		} else if (res == 'S') {
-			if (optarg) {
-				probeSSMAddrLiteral = optarg;
-			}
-			useSSM = true;
-			listenForSSM = true;
-		} else if (res == 'O') {
-			useSSM = true;
-			listenForSSM = false;
-		} else if (res == 'B') {
-			address addr;
-			if (!addr.parse(optarg, false)) {
-				fprintf(stderr, "Bad address format.\n");
-				return -1;
-			}
-			ssmBootstrap.push_back(addr);
-		} else if (res == 'P') {
-			useSSMPing = true;
-		} else if (res == 's') {
-			if (!beaconUnicastAddr.parse(optarg, false, false)) {
-				fprintf(stderr, "Bad address format.\n");
-				return -1;
-			}
-		} else if (res == 'd') {
-			dumpFile = optarg ? optarg : defaultDumpFile;
-		} else if (res == 'I') {
-			char *end;
-			dumpInterval = strtoul(optarg, &end, 10);
-			if (*end || dumpInterval < 5) {
-				fprintf(stderr, "Bad interval.\n");
-				return -1;
-			}
-		} else if (res == 'L') {
-			launchSomething = optarg;
-		} else if (res == 'W') {
-			int type = T_WEBSITE_GENERIC;
-			if (strncmp(optarg, "lg$", 3) == 0) {
-				type = T_WEBSITE_LG;
-				optarg += 3;
-			} else if (strncmp(optarg, "matrix$", 7) == 0) {
-				type = T_WEBSITE_MATRIX;
-				optarg += 7;
-			}
-			webSites[type] = optarg;
-		} else if (res == 'C') {
-			if (strlen(optarg) != 2) {
-				fprintf(stderr, "Bad country code.\n");
-				return -1;
-			}
-			twoLetterCC = optarg;
-		} else if (res == 'F') {
-			if (!strcmp(optarg, "ssmping")) {
-				flags |= SSMPING_CAPABLE;
-			} else {
-				fprintf(stderr, "Unknown flag \"%s\"\n", optarg);
-			}
-		} else if (res == 'i') {
-			multicastInterface = optarg;
-		} else if (res == 'h') {
-			usage();
-			return -1;
-		} else if (res == 'v') {
-			verbose++;
-		} else if (res == 'U') {
-			dumpBwReport = true;
-		} else if (res == '4') {
-			forceFamily = AF_INET;
-		} else if (res == '6') {
-			forceFamily = AF_INET6;
-		} else if (res == 'V') {
-			show_version();
-		} else if (res == -1) {
-			break;
 		}
 	}
 

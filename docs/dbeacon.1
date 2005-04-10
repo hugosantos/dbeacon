@@ -3,12 +3,11 @@
 dbeacon \- Distributed IPv4/IPv6 multicast beacon
 .SH SYNOPSYS
 \fBdbeacon\fR \fB-a \fIMAIL\fR \fB-b \fIBEACON_ADDR\fR[/\fIPORT\fR] [\fB-i\fR
-\fIINTFNAME\fR] [\fB-n\fR \fINAME\fR] [\fB-r\fR \fIREDIST_ADDR\fR[/\fIPORT\fR]]
-[\fB-S\fR [\fIGROUP_ADDR\fR[/\fIPORT\fR]] [\fB-s\fR \fIADDR\fR]
-[\fB-d\fR [\fIFILE\fR]] [\fB-I\fR \fINUMBER\fR] [\fB-W\fR \fItype$url\fR]
-[\fB-L \fIprogram\fR] [\fB-C\fR \fICC\fR] [\fB-4\fR] [\fB-6\fR] [\fB-v\fR]
-[\fB-P\fR] [\fB-U\fR] [\fB-V\fR] [\fB-F\fR \fIflag\fR] [\fB-O\fR]
-[\fB-B\fR \fIADDR\fR]
+\fIINTFNAME\fR] [\fB-n\fR \fINAME\fR] [\fB-S\fR [\fIGROUP_ADDR\fR[/\fIPORT\fR]]
+[\fB-s\fR \fIADDR\fR] [\fB-d\fR [\fIFILE\fR]] [\fB-I\fR \fINUMBER\fR]
+[\fB-W\fR \fItype$url\fR] [\fB-L \fIprogram\fR] [\fB-C\fR \fICC\fR] [\fB-4\fR]
+[\fB-6\fR] [\fB-v\fR] [\fB-P\fR] [\fB-U\fR] [\fB-V\fR] [\fB-F\fR \fIflag\fR]
+[\fB-O\fR] [\fB-B\fR \fIADDR\fR]
 .SH DESCRIPTION
 \fBdbeacon\fR is a network level management tool aiming at getting various statistics about multicast connectivity. Its first usage is to check out if you can send/receive toward/from an IPv4/IPv6 multicast network. Its second usage is to gather various statistics by using a known multicast ASM group, for example TTL between each multicast peers, loss or jitter figures. Theses statistics are kept internally but can be dumped periodically in a file in xml format for latter processing. Statistics gathering is completetly distributed and rely on the powerful nature of ASM. No server is required, but maybe a http server for accessing the statistics and build an adjacency matrix of the peers.
 .SH OPTIONS
@@ -22,9 +21,6 @@ This is the IPv4/IPv6 address of the ASM group used by dbeacon to gather statist
 .TP
 \fB-n\fR \fINAME\fR
 The name identifying you on the dbeacon session. If not specified, dbeacon will use the hostname of the running machine.
-.TP
-\fB-r\fR \fIREDIST_ADDR\fR/\fIPORT\fR
-Redistribute reports to the supplied host/port. Multiple may be supplied
 .TP
 \fB-S\fR \fIGROUP_ADDR\fR/\fIPORT\fR
 Enables SSM reception/sending on optional GROUP_ADDR/PORT

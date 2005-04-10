@@ -29,7 +29,6 @@ Usage: dbeacon [OPTIONS...]
   -a MAIL                Supply administration contact
   -i INTFNAME            Use INTFNAME instead of the default interface for multicast
   -b BEACON_ADDR[/PORT]  Multicast group address to send probes to
-  -r REDIST_ADDR[/PORT]  Redistribute reports to the supplied host/port. Multiple may be supplied
   -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT
   -O                     Disables the joining of SSM groups but still sends via SSM.
                          Use this option if your operating system has problems with SSM
