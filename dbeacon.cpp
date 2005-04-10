@@ -456,6 +456,8 @@ void show_version() {
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;\n");
 	fprintf(stderr, "  o Ideas and testing by Sebastien Chaumontet;\n");
+	fprintf(stderr, "  o SSM Ping originaly by Stig Venaas\n");
+	fprintf(stderr, "    - first proposed by Pavan Namburi, Kamil Sarac and Kevin C. Almeroth;\n");
 	fprintf(stderr, "  o Bernhard Schmidt provided valuable resources and helped during testing.\n");
 	fprintf(stderr, "\n");
 

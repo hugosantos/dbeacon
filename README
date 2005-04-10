@@ -14,7 +14,11 @@ dbeacon was originally only IPv6 capable, designed to be used in the m6bone.
 
   o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;
   o Ideas and testing by Sebastien Chaumontet;
+  o SSM Ping originaly by Stig Venaas
+    - first proposed by Pavan Namburi, Kamil Sarac and Kevin C. Almeroth;
   o Bernhard Schmidt provided valuable resources and helped during testing.
+
+Check dbeacon's Wiki at http://dbeacon.innerghost.net/ for more information.
 
 Running
 -------
@@ -27,13 +31,18 @@ Usage: dbeacon [OPTIONS...]
   -b BEACON_ADDR[/PORT]  Multicast group address to send probes to
   -r REDIST_ADDR[/PORT]  Redistribute reports to the supplied host/port. Multiple may be supplied
   -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT
+  -O                     Disables the joining of SSM groups but still sends via SSM.
+                         Use this option if your operating system has problems with SSM
+  -B ADDR                Bootstraps by joining the specified address
   -s ADDR                Bind to local address
   -d [FILE]              Dump periodic reports to dump.xml or specified file
   -I NUMBER              Interval between dumps. Defaults to 5 secs
-  -l LOCAL_ADDR[/PORT]   Listen for reports from other probes
-  -W type$url            Specify a website to announce. type is one of lg, matrix
+  -W URL / type$URL      Specify a website to announce. If type$ (one of lg or matrix) is used
+                         will announce an URL for that type instead
   -C CC                  Specify your two letter Country Code
   -L program             Launch program after each dump. The first argument will be the dump filename
+  -F flag                Set a dbeacon flag to be announce. Available flags are: ssmping
+  -P                     Enable SSM Ping server capability
   -4                     Force IPv4 usage
   -6                     Force IPv6 usage
   -v                     be verbose (use several for more verbosity)
@@ -55,5 +64,6 @@ A more complete command line would be
 Licensing
 ---------
 
-This code is licensed with the GNU Public Licence (GPL) v2.
+This code is licensed under the GNU Public Licence (GPL) v2.
+
 
