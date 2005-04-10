@@ -26,6 +26,12 @@
 #include <unistd.h>
 #include <sys/uio.h>
 
+#ifdef SOLARIS
+#define TTLType         uint8_t
+#else
+#define TTLType         int
+#endif
+
 int _McastListenNewAPI(int sock, const address &grpaddr);
 int _McastListenOldAPI(int sock, const address &grpaddr);
 

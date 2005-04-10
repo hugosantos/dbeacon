@@ -26,22 +26,6 @@
 
 #include "address.h"
 
-#ifdef SOLARIS
-#define TTLType		uint8_t
-#else
-#define TTLType		int
-#endif
-
-extern const char *defaultPort;
-extern const int defaultTTL;
-
-extern int forceFamily;
-extern int mcastInterface;
-
-struct beaconExternalStats;
-
-extern uint32_t flags;
-
 struct Stats {
 	Stats();
 
@@ -125,13 +109,6 @@ struct beaconSource {
 
 typedef std::map<address, beaconSource> Sources;
 
-extern std::string beaconName, adminContact, twoLetterCC;
-extern Sources sources;
-extern WebSites webSites;
-extern address beaconUnicastAddr;
-
-extern int verbose;
-
 beaconSource &getSource(const address &, const char *name, uint64_t now, bool rxlocal);
 void removeSource(const address &, bool);
 
@@ -147,7 +124,24 @@ void ListenTo(content_type, int);
 void SetupFDSet(int);
 
 int SetupSSMPing();
-void handle_ssmping(int s, address &, const address &, uint8_t *, int);
+void handle_ssmping(int s, address &, const address &, uint8_t *, int, uint64_t);
+
+extern const char *defaultPort;
+extern const int defaultTTL;
+
+extern int forceFamily;
+extern int mcastInterface;
+
+struct beaconExternalStats;
+
+extern uint32_t flags;
+
+extern std::string beaconName, adminContact, twoLetterCC;
+extern Sources sources;
+extern WebSites webSites;
+extern address beaconUnicastAddr;
+
+extern int verbose;
 
 #endif
 

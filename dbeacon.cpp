@@ -724,7 +724,7 @@ void handle_mcast(int sock, content_type type) {
 	}
 
 	if (type == SSMPING) {
-		handle_ssmping(sock, from, to, buffer, len);
+		handle_ssmping(sock, from, to, buffer, len, recvdts);
 	} else if (type == NPROBE || type == NSSMPROBE) {
 		bytesReceived += len;
 

@@ -56,7 +56,7 @@ int SetupSSMPing() {
 	return 0;
 }
 
-void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer, int len) {
+void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer, int len, uint64_t ts) {
 	if (buffer[0] != SSMPING_REQUEST || len > maxSSMPingMessage)
 		return;
 
