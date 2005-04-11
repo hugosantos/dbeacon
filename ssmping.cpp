@@ -16,6 +16,9 @@
 #include "address.h"
 #include "msocket.h"
 
+#include <stdio.h>
+#include <unistd.h>
+
 enum {
 	SSMPING_REQUEST = 'Q',
 	SSMPING_ANSWER = 'A'
