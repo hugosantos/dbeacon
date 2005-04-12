@@ -1077,10 +1077,23 @@ sub get_beacons {
         my @res = ();
 
         foreach my $dircontent (readdir(DIR)) {
-		if (not $recv or -d "$target/$dircontent") {
+		my $t = $target . '/' . $dircontent;
+		if (not $recv or -d $t) {
 			if ($dircontent ne "." and $dircontent ne "..") {
-				$dircontent =~ s/\.rrd$//;
-				push (@res, $dircontent);
+				my $tm;
+				if ($recv) {
+					$tm = (stat("$t/lastupdate"))[9];
+					push (@res, [$dircontent, $t, $tm]);
+				} else {
+					if ($dircontent =~ s/\.rrd$//) {
+						my ($name, $addr, $asmorssm) =
+							get_name_from_host($dircontent);
+						my $host = build_host($name, $addr);
+
+						$tm = (stat("$target/lastupdate.$host"))[9];
+						push (@res, [$dircontent, $t, $tm]);
+					}
+				}
 			}
                 }
         }
@@ -1105,7 +1118,8 @@ sub do_list_beacs {
 
 	my $def = $name eq 'srcc' ? $src : $dst;
 
-	foreach my $foo (@vals) {
+	foreach my $bar (@vals) {
+		my $foo = $bar->[0];
 		printx '<option value="'.$url.'?history=1&amp;dst=';
 		printx $dst, '&amp;src=' if $name eq 'srcc';
 		printx $foo;
@@ -1171,17 +1185,55 @@ sub list_graph {
 
 		my @beacs = get_beacons($historydir, 1);
 
+		my $now = time;
+		my @wking = ();
+		my @old = ();
+
+		for (my $i = 0; $i < scalar(@beacs); $i++) {
+			if (($now - $beacs[$i]->[2]) > 900) {
+				push @old, $i;
+			} else {
+				push @wking, $i;
+			}
+		}
+
+		printx '<h3 style="margin: 0">Active</h3>';
+
 		printx "<ul>\n";
 
-		foreach my $beac (@beacs) {
+		foreach my $bar (@wking) {
+			my $beac = $beacs[$bar]->[0];
 			printx '<li><a href="', $url, '?history=1&amp;dst=', $beac, '"';
 			printx ' title="', (get_name_from_host($beac))[1], '"';
 			printx '>' . (get_name_from_host($beac))[0];
 			printx '</a>';
 
-			if (-f "$historydir/$beac/lastupdate") {
-				printx ' <small>[Last update ', format_date(time - (stat("$historydir/$beac/lastupdate"))[9]), ' ago]</small>';
-			}
+			my $tm = $beacs[$bar]->[2];
+
+			# printx ' <small>[Last update ',
+			#	format_date(time - $tm), ' ago]</small>';
+
+			printx '</li>', "\n";
+		}
+
+		printx "</ul>\n";
+
+		printx '<h3 style="margin: 0">Inactive</h3>';
+
+		printx "<ul>\n";
+
+		foreach my $bar (@old) {
+			my $beac = $beacs[$bar]->[0];
+			printx '<li><a href="', $url, '?history=1&amp;dst=', $beac, '"';
+			printx ' title="', (get_name_from_host($beac))[1], '"';
+			printx '>' . (get_name_from_host($beac))[0];
+			printx '</a>';
+
+			my $tm = $beacs[$bar]->[2];
+
+			printx ' <small>[Last update ',
+				format_date(time - $tm), ' ago]</small>';
+
 			printx '</li>', "\n";
 		}
 
@@ -1196,13 +1248,16 @@ sub list_graph {
 
 		my %pairs;
 
-		foreach my $beac (@beacs) {
-			my ($name,$addr,$asmorssm) = get_name_from_host($beac);
+		foreach my $bar (@beacs) {
+			my $beac = $bar->[0];
+			my ($name, $addr, $asmorssm) = get_name_from_host($beac);
+			my $host = build_host($name, $addr);
 			if ($asmorssm eq 'asm') {
-				$pairs{build_host($name,$addr)}[0]=$beac;
+				$pairs{$host}[0] = $beac;
 			} elsif ($asmorssm eq 'ssm') {
-				$pairs{build_host($name,$addr)}[1]=$beac;
+				$pairs{$host}[1] = $beac;
 			}
+			$pairs{$host}[2] = $bar->[2];
 		}
 
 		printx "<ul>\n";
@@ -1210,7 +1265,8 @@ sub list_graph {
 			printx "<li>";
 
 			if (defined $pairs{$key}[0]) {
-				printx '<a href="?history=1&amp;dst=' . $dst . '&amp;src=' . $pairs{$key}[0] . '">';
+				printx '<a href="?history=1&amp;dst=', $dst,
+					'&amp;src=', $pairs{$key}[0], '">';
 			}
 
 			printx ((get_name_from_host($key))[0]);
@@ -1220,13 +1276,12 @@ sub list_graph {
 			}
 
 			if (defined $pairs{$key}[1]) {
-				printx ' / <a href="?history=1&amp;dst='.$dst.'&amp;src=' . $pairs{$key}[1] . "\">SSM</a>";
+				printx ' / <a href="?history=1&amp;dst=',
+					$dst, '&amp;src=', $pairs{$key}[1], "\">SSM</a>";
 			}
 
-			my $lastupdate = "$historydir/$dst/lastupdate.$key";
-			if (-f $lastupdate) {
-				printx ' <small>[Last update ', format_date(time - (stat($lastupdate))[9]), ' ago]</small>';
-			}
+			printx ' <small>[Last update ', format_date(time - $pairs{$key}->[2]),
+					' ago]</small>';
 
 			printx "</li>\n";
 		}
