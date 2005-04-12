@@ -1,5 +1,10 @@
 CXX ?= g++
-CXXFLAGS ?= -g -Wall
+CXX_SUN = $(shell $(CXX) -V 2>&1 | grep 'Sun C++' >/dev/null && echo yes)
+ifeq ($(CSS_SUN),yes)
+	CXXFLAGS += -g -xs
+else
+	CXXFLAGS += -g -Wall
+endif
 
 PREFIX ?= /usr/local
 
@@ -9,13 +14,16 @@ OS = $(shell uname -s)
 
 ifeq ($(OS), SunOS)
 	CXXFLAGS += -DSOLARIS
+	ifeq ($(CXX_SUN), yes)
+		CXXFLAGS += -D_XPG4_2 -D__EXTENSIONS__
+	endif
 	LDFLAGS = -lnsl -lsocket
 endif
 
 all: dbeacon
 
 dbeacon: $(OBJS)
-	g++ $(CXXFLAGS) -o dbeacon $(OBJS) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o dbeacon $(OBJS) $(LDFLAGS)
 
 dbeacon.o: dbeacon.cpp dbeacon.h address.h msocket.h protocol.h
 
