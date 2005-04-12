@@ -1197,6 +1197,9 @@ sub list_graph {
 			}
 		}
 
+		@wking = sort { $beacs[$b]->[2] <=> $beacs[$a]->[2] } @wking;
+		@old = sort { $beacs[$b]->[2] <=> $beacs[$a]->[2] } @old;
+
 		printx '<h3 style="margin: 0">Active</h3>';
 
 		printx "<ul>\n";
