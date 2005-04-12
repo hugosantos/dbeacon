@@ -987,8 +987,13 @@ sub storedata {
 
 	print "Updating $dstbeacon <- $srcbeacon with $updatestring\n" if $verbose > 1;
 
-	system("touch $historydir/$dstbeacon/lastupdate");
-	system("touch $historydir/$dstbeacon/lastupdate.$srcbeacon");
+	open F1, ">$historydir/$dstbeacon/lastupdate";
+	print F1 time;
+	close F1;
+
+	open F2, ">$historydir/$dstbeacon/lastupdate.$srcbeacon";
+	print F2 time;
+	close F2;
 
 	if (!RRDs::update(build_rrd_file_path($historydir, $dstbeacon, $srcbeacon, $asmorssm), $updatestring)) {
 		return 0;
