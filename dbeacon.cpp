@@ -155,8 +155,8 @@ static int send_report(int);
 
 static void do_dump();
 static void do_bw_dump(bool);
-static void dumpBigBwStats(int);
-static void sendLeaveReport(int);
+extern "C" void dumpBigBwStats(int);
+extern "C" void sendLeaveReport(int);
 
 static int SetupSocketAndFDSet(const address &, bool, bool);
 
@@ -201,7 +201,7 @@ void usage() {
 void fixDumpFile() {
 }
 
-static void waitForMe(int) {
+extern "C" void waitForMe(int) {
 	int whocares;
 	wait(&whocares);
 }
