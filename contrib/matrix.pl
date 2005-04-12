@@ -133,7 +133,7 @@ if (defined $history_enabled and $history_enabled and defined $page->param('img'
 sub build_vertex_from_rrd {
 	my ($start, $step, $names, $data);
 
-	foreach my $dstbeacon (get_beacons($historydir)) {
+	foreach my $dstbeacon (get_beacons($historydir, 1)) {
 		my ($dstname,$dstaddr) = get_name_from_host($dstbeacon);
 
 		if (not defined $adj{$dstaddr}) {
@@ -143,7 +143,7 @@ sub build_vertex_from_rrd {
 
 		$adj{$dstaddr}[NAME] = $dstname;
 
-		foreach my $srcbeacon (get_beacons($historydir . '/' . $dstbeacon)) {
+		foreach my $srcbeacon (get_beacons($historydir . '/' . $dstbeacon, 0)) {
 			my ($srcname, $srcaddr, $asmorssm) = get_name_from_host($srcbeacon);
 
 			($start, $step, $names, $data) = RRDs::fetch(build_rrd_file_path($historydir,  $dstbeacon, $srcbeacon, $asmorssm), 'AVERAGE',
@@ -1071,15 +1071,17 @@ sub graphgen {
 }
 
 sub get_beacons {
-        my ($target, $isf, $start) = @_;
+        my ($target, $recv) = @_;
 
         opendir (DIR, $target) or die "Failed to open directory $target\n";
         my @res = ();
 
         foreach my $dircontent (readdir(DIR)) {
-                if ($dircontent ne "." and $dircontent ne "..") {
-			$dircontent =~ s/\.rrd$//;
-			push (@res, $dircontent);
+		if (not $recv or -d "$target/$dircontent") {
+			if ($dircontent ne "." and $dircontent ne "..") {
+				$dircontent =~ s/\.rrd$//;
+				push (@res, $dircontent);
+			}
                 }
         }
 
@@ -1132,11 +1134,11 @@ sub list_graph {
 	if (defined $dst) {
 		printx '<p>To ';
 
-		do_list_beacs("dstc", $dst, undef, get_beacons($historydir));
+		do_list_beacs("dstc", $dst, undef, get_beacons($historydir, 1));
 
                if (defined $src) {
                        printx "From ";
-                       do_list_beacs("srcc", $dst, $src, get_beacons("$historydir/$dst"));
+                       do_list_beacs("srcc", $dst, $src, get_beacons("$historydir/$dst", 0));
 
                        if (defined $type) {
                                printx "Type ";
@@ -1167,7 +1169,7 @@ sub list_graph {
 
 		printx '<p>Select a receiver:</p>';
 
-		my @beacs = get_beacons($historydir);
+		my @beacs = get_beacons($historydir, 1);
 
 		printx "<ul>\n";
 
@@ -1190,7 +1192,7 @@ sub list_graph {
 
 		# List visible src for this beacon
 
-		my @beacs = get_beacons("$historydir/$dst");
+		my @beacs = get_beacons("$historydir/$dst", 0);
 
 		my %pairs;
 
