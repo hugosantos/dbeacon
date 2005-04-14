@@ -859,6 +859,14 @@ sub store_data {
 
 	foreach my $a (keys %adj) {
 		if ($adj{$a}[NAME]) {
+			my $dstbeacon = build_host($adj{$a}[NAME], $a);
+			if (not -d "$historydir/$dstbeacon") {
+				mkdir "$historydir/$dstbeacon";
+			}
+			open F1, ">$historydir/$dstbeacon/lastupdate";
+			print F1 time;
+			close F1;
+
 			foreach my $b (keys %adj) {
 				if ($a ne $b and defined $adj{$a}[NEIGH]{$b}) {
 					if ($adj{$b}[NAME]) {
@@ -917,6 +925,7 @@ sub build_rrd_file_path {
 
 	return "$historydir/$dstbeacon/$srcbeacon.$asmorssm.rrd";
 }
+
 sub make_rrd_file_path {
 	my ($historydir, $dstbeacon, $srcbeacon, $asmorssm) = @_;
 
@@ -986,10 +995,6 @@ sub storedata {
 	}
 
 	print "Updating $dstbeacon <- $srcbeacon with $updatestring\n" if $verbose > 1;
-
-	open F1, ">$historydir/$dstbeacon/lastupdate";
-	print F1 time;
-	close F1;
 
 	open F2, ">$historydir/$dstbeacon/lastupdate.$srcbeacon";
 	print F2 time;
@@ -1200,7 +1205,7 @@ sub list_graph {
 		@wking = sort { $beacs[$b]->[2] <=> $beacs[$a]->[2] } @wking;
 		@old = sort { $beacs[$b]->[2] <=> $beacs[$a]->[2] } @old;
 
-		printx '<h3 style="margin: 0">Active</h3>';
+		printx '<h3 style="margin: 0">Active (', scalar(@wking), ')</h3>';
 
 		printx "<ul>\n";
 
@@ -1221,26 +1226,28 @@ sub list_graph {
 
 		printx "</ul>\n";
 
-		printx '<h3 style="margin: 0">Inactive</h3>';
+		if (scalar(@old)) {
+			printx '<h3 style="margin: 0">Inactive (', scalar(@old), ')</h3>';
 
-		printx "<ul>\n";
+			printx "<ul>\n";
 
-		foreach my $bar (@old) {
-			my $beac = $beacs[$bar]->[0];
-			printx '<li><a href="', $url, '?history=1&amp;dst=', $beac, '"';
-			printx ' title="', (get_name_from_host($beac))[1], '"';
-			printx '>' . (get_name_from_host($beac))[0];
-			printx '</a>';
+			foreach my $bar (@old) {
+				my $beac = $beacs[$bar]->[0];
+				printx '<li><a href="', $url, '?history=1&amp;dst=', $beac, '"';
+				printx ' title="', (get_name_from_host($beac))[1], '"';
+				printx '>' . (get_name_from_host($beac))[0];
+				printx '</a>';
 
-			my $tm = $beacs[$bar]->[2];
+				my $tm = $beacs[$bar]->[2];
 
-			printx ' <small>[Last update ',
-				format_date(time - $tm), ' ago]</small>';
+				printx ' <small>[Last update ',
+					format_date(time - $tm), ' ago]</small>';
 
-			printx '</li>', "\n";
+				printx '</li>', "\n";
+			}
+
+			printx "</ul>\n";
 		}
-
-		printx "</ul>\n";
 
 	} elsif (not defined $src) {
 		printx '<br />Select a source:';
