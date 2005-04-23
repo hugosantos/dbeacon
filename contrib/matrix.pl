@@ -26,7 +26,8 @@ our $default_hideinfo = 0;	# one of '0', '1'
 our $default_what = 'ssmorasm';	# one of 'ssmorasm', 'both', 'asm'
 our $history_enabled = 0;
 our $css_file;
-our $dump_update_delay = 5;	# time between each normal dumps (used to detect outdated dump files)
+our $dump_update_delay = 5;	# time between each normal dumps
+				# (used to detect outdated dump files)
 our $flag_url_format = 'http://www.sixxs.net/gfx/countries/%s.gif';
 our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
@@ -71,7 +72,7 @@ my $ssm_sessiongroup;
 my $load_start = [gettimeofday];
 my $ended_parsing_dump;
 
-exit(store_data($ARGV[0])) if scalar(@ARGV) > 0;
+exit store_data($ARGV[0]) if scalar(@ARGV) > 0;
 
 my $page = new CGI;
 my $url = $page->script_name();
@@ -106,11 +107,11 @@ sub send_page {
 	print $outb;
 }
 
-if (defined $history_enabled and $history_enabled and defined $page->param('img')) {
+if ($history_enabled and defined $page->param('img')) {
 	$|=1;
 	graphgen();
 
-} elsif (defined $history_enabled and $history_enabled and defined $page->param('history')) {
+} elsif ($history_enabled and defined $page->param('history')) {
 	list_graph();
 
 	send_page;
@@ -130,50 +131,84 @@ if (defined $history_enabled and $history_enabled and defined $page->param('img'
 	send_page;
 }
 
-sub build_vertex_from_rrd {
+sub hist_beacon_dir {
+	my ($beac) = @_;
+
+	return "$historydir/$beac";
+}
+
+sub hist_beacon_sources_dir {
+	return hist_beacon_dir(@_) . "/sources";
+}
+
+sub build_vertex_one {
+	my ($dstaddr, $srcaddr, $index, $path) = @_;
+
 	my ($start, $step, $names, $data);
 
-	foreach my $dstbeacon (get_beacons($historydir, 1)) {
-		my ($dstname,$dstaddr) = get_name_from_host($dstbeacon);
+	($start, $step, $names, $data) =
+		RRDs::fetch($path, 'AVERAGE', '-s',
+		$page->param('at'), '-e', $page->param('at'));
 
-		if (not defined $adj{$dstaddr}) {
-			$adj{$dstaddr}[IN_EDGE] = 0;
-			$adj{$dstaddr}[OUT_EDGE] = 0;
-		}
+	return [-1, -1] if RRDs::error;
 
-		$adj{$dstaddr}[NAME] = $dstname;
+	if (not defined($adj{$srcaddr})) {
+		$adj{$srcaddr}[IN_EDGE] = 0;
+		$adj{$srcaddr}[OUT_EDGE] = 0;
+	}
 
-		foreach my $srcbeacon (get_beacons($historydir . '/' . $dstbeacon, 0)) {
-			my ($srcname, $srcaddr, $asmorssm) = get_name_from_host($srcbeacon);
-
-			($start, $step, $names, $data) = RRDs::fetch(build_rrd_file_path($historydir,  $dstbeacon, $srcbeacon, $asmorssm), 'AVERAGE',
-				 '-s', $page->param('at'), '-e', $page->param('at'));
-
-			next if RRDs::error;
-
-			if (not defined($adj{$srcaddr})) {
-				$adj{$srcaddr}[IN_EDGE] = 0;
-				$adj{$srcaddr}[OUT_EDGE] = 0;
+	for (my $i = 0; $i < $#$names+1; $i++) {
+		if (defined $$data[0][$i]) {
+			if ($$names[$i] =~ /^(delay|jitter)$/) {
+				$$data[0][$i] *= 1000;
 			}
 
-			$adj{$srcaddr}[NAME] = $srcname if defined $srcname;
+			if (not defined $adj{$dstaddr}[NEIGH]{$srcaddr}) {
+				$adj{$dstaddr}[IN_EDGE] ++;
+				$adj{$srcaddr}[OUT_EDGE] ++;
+			}
 
-			my $index = $asmorssm eq 'ssm' ? 2 : 1;
+			$adj{$dstaddr}[NEIGH]{$srcaddr}[0] ++;
+			$adj{$dstaddr}[NEIGH]{$srcaddr}[$index]{$$names[$i]} = $$data[0][$i];
+		}
+	}
 
-			for (my $i = 0; $i < $#$names+1; $i++) {
-				if (defined $$data[0][$i]) {
-					if ($$names[$i] =~ /^(delay|jitter)$/) {
-						$$data[0][$i] *= 1000;
-					}
+	return [$start, $step];
+}
 
-					if (not defined $adj{$dstaddr}[NEIGH]{$srcaddr}) {
-						$adj{$dstaddr}[IN_EDGE] ++;
-						$adj{$srcaddr}[OUT_EDGE] ++;
-					}
+sub build_vertex_from_rrd {
+	my ($start, $step);
 
-					$adj{$dstaddr}[NEIGH]{$srcaddr}[0] ++;
-					$adj{$dstaddr}[NEIGH]{$srcaddr}[$index]{$$names[$i]} = $$data[0][$i];
-				}
+	foreach my $dstbeacon (get_beacons()) {
+		my ($dstname, $dstaddr) = get_name_from_host($dstbeacon->[0]);
+
+		if (defined $dstaddr) {
+			if (not defined $adj{$dstaddr}) {
+				$adj{$dstaddr}[IN_EDGE] = 0;
+				$adj{$dstaddr}[OUT_EDGE] = 0;
+			}
+
+			$adj{$dstaddr}[NAME] = $dstname;
+			$adj{$dstaddr}[CONTACT] = $dstbeacon->[3];
+			$adj{$dstaddr}[COUNTRY] = $dstbeacon->[4];
+			$adj{$dstaddr}[URL] = $dstbeacon->[5];
+			$adj{$dstaddr}[MATRIX] = $dstbeacon->[6];
+			$adj{$dstaddr}[LG] = $dstbeacon->[7];
+
+			foreach my $srcbeacon (get_sources($dstbeacon->[0])) {
+				$adj{$srcbeacon->[3]}[NAME] = $srcbeacon->[3]
+					if defined $srcbeacon->[3];
+
+				($start, $step) =
+					build_vertex_one($dstaddr,
+						$srcbeacon->[4], 1,
+						$srcbeacon->[5])
+					if defined $srcbeacon->[5];
+				($start, $step) =
+					build_vertex_one($dstaddr,
+						$srcbeacon->[4], 2,
+						$srcbeacon->[6])
+					if defined $srcbeacon->[6];
 			}
 		}
 	}
@@ -223,13 +258,20 @@ sub beacon_name {
 sub make_history_url {
 	my ($dst, $src, $type) = @_;
 
+	return "$url?history=1&amp;src=" . $src . ".$type&amp;dst=" . $dst;
+}
+
+sub make_history_urlx {
+	my ($dst, $src, $type) = @_;
+
 	my $dstbeacon = $dst->[0];
 	my $srcbeacon = $src->[0];
 
 	$dstbeacon =~ s/\/\d+$//;
         $srcbeacon =~ s/\/\d+$//;
 
-	return "$url?history=1&amp;src=" . $dst->[1] . "-$dstbeacon.$type&amp;dst=" . $src->[1] . "-$srcbeacon";
+	return "$url?history=1&amp;src=" . $dst->[1] . "-$dstbeacon.$type&amp;"
+				. 'dst=' . $src->[1] . "-$srcbeacon";
 }
 
 sub build_name {
@@ -245,12 +287,15 @@ sub make_history_link {
 	my $srcname = build_name($src);
 
 	if ($history_enabled) {
-		printx '<a class="', $class, '" href="', make_history_url($dstname, $srcname, $type) . '"';
+		printx '<a class="', $class, '" href="';
+		printx make_history_urlx($dstname, $srcname, $type) . '"';
 	} else {
 		printx '<span';
 	}
 
-	printx ' title="', $srcname->[1], ' <- ', $dstname->[1], '"' if $matrix_link_title;
+	if ($matrix_link_title) {
+		printx ' title="', $srcname->[1], ' <- ', $dstname->[1], '"';
+	}
 	printx '>', $txt;
 
 	if ($history_enabled) {
@@ -538,6 +583,27 @@ sub do_faq_qlink {
 	return do_faq_link('<small>[?]</small>', $ctx);
 }
 
+sub make_flag_url {
+	my ($country) = @_;
+
+	return '<img src="' .
+		sprintf($flag_url_format, lc $country) .
+		'" alt="', $country, '" style="vertical-align: middle; border: 1px solid black" />';
+}
+
+sub make_cell_class {
+	my ($base, $val) = @_;
+
+	my $tok = 'full';
+	if ($val >= 0.05) {
+		$tok = 'almst';
+	} elsif ($val >= 0.40) {
+		$tok = 'low';
+	}
+
+	return $tok . '_' . $base;
+}
+
 sub render_matrix {
 	my ($start, $step) = @_;
 
@@ -810,10 +876,8 @@ sub render_matrix {
 				printx ' <b>R', $ids{$a}, '</b>', '</td>';
 
 				printx '<td>';
-				if ($flag_url_format ne "" and $adj{$a}[COUNTRY]) {
-					printx '<img src="';
-					printx sprintf $flag_url_format, lc $adj{$a}[COUNTRY];
-					printx '" alt="', $adj{$a}[COUNTRY], '" style="vertical-align: middle; border: 1px solid black" />';
+				if ($flag_url_format ne '' and $adj{$a}[COUNTRY]) {
+					printx make_flag_url($adj{$a}[COUNTRY]);
 				}
 				printx '</td>';
 
@@ -850,22 +914,70 @@ sub render_matrix {
 	end_document;
 }
 
-sub store_data {
+sub update_ttl_hist {
+	my ($file, $ttl) = @_;
 
-	if (check_outdated_dump) {
-		die "Outdated dumpfile\n";
+	my @lines = ();
+
+	if (open F, "< $file") {
+		while (<F>) {
+			push @lines, $_;
+		}
+
+		close F;
 	}
+
+	open F, "> $file";
+
+	print F 'At ', time, ' \'' . localtime() . '\' TTL was ', $ttl, "\n";
+
+	if (scalar(@lines) > 0) {
+		my $i = 1;
+
+		if ($lines[0] =~ m/^At (\d+) '.*' TTL was (\d+)$/) {
+			if ($2 != $ttl) {
+				$i = 0;
+			}
+		}
+
+		for (; $i < scalar(@lines); $i++) {
+			print F $lines[$i];
+		}
+	}
+
+	close F;
+}
+
+sub store_meta_data {
+	my ($dirn, $name, $data) = @_;
+
+	if (defined $data) {
+		if (open FILE, "> $dirn/$name") {
+			print FILE $data;
+			close FILE;
+		}
+	}
+}
+
+sub store_data {
+	die "Outdated dumpfile\n" if check_outdated_dump;
+
 	parse_dump_file(@_);
 
 	foreach my $a (keys %adj) {
 		if ($adj{$a}[NAME]) {
 			my $dstbeacon = build_host($adj{$a}[NAME], $a);
-			if (not -d "$historydir/$dstbeacon") {
-				mkdir "$historydir/$dstbeacon";
+			my $dirn = hist_beacon_dir $dstbeacon;
+			if (not -d $dirn) {
+				mkdir $dirn;
 			}
-			open F1, ">$historydir/$dstbeacon/lastupdate";
-			print F1 time;
-			close F1;
+
+			store_meta_data $dirn, 'lastupdate', time;
+			store_meta_data $dirn, 'contact', $adj{$a}[CONTACT];
+			store_meta_data $dirn, 'country', $adj{$a}[COUNTRY];
+			store_meta_data $dirn, 'website', $adj{$a}[URL];
+			store_meta_data $dirn, 'matrix_url', $adj{$a}[MATRIX];
+			store_meta_data $dirn, 'lg_url', $adj{$a}[LG];
 
 			foreach my $b (keys %adj) {
 				if ($a ne $b and defined $adj{$a}[NEIGH]{$b}) {
@@ -896,6 +1008,9 @@ sub store_data_one {
 		$index = 2;
 	}
 
+	update_ttl_hist(build_history_file_path($dst_h, $src_h) . "/$tag-ttl-hist",
+		$adj{$dst}[NEIGH]{$src}[$index]{'ttl'}) if defined $adj{$dst}[NEIGH]{$src}[$index]{'ttl'};
+
 	foreach my $type qw(ttl loss delay jitter) {
 		$values{$type} = $adj{$dst}[NEIGH]{$src}[$index]{$type};
 		$good++ if defined $values{$type};
@@ -918,41 +1033,41 @@ sub build_host {
 	return "$name-$addr";
 }
 
-sub build_rrd_file_path {
-	my ($historydir, $dstbeacon, $srcbeacon, $asmorssm) = @_;
+sub make_hist_file_path {
+	my ($dstbeacon, $srcbeacon) = @_;
 
-	$srcbeacon =~ s/\.(ssm|asm)$//;
-
-	return "$historydir/$dstbeacon/$srcbeacon.$asmorssm.rrd";
-}
-
-sub make_rrd_file_path {
-	my ($historydir, $dstbeacon, $srcbeacon, $asmorssm) = @_;
-
-	if (! -d "$historydir/$dstbeacon") {
-		if (! -d $historydir) {
-			if (!mkdir $historydir) {
-				return 0;
-			}
-		}
-		return mkdir "$historydir/$dstbeacon";
-	}
+	mkdir $historydir;
+	mkdir "$historydir/$dstbeacon";
+	mkdir "$historydir/$dstbeacon/sources";
+	mkdir "$historydir/$dstbeacon/sources/$srcbeacon";
 
 	return 1;
 }
 
+sub build_history_file_path {
+	my ($dstbeacon, $srcbeacon) = @_;
+
+	$srcbeacon =~ s/\.(ssm|asm)$//;
+
+	make_hist_file_path($dstbeacon, $srcbeacon);
+
+	return "$historydir/$dstbeacon/sources/$srcbeacon";
+}
+
+sub build_rrd_file_path {
+	my ($dstbeacon, $srcbeacon, $asmorssm) = @_;
+
+	return build_history_file_path($dstbeacon, $srcbeacon) . "/$asmorssm-hist.rrd";
+}
+
 sub check_rrd {
-	my ($historydir, $dstbeacon, $srcbeacon, $asmorssm) = @_;
+	my ($dstbeacon, $srcbeacon, $asmorssm) = @_;
 
 	my $rrdfile = build_rrd_file_path(@_);
 
 	if (! -f $rrdfile) {
 		if ($verbose) {
 			print "New combination: RRD file $rrdfile needs to be created\n";
-		}
-
-		if (!make_rrd_file_path(@_)) {
-			return 0;
 		}
 
 		if (!RRDs::create($rrdfile,
@@ -977,13 +1092,13 @@ sub check_rrd {
 		}
 	}
 
-	return 1;
+	return $rrdfile;
 }
 
 sub storedata {
 	my ($dstbeacon, $srcbeacon, $asmorssm, %values) = @_;
 
-	check_rrd($historydir, $dstbeacon, $srcbeacon, $asmorssm);
+	my $rrdfile = check_rrd($dstbeacon, $srcbeacon, $asmorssm);
 
 	# Update rrd with new values
 
@@ -996,15 +1111,11 @@ sub storedata {
 
 	print "Updating $dstbeacon <- $srcbeacon with $updatestring\n" if $verbose > 1;
 
-	open F2, ">$historydir/$dstbeacon/lastupdate.$srcbeacon";
+	open F2, '> ' . build_history_file_path($dstbeacon, $srcbeacon) . '/lastupdate';
 	print F2 time;
 	close F2;
 
-	if (!RRDs::update(build_rrd_file_path($historydir, $dstbeacon, $srcbeacon, $asmorssm), $updatestring)) {
-		return 0;
-	}
-
-	return 1;
+	return RRDs::update($rrdfile, $updatestring);
 }
 
 sub graphgen {
@@ -1022,7 +1133,7 @@ sub graphgen {
 	my ($msrc, undef, $asmorssm) = get_name_from_host($src);
 	my ($mdst) = get_name_from_host($dst);
 
-	my $rrdfile = build_rrd_file_path($historydir, $dst, $src, $asmorssm);
+	my $rrdfile = build_rrd_file_path($dst, $src, $asmorssm);
 
 	# Escape ':' chars
 	$rrdfile =~ s/:/\\:/g;
@@ -1075,37 +1186,90 @@ sub graphgen {
 	}
 }
 
+sub get_beacon_metadata_one {
+	my ($dirn, $name) = @_;
+
+	my $res = undef;
+
+	if (open FILE, "< $dirn/$name") {
+		$res = readline FILE;
+		close FILE;
+	}
+
+	return $res;
+}
+
+sub get_beacon_metadata {
+	my ($dst) = @_;
+
+	my $dirn = "$historydir/$dst";
+
+	my $lastupdate = get_beacon_metadata_one $dirn, 'lastupdate';
+	my $contact = get_beacon_metadata_one $dirn, 'contact';
+	my $country = get_beacon_metadata_one $dirn, 'country';
+	my $website = get_beacon_metadata_one $dirn, 'website';
+	my $matrix = get_beacon_metadata_one $dirn, 'matrix_url';
+	my $lg = get_beacon_metadata_one $dirn, 'lg_url';
+
+	return [$lastupdate, $contact, $country, $website, $matrix, $lg];
+}
+
 sub get_beacons {
-        my ($target, $recv) = @_;
+	return () if not opendir DIR, $historydir;
 
-        opendir (DIR, $target) or die "Failed to open directory $target\n";
-        my @res = ();
+	my @res = ();
 
-        foreach my $dircontent (readdir(DIR)) {
-		my $t = $target . '/' . $dircontent;
-		if (not $recv or -d $t) {
-			if ($dircontent ne "." and $dircontent ne "..") {
-				my $tm;
-				if ($recv) {
-					$tm = (stat("$t/lastupdate"))[9];
-					push (@res, [$dircontent, $t, $tm]);
-				} else {
-					if ($dircontent =~ s/\.rrd$//) {
-						my ($name, $addr, $asmorssm) =
-							get_name_from_host($dircontent);
-						my $host = build_host($name, $addr);
+	foreach my $dirc (readdir(DIR)) {
+		my $t = $historydir . '/' . $dirc;
+		if (-d $t) {
+			if ($dirc ne '.' and $dirc ne '..') {
+				my $metadata = get_beacon_metadata $dirc;
 
-						$tm = (stat("$target/lastupdate.$host"))[9];
-						push (@res, [$dircontent, $t, $tm]);
-					}
-				}
+				push (@res, [$dirc, $t, $metadata->[0], $metadata->[1], $metadata->[2], $metadata->[3], $metadata->[4], $metadata->[5]]);
 			}
-                }
-        }
+		}
+	}
 
-        close (DIR);
+	closedir DIR;
 
-        return @res;
+	return @res;
+}
+
+sub get_sources {
+	my ($dst) = @_;
+
+	my $targ = hist_beacon_sources_dir $dst;
+
+	return () if not opendir DIR, $targ;
+
+	my @res = ();
+
+	foreach my $item (readdir(DIR)) {
+		my $t = "$targ/$item";
+		if ($item ne '.' and $item ne '..' and -d $t and -f "$t/lastupdate") {
+			my ($name, $addr) = get_name_from_host($item);
+			my $tm = (stat("$t/lastupdate"))[9];
+
+			my $asmhist = "$t/asm-hist.rrd";
+			my $ssmhist = "$t/ssm-hist.rrd";
+
+			if (not -f $asmhist) {
+				$asmhist = undef;
+			}
+
+			if (not -f $ssmhist) {
+				$ssmhist = undef;
+			}
+
+			my $metadata = get_beacon_metadata $item;
+
+			push @res, [$item, $t, $tm, $name, $addr, $asmhist, $ssmhist, $metadata->[2]];
+		}
+	}
+
+	closedir DIR;
+
+	return @res;
 }
 
 sub get_name_from_host {
@@ -1113,13 +1277,14 @@ sub get_name_from_host {
 
 	return ($1, $2, $3) if $host =~ /^(.+)\-(.+)\.(ssm|asm)$/;
 	return ($1, $2) if $host =~ /^(.+)\-(.+)$/;
+
 	return 0;
 }
 
 sub do_list_beacs {
 	my ($name, $dst, $src, @vals) = @_;
 
-	printx '<select name="'.$name.'" onchange="location = this.options[this.selectedIndex].value;">'."\n";
+	printx '<select name="', $name, '" onchange="location = this.options[this.selectedIndex].value;">', "\n";
 
 	my $def = $name eq 'srcc' ? $src : $dst;
 
@@ -1138,7 +1303,27 @@ sub do_list_beacs {
 	}
 
 	printx '</select>', "\n";
+}
 
+sub do_list_sources_one {
+	my ($dst, $src, $name, $tag, $def) = @_;
+
+	printx '<option value="', make_history_url($dst, $src, $tag), '"';
+	printx ' selected="selected"' if "$src.$tag" eq $def;
+	printx '>', $name, ' (', $tag, ')</option>';
+}
+
+sub do_list_sources {
+	my ($name, $dst, $src, @vals) = @_;
+
+	printx '<select name="', $name, '" onchange="location = this.options[this.selectedIndex].value;">', "\n";
+
+	foreach my $bar (@vals) {
+		do_list_sources_one $dst, $bar->[0], $bar->[3], 'asm', $src if defined $bar->[5];
+		do_list_sources_one $dst, $bar->[0], $bar->[3], 'ssm', $src if defined $bar->[6];
+	}
+
+	printx '</select>', "\n";
 }
 
 sub graphthumb {
@@ -1153,11 +1338,11 @@ sub list_graph {
 	if (defined $dst) {
 		printx '<p>To ';
 
-		do_list_beacs("dstc", $dst, undef, get_beacons($historydir, 1));
+		do_list_beacs("dstc", $dst, undef, get_beacons());
 
                if (defined $src) {
                        printx "From ";
-                       do_list_beacs("srcc", $dst, $src, get_beacons("$historydir/$dst", 0));
+		       do_list_sources('srcc', $dst, $src, get_sources($dst));
 
                        if (defined $type) {
                                printx "Type ";
@@ -1188,7 +1373,7 @@ sub list_graph {
 
 		printx '<p>Select a receiver:</p>';
 
-		my @beacs = get_beacons($historydir, 1);
+		my @beacs = get_beacons();
 
 		my $now = time;
 		my @wking = ();
@@ -1207,17 +1392,24 @@ sub list_graph {
 
 		printx '<h3 style="margin: 0">Active (', scalar(@wking), ')</h3>';
 
-		printx "<ul>\n";
+		printx '<ul class="beaconlist">', "\n";
 
 		foreach my $bar (@wking) {
 			my $beac = $beacs[$bar]->[0];
-			printx '<li><a href="', $url, '?history=1&amp;dst=', $beac, '"';
+			printx '<li>';
+
+			printx make_flag_url($beacs[$bar]->[4]), '&nbsp;' if defined $beacs[$bar]->[4];
+
+			printx '<a href="', $url, '?history=1&amp;dst=', $beac, '"';
 			printx ' title="', (get_name_from_host($beac))[1], '"';
 			printx '>' . (get_name_from_host($beac))[0];
 			printx '</a>';
 
-			my $tm = $beacs[$bar]->[2];
+			if (defined $beacs[$bar]->[3]) {
+				printx ' <i>(', $beacs[$bar]->[3], ')</i>';
+			}
 
+			# my $tm = $beacs[$bar]->[2];
 			# printx ' <small>[Last update ',
 			#	format_date(time - $tm), ' ago]</small>';
 
@@ -1229,11 +1421,13 @@ sub list_graph {
 		if (scalar(@old)) {
 			printx '<h3 style="margin: 0">Inactive (', scalar(@old), ')</h3>';
 
-			printx "<ul>\n";
+			printx '<ul class="beaconlist">', "\n";
 
 			foreach my $bar (@old) {
 				my $beac = $beacs[$bar]->[0];
-				printx '<li><a href="', $url, '?history=1&amp;dst=', $beac, '"';
+				printx '<li>';
+				printx make_flag_url($beacs[$bar]->[4]), '&nbsp;' if defined $beacs[$bar]->[4];
+				printx '<a href="', $url, '?history=1&amp;dst=', $beac, '"';
 				printx ' title="', (get_name_from_host($beac))[1], '"';
 				printx '>' . (get_name_from_host($beac))[0];
 				printx '</a>';
@@ -1254,48 +1448,34 @@ sub list_graph {
 
 		# List visible src for this beacon
 
-		my @beacs = get_beacons("$historydir/$dst", 0);
+		my @beacs = get_sources($dst);
 
-		my %pairs;
+		printx '<ul class="beaconlist">', "\n";
+		foreach my $beac (@beacs) {
+			printx '<li>', "\n";
 
-		foreach my $bar (@beacs) {
-			my $beac = $bar->[0];
-			my ($name, $addr, $asmorssm) = get_name_from_host($beac);
-			my $host = build_host($name, $addr);
-			if ($asmorssm eq 'asm') {
-				$pairs{$host}[0] = $beac;
-			} elsif ($asmorssm eq 'ssm') {
-				$pairs{$host}[1] = $beac;
-			}
-			$pairs{$host}[2] = $bar->[2];
-		}
+			printx make_flag_url($beac->[7]), '&nbsp;' if defined $beac->[7];
 
-		printx "<ul>\n";
-		foreach my $key (keys %pairs) {
-			printx "<li>";
-
-			if (defined $pairs{$key}[0]) {
-				printx '<a href="?history=1&amp;dst=', $dst,
-					'&amp;src=', $pairs{$key}[0], '">';
+			if (defined $beac->[5]) {
+				printx '<a href="', make_history_url($dst, $beac->[0], 'asm'), '">';
 			}
 
-			printx ((get_name_from_host($key))[0]);
+			printx $beac->[3];
 
-			if (defined $pairs{$key}[0]) {
-				printx '</a>';
+			if (defined $beac->[5]) {
+				printx '</a>'
 			}
 
-			if (defined $pairs{$key}[1]) {
-				printx ' / <a href="?history=1&amp;dst=',
-					$dst, '&amp;src=', $pairs{$key}[1], "\">SSM</a>";
+			if (defined $beac->[6]) {
+				printx ' / <a href="', make_history_url($dst, $beac->[0], 'ssm'), '">SSM</a>';
 			}
 
-			printx ' <small>[Last update ', format_date(time - $pairs{$key}->[2]),
+			printx ' <small>[Last update ', format_date(time - $beac->[2]),
 					' ago]</small>';
 
-			printx "</li>\n";
+			printx '</li>', "\n";
 		}
-		printx "</ul>\n";
+		printx '</ul>', "\n";
 	}  elsif (not defined $type) {
 		printx "<div style=\"margin-left: 2em\">\n";
 		printx "<h2 style=\"margin-bottom: 0\">History for the last " . $ages{$age} . "</h2>\n";
@@ -1434,6 +1614,16 @@ ul#view li {
 	padding: 0;
 	padding-left: 5px;
 	margin: 0;
+}
+
+ul.beaconlist {
+	padding-left: 1em;
+	list-style-type: none;
+	margin-top: 0.5em;
+}
+
+ul.beaconlist > li {
+	margin: 0.3em;
 }
 
 #view #currentview {
