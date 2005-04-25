@@ -256,7 +256,7 @@ static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 
 static inline bool check_string(char *hd, int len, string &result) {
 	for (int i = 0; i < len; i++) {
-		if (!isascii(hd[i]))
+		if (!isprint(hd[i]))
 			return false;
 	}
 	result = string(hd, len);
