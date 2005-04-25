@@ -192,7 +192,7 @@ void usage() {
 	fprintf(stderr, "  -C CC                  Specify your two letter Country Code\n");
 	fprintf(stderr, "  -L program             Launch program after each dump.\n");
 	fprintf(stderr, "                         The first argument will be the dump filename\n");
-	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announce.\n");
+	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announced.\n");
 	fprintf(stderr, "                         Available flags are: ssmping\n");
 	fprintf(stderr, "  -4, -ipv4              Force IPv4 usage\n");
 	fprintf(stderr, "  -6, -ipv6              Force IPv6 usage\n");
