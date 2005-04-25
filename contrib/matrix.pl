@@ -173,7 +173,7 @@ sub build_vertex_one {
 		}
 	}
 
-	return [$start, $step];
+	return ($start, $step);
 }
 
 sub build_vertex_from_rrd {
@@ -199,16 +199,23 @@ sub build_vertex_from_rrd {
 				$adj{$srcbeacon->[3]}[NAME] = $srcbeacon->[3]
 					if defined $srcbeacon->[3];
 
-				($start, $step) =
-					build_vertex_one($dstaddr,
-						$srcbeacon->[4], 1,
-						$srcbeacon->[5])
-					if defined $srcbeacon->[5];
-				($start, $step) =
-					build_vertex_one($dstaddr,
-						$srcbeacon->[4], 2,
-						$srcbeacon->[6])
-					if defined $srcbeacon->[6];
+				if (defined $srcbeacon->[5]) {
+					my ($s1, $s2) =
+						build_vertex_one($dstaddr,
+							$srcbeacon->[4], 1,
+							$srcbeacon->[5]);
+					$start ||= $s1;
+					$step ||= $s2;
+				}
+
+				if (defined $srcbeacon->[6]) {
+					my ($s1, $s2) =
+						build_vertex_one($dstaddr,
+							$srcbeacon->[4], 2,
+							$srcbeacon->[6]);
+					$start ||= $s1;
+					$step ||= $s2;
+				}
 			}
 		}
 	}
@@ -428,6 +435,8 @@ sub build_header {
 	if (defined $step) { # From history
 		printx "<p><b>Snapshot stats at " . localtime($start) . "</b> ($step seconds average)</p>\n";
 
+	# if (defined $page->param('at')) {
+
 		printx '<form id="timenavigator" action=";">';
 		printx '<script type="text/javascript">
 			function move(way) {
@@ -447,7 +456,7 @@ sub build_header {
 		my $ammount = $page->param('ammount');
 		$ammount ||= 60;
 
-		my @ammounts = ([60, '60 s'], [600, '10m'], [3600, '60m'], [14400, '4h'], [43200, '12h'], [86400, '24h'], [604800, '7d'], [2592000, '30d']);
+		my @ammounts = ([60, '60 s'], [600, '10m'], [3600, '1h'], [14400, '4h'], [43200, '12h'], [86400, '24h'], [604800, '7d'], [2592000, '30d']);
 		# 7884000 3 months
 
 		foreach my $ammitem (@ammounts) {
@@ -677,7 +686,7 @@ sub render_matrix {
 					} else {
 						push (@repnosources, $c);
 					}
-				} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) < 0.2 and $adj{$c}[IN_EDGE] < 6) {
+				} elsif (($adj{$c}[IN_EDGE] / scalar(@sortedkeys)) <= 0.25) { # and $adj{$c}[IN_EDGE] < 6) {
 					push (@lowrx, $c);
 				} else {
 					push (@rx, $c);
