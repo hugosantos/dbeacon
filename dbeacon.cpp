@@ -475,6 +475,8 @@ enum {
 	DUMPINTERVAL,
 	DUMPEXEC,
 	SPECWEBSITE,
+	SPECMATRIX,
+	SPECLG,
 	COUNTRY,
 	SPECFLAG,
 	VERBOSE,
@@ -485,34 +487,53 @@ enum {
 	SHOWVERSION
 };
 
+enum {
+	NO_ARG = 0,
+	REQ_ARG,
+	OPT_ARG
+};
+
 static const struct param_tok {
 	int name;
 	const char *sf, *lf;
 	int param;
 } param_format[] = {
-	{ NAME,		"n", "name", 1 },
-	{ CONTACT,	"a", 0, 1 },
-	{ INTERFACE,	"i", "interface", 1 },
-	{ BEACONADDR,	"b", 0, 1 },
-	{ SSMADDR,	"S", 0, 2 },
-	{ SSMSENDONLY,	"O", 0, 0 },
-	{ BOOTSTRAP,	"B", "bootstrap", 1 },
-	{ ENABLESSMPING,"P", "ssmping", 0 },
-	{ SOURCEADDR,	"s", 0, 1 },
-	{ DUMP,		"d", "dump", 2 },
-	{ DUMPINTERVAL,	"I", "interval", 1 },
-	{ DUMPEXEC,	"L", "exec", 1 },
-	{ SPECWEBSITE,	"W", 0, 1 },
-	{ COUNTRY,	"C", "CC", 1 },
-	{ SPECFLAG,	"F", "flag", 1 },
-	{ VERBOSE,	"v", "verbose", 0 },
-	{ DUMPBW,	"U", "dump-bw", 0 },
-	{ HELP,		"h", "help", 0 },
-	{ FORCEv4,	"4", "ipv4", 0 },
-	{ FORCEv6,	"6", "ipv6", 0 },
-	{ SHOWVERSION,	"V", "version", 0 },
+	{ NAME,		"n", "name", REQ_ARG },
+	{ CONTACT,	"a", 0, REQ_ARG },
+	{ INTERFACE,	"i", "interface", REQ_ARG },
+	{ BEACONADDR,	"b", 0, REQ_ARG },
+	{ SSMADDR,	"S", 0, OPT_ARG },
+	{ SSMSENDONLY,	"O", 0, NO_ARG },
+	{ BOOTSTRAP,	"B", "bootstrap", REQ_ARG },
+	{ ENABLESSMPING,"P", "ssmping", NO_ARG },
+	{ SOURCEADDR,	"s", 0, REQ_ARG },
+	{ DUMP,		"d", "dump", OPT_ARG },
+	{ DUMPINTERVAL,	"I", "interval", REQ_ARG },
+	{ DUMPEXEC,	"L", "exec", REQ_ARG },
+	{ SPECWEBSITE,	"W", "website", REQ_ARG },
+	{ SPECMATRIX,	"Wm", "matrix", REQ_ARG },
+	{ SPECLG,	"Wl", "lg", REQ_ARG },
+	{ COUNTRY,	"C", "CC", REQ_ARG },
+	{ SPECFLAG,	"F", "flag", REQ_ARG },
+	{ VERBOSE,	"v", "verbose", NO_ARG },
+	{ DUMPBW,	"U", "dump-bw", NO_ARG },
+	{ HELP,		"h", "help", NO_ARG },
+	{ FORCEv4,	"4", "ipv4", NO_ARG },
+	{ FORCEv6,	"6", "ipv6", NO_ARG },
+	{ SHOWVERSION,	"V", "version", NO_ARG },
 	{ 0, 0, 0, 0 }
 };
+
+static void check_good_string(const char *what, const char *value) {
+	int l = strlen(value);
+
+	for (int i = 0; i < l; i++) {
+		if (!isprint(value[i])) {
+			fprintf(stderr, "Invalid `%s` string.\n", what);
+			exit(1);
+		}
+	}
+}
 
 int parse_arguments(int argc, char **argv) {
 	vector< pair<const char *, const char *> > args;
@@ -545,15 +566,16 @@ int parse_arguments(int argc, char **argv) {
 		if (!tok) {
 			fprintf(stderr, "Unknown parameter `%s`\n", i->first);
 		} else {
-			if (tok->param == 1 && !i->second) {
+			if (tok->param == REQ_ARG && !i->second) {
 				fprintf(stderr, "Parameter `%s` requires an argument\n", i->first);
 				return -1;
-			} else if (tok->param == 0 && i->second) {
+			} else if (tok->param == NO_ARG && i->second) {
 				fprintf(stderr, "Parameter `%s` doesn't require an argument, ignoring.\n", i->first);
 			}
 
 			switch (tok->name) {
 			case NAME:
+				check_good_string("name", i->second);
 				beaconName = i->second;
 				break;
 			case CONTACT:
@@ -561,6 +583,7 @@ int parse_arguments(int argc, char **argv) {
 					fprintf(stderr, "Not a valid email address.\n");
 					return -1;
 				}
+				check_good_string("admin contact", i->second);
 				adminContact = i->second;
 				break;
 			case BEACONADDR:
@@ -614,14 +637,26 @@ int parse_arguments(int argc, char **argv) {
 				break;
 			case SPECWEBSITE:
 				if (strncmp(i->second, "lg$", 3) == 0) {
+					check_good_string("LG website", i->second + 3);
 					webSites[T_WEBSITE_LG] = i->second + 3;
 				} else if (strncmp(i->second, "matrix$", 7) == 0) {
+					check_good_string("matrix url", i->second + 7);
 					webSites[T_WEBSITE_MATRIX] = i->second + 7;
 				} else {
+					check_good_string("website", i->second);
 					webSites[T_WEBSITE_GENERIC] = i->second;
 				}
 				break;
+			case SPECMATRIX:
+				check_good_string("matrix url", i->second);
+				webSites[T_WEBSITE_MATRIX] = i->second;
+				break;
+			case SPECLG:
+				check_good_string("lg url", i->second);
+				webSites[T_WEBSITE_LG] = i->second;
+				break;
 			case COUNTRY:
+				check_good_string("country", i->second);
 				if (strlen(i->second) != 2) {
 					fprintf(stderr, "Bad country code.\n");
 					return -1;
