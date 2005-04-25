@@ -173,28 +173,32 @@ static uint8_t buffer[bufferLen];
 
 void usage() {
 	fprintf(stderr, "Usage: dbeacon [OPTIONS...]\n\n");
-	fprintf(stderr, "  -n NAME                Specifies the beacon name\n");
+	fprintf(stderr, "  -n NAME, -name NAME    Specifies the beacon name\n");
 	fprintf(stderr, "  -a MAIL                Supply administration contact\n");
-	fprintf(stderr, "  -i INTFNAME            Use INTFNAME instead of the default interface for multicast\n");
+	fprintf(stderr, "  -i IN, -interface IN   Use IN instead of the default interface for multicast\n");
 	fprintf(stderr, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
 	fprintf(stderr, "  -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
 	fprintf(stderr, "  -O                     Disables the joining of SSM groups but still sends via SSM.\n");
 	fprintf(stderr, "                         Use this option if your operating system has problems with SSM\n");
 	fprintf(stderr, "  -B ADDR                Bootstraps by joining the specified address\n");
+	fprintf(stderr, "  -P, -ssmping           Enable the SSMPing server capability\n");
 	fprintf(stderr, "  -s ADDR                Bind to local address\n");
 	fprintf(stderr, "  -d [FILE]              Dump periodic reports to dump.xml or specified file\n");
-	fprintf(stderr, "  -I NUMBER              Interval between dumps. Defaults to 5 secs\n");
-	fprintf(stderr, "  -W URL / type$URL      Specify a website to announce. If type$ (one of lg or matrix) is used\n");
+	fprintf(stderr, "  -I N, -interval N      Interval between dumps. Defaults to 5 secs\n");
+	fprintf(stderr, "  -W URL, -website URL   Specify a website to announce.\n");
+	fprintf(stderr, "  -Wm URL, -matrix URL   Specify your matrix URL\n");
+	fprintf(stderr, "  -Wl URL, -lg URL       Specify your LG URL\n");
 	fprintf(stderr, "                         will announce an URL for that type instead\n");
 	fprintf(stderr, "  -C CC                  Specify your two letter Country Code\n");
-	fprintf(stderr, "  -L program             Launch program after each dump. The first argument will be the dump filename\n");
-	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announce. Available flags are: ssmping\n");
-	fprintf(stderr, "  -P                     Enable SSM Ping server capability\n");
-	fprintf(stderr, "  -4                     Force IPv4 usage\n");
-	fprintf(stderr, "  -6                     Force IPv6 usage\n");
+	fprintf(stderr, "  -L program             Launch program after each dump.\n");
+	fprintf(stderr, "                         The first argument will be the dump filename\n");
+	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announce.\n");
+	fprintf(stderr, "                         Available flags are: ssmping\n");
+	fprintf(stderr, "  -4, -ipv4              Force IPv4 usage\n");
+	fprintf(stderr, "  -6, -ipv6              Force IPv6 usage\n");
 	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
 	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
-	fprintf(stderr, "  -V                     Outputs version information and leaves\n");
+	fprintf(stderr, "  -V, -version           Outputs version information and leaves\n");
 	fprintf(stderr, "\n");
 }
 
