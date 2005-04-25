@@ -27,11 +27,11 @@
 #include <sys/uio.h>
 
 #ifndef CMSG_LEN
-#define CMSG_LEN	(sizeof(struct cmsghdr) + (size))
+#define CMSG_LEN(size)	(sizeof(struct cmsghdr) + (size))
 #endif
 
 #ifndef CMSG_SPACE
-#define CMSG_SPACE	(sizeof(struct cmsghdr) + (size))
+#define CMSG_SPACE(size)	(sizeof(struct cmsghdr) + (size))
 #endif
 
 #ifdef SOLARIS
