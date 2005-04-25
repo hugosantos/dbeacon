@@ -26,6 +26,14 @@
 #include <unistd.h>
 #include <sys/uio.h>
 
+#ifndef CMSG_LEN
+#define CMSG_LEN	(sizeof(struct cmsghdr) + (size))
+#endif
+
+#ifndef CMSG_SPACE
+#define CMSG_SPACE	(sizeof(struct cmsghdr) + (size))
+#endif
+
 #ifdef SOLARIS
 #define TTLType         uint8_t
 #else
