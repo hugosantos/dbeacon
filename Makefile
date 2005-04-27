@@ -1,6 +1,6 @@
 CXX ?= g++
 CXX_SUN = $(shell $(CXX) -V 2>&1 | grep 'Sun C++' >/dev/null && echo yes)
-ifeq ($(CSS_SUN),yes)
+ifeq ($(CXX_SUN),yes)
 	CXXFLAGS += -g -xs
 else
 	CXXFLAGS += -g -Wall
