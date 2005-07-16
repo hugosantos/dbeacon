@@ -590,6 +590,9 @@ int parse_arguments(int argc, char **argv) {
 				check_good_string("admin contact", i->second);
 				adminContact = i->second;
 				break;
+			case INTERFACE:
+				multicastInterface = i->second;
+				break;
 			case BEACONADDR:
 				probeAddrLiteral = i->second;
 				break;
