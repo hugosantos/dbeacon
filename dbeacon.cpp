@@ -922,6 +922,12 @@ beaconSource &getSource(const address &baddr, const char *name, uint64_t now, bo
 				fprintf(stderr, "Failed to join SSM (S,G) where S = %s, reason: %s\n",
 								tmp, strerror(errno));
 			}
+		} else {
+			if (verbose > 1) {
+				char tmp[64];
+				baddr.print(tmp, sizeof(tmp));
+				fprintf(stderr, "Joined SSM (S, G) where S = %s\n", tmp);
+			}
 		}
 	}
 
