@@ -379,7 +379,7 @@ int main(int argc, char **argv) {
 
 		uint64_t now = get_timestamp();
 		for (vector<address>::const_iterator i = ssmBootstrap.begin(); i != ssmBootstrap.end(); i++) {
-			getSource(*i, 0, now, false);
+			getSource(*i, 0, now, 0, false);
 		}
 	} else if (!ssmBootstrap.empty()) {
 		fprintf(stderr, "Tried to bootstrap using SSM when SSM is not enabled.\n");
@@ -883,7 +883,7 @@ void Stats::check_validity(uint64_t now) {
 
 beaconExternalStats::beaconExternalStats() : identified(false) {}
 
-beaconSource &getSource(const address &baddr, const char *name, uint64_t now, bool rx_local) {
+beaconSource &getSource(const address &baddr, const char *name, uint64_t now, uint64_t recvdts, bool rx_local) {
 	Sources::iterator i = sources.find(baddr);
 	if (i != sources.end()) {
 		i->second.lastevent = now;
@@ -971,7 +971,7 @@ void beaconSource::setName(const string &n) {
 	identified = true;
 }
 
-beaconExternalStats &beaconSource::getExternal(const address &baddr, uint64_t ts) {
+beaconExternalStats &beaconSource::getExternal(const address &baddr, uint64_t now, uint64_t ts) {
 	ExternalSources::iterator k = externalSources.find(baddr);
 	if (k == externalSources.end()) {
 		externalSources.insert(make_pair(baddr, beaconExternalStats()));
@@ -988,21 +988,21 @@ beaconExternalStats &beaconSource::getExternal(const address &baddr, uint64_t ts
 
 	beaconExternalStats &stats = k->second;
 
-	stats.lastupdate = ts;
+	stats.lastupdate = now;
 
 	return stats;
 }
 
 template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; }
 
-void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now, bool ssm) {
+void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now, uint64_t recvts, bool ssm) {
 	if (verbose > 2)
 		fprintf(stderr, "beacon(%s%s) update %u, %llu, %llu\n",
 			name.c_str(), (ssm ? "/SSM" : ""), seqnum, timestamp, now);
 
 	beaconMcastState *st = ssm ? &SSM : &ASM;
 
-	st->update(ttl, seqnum, timestamp, now);
+	st->update(ttl, seqnum, timestamp, now, recvts);
 }
 
 bool beaconSource::rxlocal(uint64_t now) const {
@@ -1030,22 +1030,28 @@ int64_t abs64(int64_t foo) { return foo < 0 ? -foo : foo; }
 
 // logic adapted from java beacon
 
-void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t _now) {
+void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t tsnow, uint64_t _now) {
+	/*
+	 * ttl - received TTL
+	 * seqnum - received seqnum in probe
+	 * timestamp - received timestamp in probe (timeofday in sender)
+	 * _now - when this packet was received locally (timeofday of host)
+	 */
+
 	int64_t now = (uint32_t)_now;
 
-	//int64_t diff = udiff(now, timestamp);
 	int64_t diff = now - timestamp;
 	int64_t absdiff = abs64(diff);
 
 	if (udiff(seqnum, lastseq) > PACKETS_VERY_OLD) {
-		refresh(seqnum - 1, now);
+		refresh(seqnum - 1, tsnow);
 	}
 
 	if (seqnum < lastseq && (lastseq - seqnum) >= packetcount)
 		return;
 
 	s.timestamp = timestamp;
-	s.lastupdate = _now;
+	s.lastupdate = tsnow;
 
 	bool dup = false;
 
@@ -1114,7 +1120,7 @@ void beaconMcastState::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, 
 static int send_nprobe(const address &addr, uint32_t &seq) {
 	int len;
 
-	len = build_probe(buffer, bufferLen, seq, get_timestamp());
+	len = build_probe(buffer, bufferLen, seq, get_time_of_day());
 	seq++;
 
 	len = sendto(mcastSock, buffer, len, 0, addr.saddr(), addr.addrlen());
@@ -1338,7 +1344,7 @@ void do_dump() {
 void doLaunchSomething() {
 	pid_t p = fork();
 	if (p == 0) {
-		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile);
+		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile, 0);
 	}
 }
 

@@ -273,18 +273,20 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 	if (buff[2] != PROTO_VER)
 		return;
 
+	uint64_t now = get_timestamp();
+
 	if (buff[3] == 0) {
 		if (len == 12) {
 			uint32_t seq = ntohl(*((uint32_t *)(buff + 4)));
 			uint32_t ts = ntohl(*((uint32_t *)(buff + 8)));
-			getSource(from, 0, recvdts, true).update(ttl, seq, ts, recvdts, ssm);
+			getSource(from, 0, now, recvdts, true).update(ttl, seq, ts, now, recvdts, ssm);
 		}
 		return;
 	} else if (buff[3] == 1) {
 		if (len < 5)
 			return;
 
-		beaconSource &src = getSource(from, 0, recvdts, true);
+		beaconSource &src = getSource(from, 0, now, recvdts, true);
 
 		src.sttl = buff[4];
 
@@ -327,7 +329,7 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 					memcpy(&a4->sin_port, hd + 6, sizeof(uint16_t));
 				}
 
-				beaconExternalStats &stats = src.getExternal(addr, recvdts);
+				beaconExternalStats &stats = src.getExternal(addr, now, recvdts);
 
 				int plen = hd[1] - blen;
 				for (uint8_t *pd = tlv_begin(hd + 2 + blen, plen); pd; pd = tlv_next(pd, plen)) {
@@ -342,13 +344,13 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 
 						if (!read_tlv_stats(pd, stats, *st))
 							break;
-						st->lastupdate = recvdts;
+						st->lastupdate = now;
 					}
 				}
 
 				// trigger local SSM join
 				if (!addr.is_equal(beaconUnicastAddr)) {
-					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, recvdts, false);
+					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, now, recvdts, false);
 					if (t.adminContact.empty())
 						t.adminContact = stats.contact;
 				}

@@ -25,6 +25,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <sys/uio.h>
+#include <sys/times.h>
 
 #ifndef CMSG_LEN
 #define CMSG_LEN(size)	(sizeof(struct cmsghdr) + (size))
@@ -314,7 +315,7 @@ int RecvMsg(int sock, address &from, address &to, uint8_t *buffer, int buflen, i
 	}
 
 	if (!ts) {
-		ts = get_timestamp();
+		ts = get_time_of_day();
 	}
 
 	return len;
@@ -514,6 +515,14 @@ void address::set(const sockaddr *sa) {
 }
 
 uint64_t get_timestamp() {
+	struct tms tmp;
+
+	clock_t v = times(&tmp);
+
+	return (v * 1000) / sysconf(_SC_CLK_TCK);
+}
+
+uint64_t get_time_of_day() {
 	struct timeval tv;
 	uint64_t timestamp;
 

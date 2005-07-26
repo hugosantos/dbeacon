@@ -67,7 +67,7 @@ struct beaconMcastState {
 	uint32_t cacheseqnum[PACKETS_PERIOD+1];
 
 	void refresh(uint32_t, uint64_t);
-	void update(uint8_t, uint32_t, uint64_t, uint64_t);
+	void update(uint8_t, uint32_t, uint64_t, uint64_t, uint64_t);
 };
 
 typedef std::map<int, std::string> WebSites;
@@ -87,9 +87,9 @@ struct beaconSource {
 	beaconMcastState ASM, SSM;
 
 	void setName(const std::string &);
-	void update(uint8_t, uint32_t, uint64_t, uint64_t, bool);
+	void update(uint8_t, uint32_t, uint64_t, uint64_t, uint64_t, bool);
 
-	beaconExternalStats &getExternal(const address &, uint64_t);
+	beaconExternalStats &getExternal(const address &, uint64_t now, uint64_t ts);
 
 	bool rxlocal(uint64_t now) const;
 
@@ -109,10 +109,11 @@ struct beaconSource {
 
 typedef std::map<address, beaconSource> Sources;
 
-beaconSource &getSource(const address &, const char *name, uint64_t now, bool rxlocal);
+beaconSource &getSource(const address &, const char *name, uint64_t now, uint64_t recvts, bool rxlocal);
 void removeSource(const address &, bool);
 
 uint64_t get_timestamp();
+uint64_t get_time_of_day();
 
 enum content_type {
 	NPROBE,
