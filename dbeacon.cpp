@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -46,7 +47,7 @@ using namespace std;
 
 #define NEW_BEAC_PCOUNT	10
 
-static const char *versionInfo = "0.3.6 ($Rev$)";
+static const char *versionInfo = "0.3.7 ($Rev$)";
 
 static const char *defaultIPv6SSMChannel = "ff3e::beac";
 static const char *defaultIPv4SSMChannel = "232.2.3.2";
@@ -84,6 +85,29 @@ enum {
 	WEBSITE_REPORT_EVENT
 };
 
+// Timer event names
+const char *TimerEventName[] = {
+	"Garbage Collect",
+	"Dump Stats",
+	"Bandwidth stats",
+	"Bandwidth stats [2]",
+	"Send Probe",
+	"New send probe process",
+	"SSM Send Probe",
+	"New SSM send probe process",
+
+	"Send Report",
+	"Send SSM Report",
+	"Send Map-Report",
+	"Send Website-Report"
+};
+
+static const char *EventName(int type) {
+	if (type < REPORT_EVENT)
+		return TimerEventName[type];
+	return TimerEventName[type - REPORT_EVENT + 8];
+}
+
 static const char *Flags[] = {
 	"SSM",
 	"SSMPing"
@@ -98,6 +122,7 @@ Sources sources;
 WebSites webSites;
 address beaconUnicastAddr;
 int verbose = 0;
+bool timeDebug = false;
 uint32_t flags = 0;
 
 int mcastInterface = 0;
@@ -200,6 +225,24 @@ void usage() {
 	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
 	fprintf(stderr, "  -V, -version           Outputs version information and leaves\n");
 	fprintf(stderr, "\n");
+}
+
+static void debug(FILE *f, const char *format, ...) {
+	timeval tv;
+	gettimeofday(&tv, 0);
+
+	char tbuf[64];
+	struct tm tmp;
+	strftime(tbuf, sizeof(tbuf), "%b %d %H:%M:%S", localtime_r(&tv.tv_sec, &tmp));
+
+	char buffer[256];
+
+	va_list vl;
+	va_start(vl, format);
+	vsnprintf(buffer, sizeof(buffer), format, vl);
+	va_end(vl);
+
+	fprintf(f, "%s.%06u %s\n", tbuf, tv.tv_usec, buffer);
 }
 
 void fixDumpFile() {
@@ -429,12 +472,12 @@ int main(int argc, char **argv) {
 				continue;
 			perror("Select failed");
 			return -1;
-		} else if (res == 0) {
-			handle_event();
 		} else {
-			for (vector<pair<int, content_type> >::const_iterator i = mcastSocks.begin(); i != mcastSocks.end(); i++)
+			for (vector<pair<int, content_type> >::const_iterator i = mcastSocks.begin(); i != mcastSocks.end(); ++i)
 				if (FD_ISSET(i->first, &readset))
 					handle_mcast(i->first, i->second);
+
+			handle_event();
 		}
 	}
 
@@ -488,7 +531,8 @@ enum {
 	HELP,
 	FORCEv4,
 	FORCEv6,
-	SHOWVERSION
+	SHOWVERSION,
+	TIMEDEBUG
 };
 
 enum {
@@ -525,6 +569,7 @@ static const struct param_tok {
 	{ FORCEv4,	"4", "ipv4", NO_ARG },
 	{ FORCEv6,	"6", "ipv6", NO_ARG },
 	{ SHOWVERSION,	"V", "version", NO_ARG },
+	{ TIMEDEBUG,	"Dt", "debug-time", NO_ARG },
 	{ 0, 0, 0, 0 }
 };
 
@@ -695,6 +740,9 @@ int parse_arguments(int argc, char **argv) {
 			case SHOWVERSION:
 				show_version();
 				break;
+			case TIMEDEBUG:
+				timeDebug = true;
+				break;
 			}
 		}
 	}
@@ -707,26 +755,62 @@ struct timer {
 	uint64_t target;
 };
 
-static list<timer> timers;
+typedef std::list<timer> tq_def;
+static tq_def timers;
+
+/* accumulated time waiting to be spent by events */
+static uint32_t taccum = 0;
+static uint32_t lastclk = 0;
+
+/* used for debugging only */
+static std::map<int, uint32_t> lastEventTimes;
+
+static void update_taccum() {
+	uint32_t now = get_timestamp();
+	uint32_t diff = now - lastclk;
+	lastclk = now;
+	taccum += diff;
+}
 
 void next_event(timeval *eventm) {
-	int64_t diff = timers.begin()->target - (int64_t)get_timestamp();
+	update_taccum();
 
-	if (diff <= 0) {
-		diff = 1;
+	timer &h = *timers.begin();
+
+	/* we assume we always have a timer in the list */
+	if (taccum > h.target) {
+		taccum -= h.target;
+		h.target = 0;
+	} else {
+		h.target -= taccum;
+		taccum = 0;
 	}
 
-	eventm->tv_sec = diff / 1000;
-	eventm->tv_usec = (diff % 1000) * 1000;
+	eventm->tv_sec = h.target / 1000;
+	eventm->tv_usec = (h.target % 1000) * 1000;
 }
 
 void insert_sorted_event(timer &t) {
-	t.target = get_timestamp() + t.interval;
+	uint32_t accum = 0;
 
-	list<timer>::iterator i = timers.begin();
+	tq_def::iterator i = timers.begin();
 
-	while (i != timers.end() && i->target < t.target)
-		i++;
+	while (1) {
+		if (i == timers.end() || (accum + i->target) >= t.interval)
+			break;
+		accum += i->target;
+		++i;
+	}
+
+	t.target = t.interval - accum;
+
+	if (i != timers.end())
+		i->target -= t.target;
+
+	if (timers.empty()) {
+		lastclk = get_timestamp();
+		taccum = 0;
+	}
 
 	timers.insert(i, t);
 }
@@ -746,12 +830,24 @@ uint32_t timeFact(int val, bool random) {
 	return (uint32_t) ((random ? ceil(Exprnd(beacInt * val)) : (beacInt * val)) * 1000);
 }
 
-void handle_event() {
+static void handle_single_event() {
 	timer t = *timers.begin();
 	timers.erase(timers.begin());
 
-	if (verbose > 3)
-		fprintf(stderr, "Event %i\n", t.type);
+	if (timeDebug && !(t.type == SENDING_EVENT || t.type == SSM_SENDING_EVENT)) {
+		uint32_t now = get_timestamp();
+		uint32_t prev;
+
+		std::map<int, uint32_t>::iterator j = lastEventTimes.find(t.type);
+		if (j != lastEventTimes.end())
+			prev = j->second;
+		else
+			prev = now;
+
+		debug(stderr, "Event %s [interval=%ums, prev=%u, diff=%i]", EventName(t.type), t.interval, prev, (now - prev) - (int32_t)t.interval);
+
+		lastEventTimes[t.type] = now;
+	}
 
 	switch (t.type) {
 	case SENDING_EVENT:
@@ -800,6 +896,20 @@ void handle_event() {
 		insert_event(WEBSITE_REPORT_EVENT, timeFact(websiteReportI));
 	} else {
 		insert_sorted_event(t);
+	}
+}
+
+void handle_event() {
+	update_taccum();
+
+	while (!timers.empty()) {
+		if (timers.begin()->target > taccum) {
+			return;
+		}
+
+		taccum -= timers.begin()->target;
+
+		handle_single_event();
 	}
 }
 
@@ -1364,7 +1474,7 @@ void do_bw_dump(bool big) {
 		double incomingRate = bytesReceived * 8 / 10000.;
 
 		if (dumpBwReport) {
-			fprintf(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)\n",
+			debug(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)",
 					bytesReceived, incomingRate, bytesSent, bytesSent * 8 / 10000.);
 		}
 

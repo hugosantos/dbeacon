@@ -377,7 +377,7 @@ sub start_handler {
 			$adj{$current_beacon}[NAME] = $atts{'name'};
 			$adj{$current_beacon}[CONTACT] = $atts{'contact'};
 			$adj{$current_beacon}[AGE] = $atts{'age'};
-			$adj{$current_beacon}[COUNTRY] = $atts{'country'} if defined $atts{'country'};
+			$adj{$current_beacon}[COUNTRY] = uc $atts{'country'} if defined $atts{'country'};
 			$adj{$current_beacon}[RX_LOCAL] = $atts{'rxlocal'} if defined $atts{'rxlocal'};
 		}
 	} elsif ($tag eq 'asm' or $tag eq 'ssm') {
@@ -400,7 +400,7 @@ sub start_handler {
 		if (defined $atts{'name'} and defined $atts{'addr'}) {
 			$adj{$current_source}[NAME] = $atts{'name'} if defined $atts{'name'};
 			$adj{$current_source}[CONTACT] = $atts{'contact'} if defined $atts{'contact'};
-			$adj{$current_source}[COUNTRY] ||= $atts{'country'} if defined $atts{'country'};
+			$adj{$current_source}[COUNTRY] ||= uc $atts{'country'} if defined $atts{'country'};
 		}
 	} elsif ($tag eq 'website') {
 		if ($atts{'type'} ne '' and $atts{'url'} ne '') {

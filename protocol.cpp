@@ -20,7 +20,9 @@
 
 using namespace std;
 
-static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer, uint8_t type, const char *str) {
+/* Helper method to write a TLV with a string value */
+static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer,
+					uint8_t type, const char *str) {
 	int len = strlen(str);
 	if ((pointer + 2 + len) > maxlen)
 		return false;
@@ -31,7 +33,9 @@ static inline bool write_tlv_string(uint8_t *buf, int maxlen, int &pointer, uint
 	return true;
 }
 
-static bool write_tlv_start(uint8_t *buff, int maxlen, int &ptr, uint8_t type, int len) {
+/* Helper method to start a TLV block */
+static bool write_tlv_start(uint8_t *buff, int maxlen, int &ptr,
+				uint8_t type, int len) {
 	if ((ptr + len + 2) > maxlen)
 		return false;
 
@@ -43,7 +47,9 @@ static bool write_tlv_start(uint8_t *buff, int maxlen, int &ptr, uint8_t type, i
 	return true;
 }
 
-static bool write_tlv_uint(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t val) {
+/* Helper method to write a TLV with a 32bit unsigned integer value */
+static bool write_tlv_uint(uint8_t *buff, int maxlen, int &ptr, uint8_t type,
+							uint32_t val) {
 	if (!write_tlv_start(buff, maxlen, ptr, type, 4))
 		return false;
 	uint32_t v = htonl(val);
@@ -52,7 +58,9 @@ static bool write_tlv_uint(uint8_t *buff, int maxlen, int &ptr, uint8_t type, ui
 	return true;
 }
 
-static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, uint32_t age, int sttl, const beaconMcastState &st) {
+/* Protocol method. writes a Stats block into a TLV block */
+static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type,
+			uint32_t age, int sttl, const beaconMcastState &st) {
 	if (!write_tlv_start(buff, maxlen, ptr, type, 20))
 		return false;
 
@@ -60,6 +68,7 @@ static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, u
 
 	uint32_t val;
 
+	/* We use memcpy due to non-aligned write problems in some archs */
 	val = htonl((uint32_t)st.s.timestamp);
 	memcpy(b + 0, &val, sizeof(val));
 	val = htonl(age);
@@ -80,6 +89,7 @@ static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type, u
 	// stats[0] = htonl(*((uint32_t *)&st.s.avgdelay));
 	// stats[1] = htonl(*((uint32_t *)&st.s.avgjitter));
 
+	/* average loss in 0..255 range */
 	b[17] = (uint8_t)(st.s.avgloss * 0xff);
 	b[18] = st.s.avgdup > 10. ? 0xff : ((uint8_t)ceil(st.s.avgdup * 25.5));
 	b[19] = (uint8_t)(st.s.avgooo * 0xff);
