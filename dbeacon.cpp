@@ -37,6 +37,8 @@
 #include <signal.h>
 #include <libgen.h>
 
+#include <assert.h>
+
 #include <map>
 #include <string>
 #include <iostream>
@@ -47,7 +49,7 @@ using namespace std;
 
 #define NEW_BEAC_PCOUNT	10
 
-static const char *versionInfo = "0.3.7 ($Rev$)";
+static const char *versionInfo = "0.3.8 ($Rev$)";
 
 static const char *defaultIPv6SSMChannel = "ff3e::beac";
 static const char *defaultIPv4SSMChannel = "232.2.3.2";
@@ -59,6 +61,7 @@ const int defaultTTL = 64;
 #endif
 static const char *defaultDumpFile = "dump.xml";
 
+/* time related constants */
 static const int timeOutI = 6;
 static const int reportI = 2;
 static const int ssmReportI = 4;
@@ -753,6 +756,10 @@ int parse_arguments(int argc, char **argv) {
 struct timer {
 	uint32_t type, interval;
 	uint64_t target;
+
+	/* debug info */
+	int pos;
+	uint64_t should;
 };
 
 typedef std::list<timer> tq_def;
@@ -760,13 +767,13 @@ static tq_def timers;
 
 /* accumulated time waiting to be spent by events */
 static uint32_t taccum = 0;
-static uint32_t lastclk = 0;
+static uint64_t lastclk = 0;
 
 /* used for debugging only */
 static std::map<int, uint32_t> lastEventTimes;
 
 static void update_taccum() {
-	uint32_t now = get_timestamp();
+	uint64_t now = get_timestamp();
 	uint32_t diff = now - lastclk;
 	lastclk = now;
 	taccum += diff;
@@ -788,10 +795,14 @@ void next_event(timeval *eventm) {
 
 	eventm->tv_sec = h.target / 1000;
 	eventm->tv_usec = (h.target % 1000) * 1000;
+
+	/* debug(stderr, "next_event %s %u %u", EventName(h.type), eventm->tv_sec, eventm->tv_usec); */
 }
 
 void insert_sorted_event(timer &t) {
 	uint32_t accum = 0;
+
+	t.pos = 0;
 
 	tq_def::iterator i = timers.begin();
 
@@ -800,9 +811,14 @@ void insert_sorted_event(timer &t) {
 			break;
 		accum += i->target;
 		++i;
+		++t.pos;
 	}
 
 	t.target = t.interval - accum;
+
+#if 1 /* TIMER_DEBUG */
+	t.should = get_time_of_day() + t.interval;
+#endif /* TIMER_DEBUG */
 
 	if (i != timers.end())
 		i->target -= t.target;
@@ -835,24 +851,36 @@ static void handle_single_event() {
 	timers.erase(timers.begin());
 
 	if (timeDebug && !(t.type == SENDING_EVENT || t.type == SSM_SENDING_EVENT)) {
-		uint32_t now = get_timestamp();
-		uint32_t prev;
+		uint64_t now = get_timestamp();
+		uint64_t prev;
 
 		std::map<int, uint32_t>::iterator j = lastEventTimes.find(t.type);
 		if (j != lastEventTimes.end())
 			prev = j->second;
 		else
-			prev = now;
+			prev = now - t.interval;
 
-		debug(stderr, "Event %s [interval=%ums, prev=%u, diff=%i]", EventName(t.type), t.interval, prev, (now - prev) - (int32_t)t.interval);
+		uint32_t diff = now - prev;
+		int32_t timediff = diff - (int32_t)t.interval;
+
+		if (abs(timediff) > 10) {
+			debug(stderr, "Event %s [interval=%ums, prev=%llu, diff=%i, pos=%i]",
+					EventName(t.type), t.interval, prev, timediff, t.pos);
+		}
 
 		lastEventTimes[t.type] = now;
 	}
 
+#if 1 /* TIMER_DEBUG */
+	int64_t td = t.should - (int64_t)get_time_of_day();
+	assert(abs(td) < 1500);
+#endif /* TIMER_DEBUG */
+
+
 	switch (t.type) {
 	case SENDING_EVENT:
 		send_probe();
-		send_count ++;
+		send_count++;
 		break;
 	case SSM_SENDING_EVENT:
 		send_ssm_probe();
@@ -1061,11 +1089,11 @@ void removeSource(const address &baddr, bool timeout) {
 			}
 		}
 
-		sources.erase(i);
-
 		if (ssmMcastSock) {
 			SSMLeave(ssmMcastSock, ssmProbeAddr, baddr);
 		}
+
+		sources.erase(i);
 	}
 }
 

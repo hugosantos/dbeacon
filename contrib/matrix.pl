@@ -17,7 +17,7 @@ use Time::HiRes qw(gettimeofday tv_interval);
 use strict;
 
 # configuration variables, may be changed in matrix.conf
-our $dumpfile = '/home/seb/dbeacon/dump.xml';
+our $dumpfile = '/var/lib/dbeacon/dump.xml';
 our $historydir = 'data';
 our $verbose = 1;
 our $title = 'IPv6 Multicast Beacon';

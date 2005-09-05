@@ -74,6 +74,7 @@ void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer, in
 	if (SendTo(s, buffer, len, to, from) < 0)
 		return;
 
+	/* reuse address structure */
 	if (!from.set_addr(from.family() == AF_INET6 ? SSMPingV6ResponseChannel :
 							SSMPingV4ResponseChannel))
 		return;
