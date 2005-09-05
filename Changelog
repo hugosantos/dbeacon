@@ -1,0 +1,8 @@
+* 0.3.8
+  - Fixed an issue when a source timed out and was removed
+* 0.3.7
+  - Fixed some pending issues with timers
+  - Added -Dt to debug the timing code
+* 0.3.6
+  - Fixed some timer issues
+  - Fix possible issue with external command execution (-L parameter)
