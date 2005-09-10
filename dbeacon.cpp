@@ -105,7 +105,7 @@ const char *TimerEventName[] = {
 	"Send Website-Report"
 };
 
-static const char *EventName(int type) {
+const char *EventName(int type) {
 	if (type < REPORT_EVENT)
 		return TimerEventName[type];
 	return TimerEventName[type - REPORT_EVENT + 8];
@@ -125,7 +125,6 @@ Sources sources;
 WebSites webSites;
 address beaconUnicastAddr;
 int verbose = 0;
-bool timeDebug = false;
 uint32_t flags = 0;
 
 int mcastInterface = 0;
@@ -534,8 +533,7 @@ enum {
 	HELP,
 	FORCEv4,
 	FORCEv6,
-	SHOWVERSION,
-	TIMEDEBUG
+	SHOWVERSION
 };
 
 enum {
@@ -572,7 +570,6 @@ static const struct param_tok {
 	{ FORCEv4,	"4", "ipv4", NO_ARG },
 	{ FORCEv6,	"6", "ipv6", NO_ARG },
 	{ SHOWVERSION,	"V", "version", NO_ARG },
-	{ TIMEDEBUG,	"Dt", "debug-time", NO_ARG },
 	{ 0, 0, 0, 0 }
 };
 
@@ -743,9 +740,6 @@ int parse_arguments(int argc, char **argv) {
 			case SHOWVERSION:
 				show_version();
 				break;
-			case TIMEDEBUG:
-				timeDebug = true;
-				break;
 			}
 		}
 	}
@@ -755,11 +749,7 @@ int parse_arguments(int argc, char **argv) {
 
 struct timer {
 	uint32_t type, interval;
-	uint64_t target;
-
-	/* debug info */
-	int pos;
-	uint64_t should;
+	uint32_t target;
 };
 
 typedef std::list<timer> tq_def;
@@ -769,12 +759,15 @@ static tq_def timers;
 static uint32_t taccum = 0;
 static uint64_t lastclk = 0;
 
-/* used for debugging only */
-static std::map<int, uint32_t> lastEventTimes;
-
 static void update_taccum() {
 	uint64_t now = get_timestamp();
-	uint32_t diff = now - lastclk;
+	int32_t diff = now - (int64_t)lastclk;
+
+	if (now < lastclk || diff > 10000) {
+		fprintf(stderr, "BAD behaviour. now=%lu lastclk=%lu diff=%i\n", now, lastclk, diff);
+		assert(0);
+	}
+
 	lastclk = now;
 	taccum += diff;
 }
@@ -802,8 +795,6 @@ void next_event(timeval *eventm) {
 void insert_sorted_event(timer &t) {
 	uint32_t accum = 0;
 
-	t.pos = 0;
-
 	tq_def::iterator i = timers.begin();
 
 	while (1) {
@@ -811,14 +802,9 @@ void insert_sorted_event(timer &t) {
 			break;
 		accum += i->target;
 		++i;
-		++t.pos;
 	}
 
 	t.target = t.interval - accum;
-
-#if 1 /* TIMER_DEBUG */
-	t.should = get_time_of_day() + t.interval;
-#endif /* TIMER_DEBUG */
 
 	if (i != timers.end())
 		i->target -= t.target;
@@ -849,33 +835,6 @@ uint32_t timeFact(int val, bool random) {
 static void handle_single_event() {
 	timer t = *timers.begin();
 	timers.erase(timers.begin());
-
-	if (timeDebug && !(t.type == SENDING_EVENT || t.type == SSM_SENDING_EVENT)) {
-		uint64_t now = get_timestamp();
-		uint64_t prev;
-
-		std::map<int, uint32_t>::iterator j = lastEventTimes.find(t.type);
-		if (j != lastEventTimes.end())
-			prev = j->second;
-		else
-			prev = now - t.interval;
-
-		uint32_t diff = now - prev;
-		int32_t timediff = diff - (int32_t)t.interval;
-
-		if (abs(timediff) > 10) {
-			debug(stderr, "Event %s [interval=%ums, prev=%llu, diff=%i, pos=%i]",
-					EventName(t.type), t.interval, prev, timediff, t.pos);
-		}
-
-		lastEventTimes[t.type] = now;
-	}
-
-#if 1 /* TIMER_DEBUG */
-	int64_t td = t.should - (int64_t)get_time_of_day();
-	assert(abs(td) < 1500);
-#endif /* TIMER_DEBUG */
-
 
 	switch (t.type) {
 	case SENDING_EVENT:

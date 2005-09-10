@@ -517,7 +517,7 @@ void address::set(const sockaddr *sa) {
 uint64_t get_timestamp() {
 	struct tms tmp;
 
-	clock_t v = times(&tmp);
+	uint64_t v = times(&tmp);
 
 	return (v * 1000) / sysconf(_SC_CLK_TCK);
 }
