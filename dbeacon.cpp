@@ -764,7 +764,7 @@ static void update_taccum() {
 	int32_t diff = now - (int64_t)lastclk;
 
 	if (now < lastclk || diff > 10000) {
-		fprintf(stderr, "BAD behaviour. now=%lu lastclk=%lu diff=%i\n", now, lastclk, diff);
+		fprintf(stderr, "BAD behaviour. now=%llu lastclk=%llu diff=%i\n", now, lastclk, diff);
 		assert(0);
 	}
 
