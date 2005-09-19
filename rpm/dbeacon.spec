@@ -1,10 +1,10 @@
 Name:		dbeacon
 Summary:	Multicast Beacon
-Version:	0.3.2
+Version:	0.3.8
 Release:	1
-URL:		http://artemis.av.it.pt/~hsantos/dbeacon/
+URL:		http://hng.av.it.pt/~hsantos/dbeacon/
 License:	GPL
-Source0:	http://artemis.av.it.pt/~hsantos/dbeacon/dbeacon_%{version}.tar.gz
+Source0:	http://hng.av.it.pt/~hsantos/dbeacon/dbeacon-%{version}.tar.gz
 Group:		Networking
 Packager:	Nick Lamb <njl195@zepler.org.uk>
 BuildRoot:	%{_builddir}/%{name}-root
@@ -34,6 +34,9 @@ multicast, collecting information via ASM and SSM.
 %{_bindir}/*
 
 %changelog
+* Mon Sep 19 2005 Nick Lamb <njl195@zepler.org.uk> 0.3.8
+- rebuild
+
 * Fri Apr 8  2005 Nick Lamb <njl195@zepler.org.uk> 0.3.2
 - First attempt to package for wider audience
 
