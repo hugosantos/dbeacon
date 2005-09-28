@@ -244,7 +244,7 @@ static void debug(FILE *f, const char *format, ...) {
 	vsnprintf(buffer, sizeof(buffer), format, vl);
 	va_end(vl);
 
-	fprintf(f, "%s.%06u %s\n", tbuf, tv.tv_usec, buffer);
+	fprintf(f, "%s.%06u %s\n", tbuf, (unsigned int)tv.tv_usec, buffer);
 }
 
 void fixDumpFile() {
