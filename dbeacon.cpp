@@ -518,6 +518,7 @@ enum {
 	SSMADDR,
 	SSMSENDONLY,
 	BOOTSTRAP,
+	REDIST,
 	ENABLESSMPING,
 	SOURCEADDR,
 	DUMP,
@@ -554,6 +555,7 @@ static const struct param_tok {
 	{ SSMADDR,	"S", 0, OPT_ARG },
 	{ SSMSENDONLY,	"O", 0, NO_ARG },
 	{ BOOTSTRAP,	"B", "bootstrap", REQ_ARG },
+	{ REDIST,	"R", "redist", REQ_ARG },
 	{ ENABLESSMPING,"P", "ssmping", NO_ARG },
 	{ SOURCEADDR,	"s", 0, REQ_ARG },
 	{ DUMP,		"d", "dump", OPT_ARG },
@@ -606,6 +608,8 @@ int parse_arguments(int argc, char **argv) {
 							i != args.end(); i++) {
 		const param_tok *tok = 0;
 		int j;
+		address addr;
+
 		for (j = 0; !tok && param_format[j].name; j++) {
 			if ((param_format[j].sf && !strcmp(i->first, param_format[j].sf))
 				|| (param_format[j].lf && !strcmp(i->first, param_format[j].lf))) {
@@ -653,14 +657,18 @@ int parse_arguments(int argc, char **argv) {
 				listenForSSM = false;
 				break;
 			case BOOTSTRAP:
-				{
-					address addr;
-					if (!addr.parse(i->second, false)) {
-						fprintf(stderr, "Bad address format.\n");
-						return -1;
-					}
-					ssmBootstrap.push_back(addr);
+				if (!addr.parse(i->second, false)) {
+					fprintf(stderr, "Bad address format.\n");
+					return -1;
 				}
+				ssmBootstrap.push_back(addr);
+				break;
+			case REDIST:
+				if (!addr.parse(i->second, false)) {
+					fprintf(stderr, "Bad address format.\n");
+					return -1;
+				}
+				redist.push_back(addr);
 				break;
 			case ENABLESSMPING:
 				useSSMPing = true;
