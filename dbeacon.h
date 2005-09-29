@@ -127,9 +127,6 @@ void SetupFDSet(int);
 int SetupSSMPing();
 void handle_ssmping(int s, address &, const address &, uint8_t *, int, uint64_t);
 
-bool is_active_beacon();
-bool checkGroup(const address &);
-
 extern const char *defaultPort;
 extern const int defaultTTL;
 

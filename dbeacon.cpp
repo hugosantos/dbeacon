@@ -173,7 +173,7 @@ int forceFamily = AF_UNSPEC;
 
 static void next_event(timeval *);
 static void insert_event(uint32_t, uint32_t);
-static void handle_mcast(int, content_type, bool);
+static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
 static int send_probe();
@@ -348,18 +348,14 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "Nothing to do, check `dbeacon -h`.\n");
 			return -1;
 		} else {
-			mcastListen.begin()->first.print(sessionName, sizeof(sessionName));
+			strcpy(sessionName, beaconName.c_str());
 		}
 	}
 
 	FD_ZERO(&readSet);
 
 	address local;
-
-	if (forceFamily != AF_UNSPEC)
-		local.set_family(forceFamily);
-	else
-		local.set_family(probeAddr.family());
+	local.set_family(probeAddr.family());
 
 	mcastSock = SetupSocketAndFDSet(local, false, false);
 	if (mcastSock < 0)
@@ -370,11 +366,6 @@ int main(int argc, char **argv) {
 	socklen_t addrlen = probeAddr.addrlen();
 
 	if (beaconUnicastAddr.is_unspecified()) {
-		if (probeAddr.is_unspecified()) {
-			fprintf(stderr, "Please specify the local address to bind to.\n");
-			return -1;
-		}
-
 		int tmpSock = socket(probeAddr.family(), SOCK_DGRAM, 0);
 		if (tmpSock < 0) {
 			perror("Failed to create socket to discover local addr");
@@ -394,8 +385,6 @@ int main(int argc, char **argv) {
 			return -1;
 		}
 
-		beaconUnicastAddr.set_port(atoi(defaultPort));
-
 		close(tmpSock);
 	}
 
@@ -412,8 +401,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	for (vector<pair<address, content_type> >::iterator i =
-			mcastListen.begin(); i != mcastListen.end(); ++i) {
+	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
 		int sock = SetupSocket(i->first, true, i->second == NSSMPROBE);
 		if (sock < 0)
 			return -1;
@@ -489,29 +477,13 @@ int main(int argc, char **argv) {
 		} else {
 			for (vector<pair<int, content_type> >::const_iterator i = mcastSocks.begin(); i != mcastSocks.end(); ++i)
 				if (FD_ISSET(i->first, &readset))
-					handle_mcast(i->first, i->second, false);
-			if (FD_ISSET(mcastSock, &readset))
-				handle_mcast(mcastSock, NPROBE, true);
+					handle_mcast(i->first, i->second);
 
 			handle_event();
 		}
 	}
 
 	return 0;
-}
-
-bool is_active_beacon() {
-	return !probeAddr.is_unspecified();
-}
-
-bool checkGroup(const address &grpaddr) {
-	for (vector<pair<address, content_type> >::iterator i =
-			mcastListen.begin(); i != mcastListen.end(); ++i) {
-		if (i->first == grpaddr)
-			return true;
-	}
-
-	return false;
 }
 
 void ListenTo(content_type content, int sock) {
@@ -526,7 +498,7 @@ void show_version() {
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  Copyright (c) 2005 - Hugo Santos <hsantos@av.it.pt>\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "  http://hng.av.it.pt/~hsantos/dbeacon/\n");
+	fprintf(stderr, "  http://artemis.av.it.pt/~hsantos/dbeacon/\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;\n");
 	fprintf(stderr, "  o Ideas and testing by Sebastien Chaumontet;\n");
@@ -546,8 +518,6 @@ enum {
 	SSMADDR,
 	SSMSENDONLY,
 	BOOTSTRAP,
-	REDIST,
-	LISTEN,
 	ENABLESSMPING,
 	SOURCEADDR,
 	DUMP,
@@ -584,8 +554,6 @@ static const struct param_tok {
 	{ SSMADDR,	"S", 0, OPT_ARG },
 	{ SSMSENDONLY,	"O", 0, NO_ARG },
 	{ BOOTSTRAP,	"B", "bootstrap", REQ_ARG },
-	{ REDIST,	"R", "redist", REQ_ARG },
-	{ LISTEN,	"l", "listen", REQ_ARG },
 	{ ENABLESSMPING,"P", "ssmping", NO_ARG },
 	{ SOURCEADDR,	"s", 0, REQ_ARG },
 	{ DUMP,		"d", "dump", OPT_ARG },
@@ -638,8 +606,6 @@ int parse_arguments(int argc, char **argv) {
 							i != args.end(); i++) {
 		const param_tok *tok = 0;
 		int j;
-		address addr;
-
 		for (j = 0; !tok && param_format[j].name; j++) {
 			if ((param_format[j].sf && !strcmp(i->first, param_format[j].sf))
 				|| (param_format[j].lf && !strcmp(i->first, param_format[j].lf))) {
@@ -687,35 +653,20 @@ int parse_arguments(int argc, char **argv) {
 				listenForSSM = false;
 				break;
 			case BOOTSTRAP:
-				if (!addr.parse(i->second, false)) {
-					fprintf(stderr, "Bad address format.\n");
-					return -1;
+				{
+					address addr;
+					if (!addr.parse(i->second, false)) {
+						fprintf(stderr, "Bad address format.\n");
+						return -1;
+					}
+					ssmBootstrap.push_back(addr);
 				}
-				ssmBootstrap.push_back(addr);
-				break;
-			case REDIST:
-				if (!addr.parse(i->second, false)) {
-					fprintf(stderr, "Bad address format.\n");
-					return -1;
-				}
-				redist.push_back(addr);
-				break;
-			case LISTEN:
-				if (!mcastListen.empty()) {
-					fprintf(stderr, "Only a single group is supported at this moment.\n");
-					return -1;
-				}
-				if (!addr.parse(i->second, true)) {
-					fprintf(stderr, "Bad address format.\n");
-					return -1;
-				}
-				mcastListen.push_back(make_pair(addr, NPROBE));
 				break;
 			case ENABLESSMPING:
 				useSSMPing = true;
 				break;
 			case SOURCEADDR:
-				if (!beaconUnicastAddr.parse(i->second, false, true)) {
+				if (!beaconUnicastAddr.parse(i->second, false, false)) {
 					fprintf(stderr, "Bad address format.\n");
 					return -1;
 				}
@@ -987,7 +938,7 @@ void handle_gc() {
 	}
 }
 
-void handle_mcast(int sock, content_type type, bool nonmcasttarget) {
+void handle_mcast(int sock, content_type type) {
 	address from, to;
 
 	uint64_t recvdts;
@@ -998,11 +949,6 @@ void handle_mcast(int sock, content_type type, bool nonmcasttarget) {
 		return;
 
 	if (from.is_equal(beaconUnicastAddr))
-		return;
-
-	if (nonmcasttarget && to.is_multicast())
-		return;
-	if (!nonmcasttarget && !to.is_multicast())
 		return;
 
 	if (verbose > 3) {
@@ -1295,8 +1241,7 @@ int send_ssm_probe() {
 int send_report(int type) {
 	int len;
 
-	len = build_report(type == SSM_REPORT ? ssmProbeAddr : probeAddr,
-			   buffer, bufferLen, type == SSM_REPORT ? STATS_REPORT : type, true);
+	len = build_report(buffer, bufferLen, type == SSM_REPORT ? STATS_REPORT : type, true);
 	if (len < 0)
 		return len;
 
