@@ -99,7 +99,25 @@ static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type,
 	return true;
 }
 
-int build_report(uint8_t *buff, int maxlen, int type, bool publishsources) {
+static int _write_address(uint8_t *buff, const address &a) {
+	if (a.family() == AF_INET6) {
+		const sockaddr_in6 *addr = a.v6();
+
+		memcpy(buff, &addr->sin6_addr, sizeof(in6_addr));
+		memcpy(buff + 16, &addr->sin6_port, sizeof(uint16_t));
+
+		return 18;
+	} else {
+		const sockaddr_in *addr = a.v4();
+
+		memcpy(buff, &addr->sin_addr, sizeof(in_addr));
+		memcpy(buff + 4, &addr->sin_port, sizeof(uint16_t));
+
+		return 6;
+	}
+}
+
+int build_report(const address &probeaddr, uint8_t *buff, int maxlen, int type, bool publishsources) {
 	if (maxlen < 4)
 		return -1;
 
@@ -138,6 +156,11 @@ int build_report(uint8_t *buff, int maxlen, int type, bool publishsources) {
 		return ptr;
 	}
 
+	if (!write_tlv_start(buff, maxlen, ptr, T_GROUP, 16))
+		return -1;
+
+	ptr += _write_address(buff, probeaddr);
+
 	if (publishsources) {
 		uint64_t now = get_timestamp();
 
@@ -164,21 +187,7 @@ int build_report(uint8_t *buff, int maxlen, int type, bool publishsources) {
 			if (!write_tlv_start(buff, maxlen, ptr, i->first.family() == AF_INET6 ? T_SOURCE_INFO : T_SOURCE_INFO_IPv4, len))
 				break;
 
-			if (i->first.family() == AF_INET6) {
-				const sockaddr_in6 *addr = i->first.v6();
-
-				memcpy(buff + ptr, &addr->sin6_addr, sizeof(in6_addr));
-				memcpy(buff + ptr + 16, &addr->sin6_port, sizeof(uint16_t));
-
-				ptr += 18;
-			} else {
-				const sockaddr_in *addr = i->first.v4();
-
-				memcpy(buff + ptr, &addr->sin_addr, sizeof(in_addr));
-				memcpy(buff + ptr + 4, &addr->sin_port, sizeof(uint16_t));
-
-				ptr += 6;
-			}
+			ptr += _write_address(buff + ptr, i->first);
 
 			if (type == MAP_REPORT) {
 				write_tlv_string(buff, maxlen, ptr, T_BEAC_NAME, i->second.name.c_str());
@@ -302,6 +311,41 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 
 		len -= 5;
 
+		/* Check for Group TLV */
+		int tlen = len;
+		bool checked = false;
+
+		for (uint8_t *hd = tlv_begin(buff + 5, tlen); hd; hd = tlv_next(hd, tlen)) {
+			if (hd[0] == T_GROUP) {
+				if (checked)
+					return;
+
+				checked = true;
+
+				address grpaddr;
+
+				if (hd[1] == 18) {
+					/* IPv6 */
+					grpaddr.set_family(AF_INET6);
+					memcpy(&grpaddr.v6()->sin6_addr, hd + 2, sizeof(in6_addr));
+					grpaddr.v6()->sin6_port = ntohs(*(uint16_t *)(hd + 2 + sizeof(in6_addr)));
+				} else if (hd[1] == 6) {
+					/* IPv4 */
+					grpaddr.set_family(AF_INET);
+					memcpy(&grpaddr.v4()->sin_addr, hd + 2, sizeof(in_addr));
+					grpaddr.v4()->sin_port = ntohs(*(uint16_t *)(hd + 2 + sizeof(in_addr)));
+				} else {
+					return;
+				}
+
+				if (!checkGroup(grpaddr)) {
+					if (verbose > 3)
+						fprintf(stderr, "Rejected report, not interested in group.\n");
+					return;
+				}
+			}
+		}
+
 		for (uint8_t *hd = tlv_begin(buff + 5, len); hd; hd = tlv_next(hd, len)) {
 			if (verbose > 4) {
 				char tmp[64];
@@ -359,7 +403,7 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 				}
 
 				// trigger local SSM join
-				if (!addr.is_equal(beaconUnicastAddr)) {
+				if (!addr.is_equal(beaconUnicastAddr) && is_active_beacon()) {
 					beaconSource &t = getSource(addr, stats.identified ? stats.name.c_str() : 0, now, recvdts, false);
 					if (t.adminContact.empty())
 						t.adminContact = stats.contact;

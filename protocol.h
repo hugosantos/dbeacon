@@ -35,6 +35,8 @@ enum {
 	T_WEBSITE_LG = 'L',
 	T_CC = 'C',
 
+	T_GROUP = 'g',
+
 	T_LEAVE = 'Q'
 };
 
@@ -54,7 +56,7 @@ enum {
 };
 
 int build_probe(uint8_t *, int, uint32_t, uint64_t);
-int build_report(uint8_t *, int, int, bool);
+int build_report(const address &, uint8_t *, int, int, bool);
 
 void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buffer, int len, bool);
 
