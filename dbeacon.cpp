@@ -188,7 +188,15 @@ extern "C" void sendLeaveReport(int);
 static int SetupSocketAndFDSet(const address &, bool, bool);
 
 static inline double Rand() {
-	return rand() / (double)RAND_MAX;
+	double f = rand();
+
+	/* Prevent 0.0 and 1.0, thanks to Alexander Gall */
+	if (f == 0)
+		f = 1;
+	else if (f == RAND_MAX)
+		f = RAND_MAX-1;
+
+	return f / (double)RAND_MAX;
 }
 
 static inline double Exprnd(double mean) {

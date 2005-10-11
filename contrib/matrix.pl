@@ -17,6 +17,7 @@ use Time::HiRes qw(gettimeofday tv_interval);
 use strict;
 
 # configuration variables, may be changed in matrix.conf
+our $beacon_config_base = '/nosuchdir';
 our $dumpfile = '/var/lib/dbeacon/dump.xml';
 our $historydir = 'data';
 our $verbose = 1;
@@ -75,13 +76,20 @@ my $ended_parsing_dump;
 exit store_data($ARGV[0]) if scalar(@ARGV) > 0;
 
 my $page = new CGI;
-my $url = $page->script_name();
+my $url = $page->script_name().'?';
 
 my $dst = $page->param('dst');
 my $src = $page->param('src');
 my $type = $page->param('type');
 my $age = $page->param('age');
 my $at = $page->param('at');
+
+my $beacon_id = $page->param('id');
+if ($beacon_id) {
+    -d $beacon_config_base && -f "$beacon_config_base/$beacon_id/matrix.conf" 
+	&& do "$beacon_config_base/$beacon_id/matrix.conf";
+    $url .= "id=".$beacon_id."&amp;";
+}
 
 my %ages = (
 	'-1h' => 'Hour',
@@ -224,12 +232,12 @@ sub build_vertex_from_rrd {
 }
 
 sub full_url0 {
-	return "$url?dst=$dst&amp;src=$src";
+	return $url."dst=$dst&amp;src=$src";
 }
 
 sub full_url {
 	$type ||= 'ttl';
-	return "$url?dst=$dst&amp;src=$src&amp;type=$type";
+	return $url."dst=$dst&amp;src=$src&amp;type=$type";
 }
 
 sub parse_dump_file {
@@ -265,7 +273,7 @@ sub beacon_name {
 sub make_history_url {
 	my ($dst, $src, $type) = @_;
 
-	return "$url?history=1&amp;src=" . $src . ".$type&amp;dst=" . $dst;
+	return $url."history=1&amp;src=" . $src . ".$type&amp;dst=" . $dst;
 }
 
 sub make_history_urlx {
@@ -277,7 +285,7 @@ sub make_history_urlx {
 	$dstbeacon =~ s/\/\d+$//;
         $srcbeacon =~ s/\/\d+$//;
 
-	return "$url?history=1&amp;src=" . $dst->[1] . "-$dstbeacon.$type&amp;"
+	return $url."history=1&amp;src=" . $dst->[1] . "-$dstbeacon.$type&amp;"
 				. 'dst=' . $src->[1] . "-$srcbeacon";
 }
 
@@ -443,7 +451,7 @@ sub build_header {
 				var timenavoff = document.getElementById("timenavigator").offset;
 				var selectedvalue = timenavoff.options[timenavoff.selectedIndex].value;
 				var newdate = ' . $at . ' + selectedvalue * way;
-				var url = "' . "$url?what=$attwhat&amp;tt=$attname" . '&amp;ammount=" + selectedvalue + "&amp;at="+newdate;
+				var url = "' . $url."what=$attwhat&amp;tt=$attname" . '&amp;ammount=" + selectedvalue + "&amp;at="+newdate;
 				location.href = url;
 			}
 			</script>';
@@ -510,22 +518,22 @@ sub build_header {
 	printx ' <small>(';
 
 	if (not $atthideinfo) {
-		printx "<a href=\"$url?hideinfo=1&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
+		printx "<a href=\"".$url."hideinfo=1&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Hide Source Info</a>";
 	} else {
-		printx "<a href=\"$url?hideinfo=0&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Show Source Info</a>";
+		printx "<a href=\"".$url."hideinfo=0&amp;$fullatt$whatatt&amp;att=$attname&amp;at=$at\">Show Source Info</a>";
 	}
 
-	printx ", <a href=\"$url?$hideatt&amp;$whatatt&amp;att=$attname&amp;at=$at&amp;full=" . (!$full_matrix) . '">' . ($full_matrix ? 'Condensed' : 'Full') . '</a>';
+	printx ", <a href=\"$url$hideatt&amp;$whatatt&amp;att=$attname&amp;at=$at&amp;full=" . (!$full_matrix) . '">' . ($full_matrix ? 'Condensed' : 'Full') . '</a>';
 
 	if ($attwhat eq "asm") {
-		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+		printx ", <a href=\"$url$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		printx ", <a href=\"$url$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
 	} elsif ($attwhat eq "ssmorasm") {
-		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+		printx ", <a href=\"$url$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+		printx ", <a href=\"$url$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	} else {
-		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
-		printx ", <a href=\"$url?$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+		printx ", <a href=\"$url$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+		printx ", <a href=\"$url$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
 	}
 
 	printx ')</small>:</span></p>';
@@ -538,7 +546,7 @@ sub build_header {
 		if ($attname eq $att) {
 			printx '<span class="viewitem" id="currentview">', $attn, '</span>';
 		} else {
-			printx "<a class=\"viewitem\" href=\"$url?$hideatt$fullatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
+			printx "<a class=\"viewitem\" href=\"$url$hideatt$fullatt$whatatt" . "att=$att&amp;at=$at\">$attn</a>";
 		}
 		printx ' <small>(', $view_type[$i], ')</small></li>', "\n";
 	}
@@ -636,10 +644,10 @@ sub render_matrix {
 
 	my $addinfo;
 	if ($attat > 0) {
-		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname\">Live stats</a>)";
+		$addinfo = " (<a href=\"".$url."what=$attwhat&amp;att=$attname\">Live stats</a>)";
 	} elsif ($history_enabled) {
-		$addinfo = " (<a href=\"$url?what=$attwhat&amp;att=$attname&amp;at=" . (time - 60) ."\">Past stats</a>";
-		$addinfo .= ", <a href=\"$url?history=1\">History</a>)";
+		$addinfo = " (<a href=\"".$url."what=$attwhat&amp;att=$attname&amp;at=" . (time - 60) ."\">Past stats</a>";
+		$addinfo .= ", <a href=\"".$url."history=1\">History</a>)";
 	}
 
 	start_document($addinfo);
@@ -1299,7 +1307,7 @@ sub do_list_beacs {
 
 	foreach my $bar (@vals) {
 		my $foo = $bar->[0];
-		printx '<option value="'.$url.'?history=1&amp;dst=';
+		printx '<option value="'.$url.'history=1&amp;dst=';
 		printx $dst, '&amp;src=' if $name eq 'srcc';
 		printx $foo;
 		printx '"';
@@ -1409,7 +1417,7 @@ sub list_graph {
 
 			printx make_flag_url($beacs[$bar]->[4]), '&nbsp;' if defined $beacs[$bar]->[4];
 
-			printx '<a href="', $url, '?history=1&amp;dst=', $beac, '"';
+			printx '<a href="', $url, 'history=1&amp;dst=', $beac, '"';
 			printx ' title="', (get_name_from_host($beac))[1], '"';
 			printx '>' . (get_name_from_host($beac))[0];
 			printx '</a>';
@@ -1436,7 +1444,7 @@ sub list_graph {
 				my $beac = $beacs[$bar]->[0];
 				printx '<li>';
 				printx make_flag_url($beacs[$bar]->[4]), '&nbsp;' if defined $beacs[$bar]->[4];
-				printx '<a href="', $url, '?history=1&amp;dst=', $beac, '"';
+				printx '<a href="', $url, 'history=1&amp;dst=', $beac, '"';
 				printx ' title="', (get_name_from_host($beac))[1], '"';
 				printx '>' . (get_name_from_host($beac))[0];
 				printx '</a>';
