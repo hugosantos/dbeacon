@@ -1,3 +1,6 @@
+* current
+  - Rand() fix, found by Alexander Gall
+  - matrix.pl contribution by Alexander Gall, support multiple configurations
 * 0.3.8
   - Fixed an issue when a source timed out and was removed
 * 0.3.7
