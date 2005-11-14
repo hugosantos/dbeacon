@@ -242,12 +242,11 @@ static void debug(FILE *f, const char *format, ...) {
 	gettimeofday(&tv, 0);
 
 	char tbuf[64];
-	struct tm tmp;
 
 	/* Some FreeBSDs' tv.tv_sec isn't time_t */
 	time_t tv_sec = tv.tv_sec;
 
-	strftime(tbuf, sizeof(tbuf), "%b %d %H:%M:%S", localtime_r(&tv_sec, &tmp));
+	strftime(tbuf, sizeof(tbuf), "%b %d %H:%M:%S", localtime(&tv_sec));
 
 	char buffer[256];
 
