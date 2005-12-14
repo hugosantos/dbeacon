@@ -1183,8 +1183,8 @@ sub graphgen {
 		'AREA:nodata#E0E0FD');
 
 	if (not defined $page->param('thumb')) {
-		push (@args,  '--vertical-label',$ytitle);
-		push (@args, 'COMMENT:' . strftime("%a %b %e %Y %H:%M (%Z)", localtime) . ' ' . strftime("%H:%M (GMT)", gmtime).'\r');
+		push (@args, '--vertical-label',$ytitle);
+		push (@args, 'COMMENT:'.strftime("%a %b %e %Y %H\\:%M (%Z)", localtime).' '.strftime("%H\\:%M (GMT)", gmtime).'\r');
 		push (@args, 'AREA:Max#FF0000:Max');
 		push (@args, 'GPRINT:Max:MAX:'.$unit);
 		push (@args, 'AREA:Avg#CC0000:Avg');
