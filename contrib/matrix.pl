@@ -38,6 +38,8 @@ our $faq_page = 'http://artemis.av.it.pt/~hsantos/dbeacon/FAQ.html';
 
 my $ssm_ping_url = 'http://www.venaas.no/multicast/ssmping/';
 
+my $histbeacmatch;
+
 if (-f '/etc/dbeacon/matrix.conf') {
 	do '/etc/dbeacon/matrix.conf';
 }
@@ -982,7 +984,9 @@ sub store_data {
 	parse_dump_file(@_);
 
 	foreach my $a (keys %adj) {
-		if ($adj{$a}[NAME]) {
+		if ($adj{$a}[NAME] and
+			(not defined $histbeacmatch or ($adj{$a}[NAME] =~ m/$histbeacmatch/))) {
+
 			my $dstbeacon = build_host($adj{$a}[NAME], $a);
 			my $dirn = hist_beacon_dir $dstbeacon;
 			if (not -d $dirn) {

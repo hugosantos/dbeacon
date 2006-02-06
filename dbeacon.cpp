@@ -48,9 +48,7 @@
 
 using namespace std;
 
-#define NEW_BEAC_PCOUNT	10
-
-static const char *versionInfo = "0.3.8 ($Rev$)";
+static const char *versionInfo = "0.3.9 ($Rev$)";
 
 static const char *defaultIPv6SSMChannel = "ff3e::beac";
 static const char *defaultIPv4SSMChannel = "232.2.3.2";
@@ -68,6 +66,8 @@ static const int reportI = 2;
 static const int ssmReportI = 4;
 static const int mapReportI = 6;
 static const int websiteReportI = 24;
+/* other constants */
+static const int probeBurstLength = 10;
 
 // Timer Events
 enum {
@@ -881,9 +881,9 @@ static void handle_single_event() {
 	} else if (t.type == WILLSEND_SSM_EVENT) {
 		insert_event(SSM_SENDING_EVENT, 100);
 		send_ssm_count = 0;
-	} else if (t.type == SENDING_EVENT && send_count == NEW_BEAC_PCOUNT) {
+	} else if (t.type == SENDING_EVENT && send_count == probeBurstLength) {
 		insert_event(WILLSEND_EVENT, timeFact(1, true));
-	} else if (t.type == SSM_SENDING_EVENT && send_ssm_count == NEW_BEAC_PCOUNT) {
+	} else if (t.type == SSM_SENDING_EVENT && send_ssm_count == probeBurstLength) {
 		insert_event(WILLSEND_SSM_EVENT, timeFact(1, true));
 	} else if (t.type == REPORT_EVENT) {
 		insert_event(REPORT_EVENT, timeFact(reportI));
