@@ -269,7 +269,24 @@ sub check_outdated_dump {
 sub beacon_name {
 	my ($d) = @_;
 
-	return $adj{$d}[NAME] or "($d)";
+	if ($adj{$d}[NAME] ne '') {
+		return $adj{$d}[NAME];
+	} else {
+		$d =~ s/\/\d+$//;
+		return "Unknown ($d)";
+	}
+}
+
+sub beacon_short_name {
+	my ($d) = @_;
+
+	my $name = beacon_name($d);
+	if (length($name) > 20) {
+		$name = substr($name, 0, 17);
+		$name .= '...';
+	}
+
+	return $name;
 }
 
 sub make_history_url {
@@ -671,7 +688,10 @@ sub render_matrix {
 	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
 	printx '<tr><td>&nbsp;</td>';
 
-	my @sortedkeys = sort { $adj{$b}[AGE] <=> $adj{$a}[AGE] } keys %adj;
+	#my @sortedkeys = sort { $adj{$b}[AGE] <=> $adj{$a}[AGE] } keys %adj;
+	#my @sortedkeys = sort { $a <=> $b } keys %adj;
+	my @sortedkeys = sort keys %adj;
+	#my @sortedkeys = keys %adj;
 
 	foreach $c (@sortedkeys) {
 		$ids{$c} = 0;
@@ -684,7 +704,6 @@ sub render_matrix {
 		} elsif (not $adj{$c}[IN_EDGE] and not $adj{$c}[OUT_EDGE]) {
 			push (@problematic, $c);
 		} else {
-			printx '<td ', $what_td, '><b><span title="', beacon_name($c), '">S', $i, '</span></b></td>' if $adj{$c}[OUT_EDGE] > 0;
 
 			$ids{$c} = $i;
 			$i++;
@@ -702,12 +721,16 @@ sub render_matrix {
 					push (@rx, $c);
 				}
 
-				push (@tx, $c) if $adj{$c}[OUT_EDGE] > 0;
+				push (@tx, $c) if $adj{$c}[OUT_EDGE] > 1;
 			} else {
 				push (@rx, $c);
 				push (@tx, $c);
 			}
 		}
+	}
+
+	foreach $c (@tx) {
+		printx '<td ', $what_td, '><b><span title="', beacon_name($c), '">S', $ids{$c}, '</span></b></td>';
 	}
 
 	printx "</tr>\n";
@@ -766,6 +789,15 @@ sub render_matrix {
 		printx '</tr>', "\n";
 	}
 	printx '</table>', "\n";
+
+	printx '<p />', "\n";
+
+	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj"><tr>', "\n";
+	printx '<td><b>Matrix cell colors:</b></td>', "\n";
+	printx '<td>Full connectivity (ASM and SSM)</td><td class="AAS">X</td>', "\n";
+	printx '<td>ASM only</td><td class="AA">X</td>', "\n";
+	printx '<td>SSM only</td><td class="AS">X</td>', "\n";
+	printx '</tr></table>', "\n";
 
 	if (scalar(@repnosources) > 0) {
 		printx '<h4 style="margin-bottom: 0">Beacons that report no received sources';
@@ -890,7 +922,7 @@ sub render_matrix {
 			if ($ids{$a} > 0) {
 				printx '<tr>', '<td align="right" class="beacname">';
 				printx '<a class="beacon_url" href="', $adj{$a}[URL], '">' if $adj{$a}[URL];
-				printx $adj{$a}[NAME];
+				printx beacon_short_name($a);
 				printx '</a>' if $adj{$a}[URL];
 				printx ' <b>R', $ids{$a}, '</b>', '</td>';
 
