@@ -35,7 +35,7 @@
 #define CMSG_SPACE(size)	(sizeof(struct cmsghdr) + (size))
 #endif
 
-#ifdef SOLARIS
+#if defined(SOLARIS) || defined(__NetBSD__)
 #define TTLType         uint8_t
 #else
 #define TTLType         int
