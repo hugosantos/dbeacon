@@ -470,7 +470,7 @@ sub build_header {
 				var timenavoff = document.getElementById("timenavigator").offset;
 				var selectedvalue = timenavoff.options[timenavoff.selectedIndex].value;
 				var newdate = ' . $at . ' + selectedvalue * way;
-				var url = "' . $url."what=$attwhat&amp;tt=$attname" . '&amp;ammount=" + selectedvalue + "&amp;at="+newdate;
+				var url = "' . $url."what=$attwhat&amp;att=$attname" . '&amp;ammount=" + selectedvalue + "&amp;at="+newdate;
 				location.href = url;
 			}
 			</script>';
