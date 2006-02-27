@@ -557,7 +557,7 @@ sub build_header {
 
 	printx ')</small>:</span></p>';
 
-	printx '<ul id="view" style="float: left">', "\n";
+	printx '<ul id="view">', "\n";
 	for ($i = 0; $i < $view_len; $i++) {
 		my $att = $view[$i];
 		my $attn = $view_name[$i];
@@ -640,6 +640,32 @@ sub make_cell_class {
 	return $tok . '_' . $base;
 }
 
+sub print_beacord {
+	my ($id) = @_;
+
+	return '<span class="beacord">' . $id . '</span>';
+}
+
+sub print_beacord_name {
+	my ($id, $name) = @_;
+
+	return print_beacord($id) . ' ' . beacon_name($name);
+}
+
+sub obsf_email {
+	my ($mail) = @_;
+
+	return '-' if not defined $mail or $mail eq '';
+
+	my $res = '';
+
+	foreach my $c (split //, $mail) {
+		$res .= '&#' . ord($c);
+	}
+
+	return $res;
+}
+
 sub render_matrix {
 	my ($start, $step) = @_;
 
@@ -654,7 +680,7 @@ sub render_matrix {
 	$attwhat ||= $default_what;
 	$full_matrix ||= $default_full_matrix;
 
-	my $what_td = "colspan=\"2\"";
+	my $what_td = 'colspan="2"';
 
 	$what_td = '' if $attwhat eq 'asm' or $attwhat eq 'ssmorasm';
 
@@ -685,13 +711,7 @@ sub render_matrix {
 
 	my %ids;
 
-	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj">', "\n";
-	printx '<tr><td>&nbsp;</td>';
-
-	#my @sortedkeys = sort { $adj{$b}[AGE] <=> $adj{$a}[AGE] } keys %adj;
-	#my @sortedkeys = sort { $a <=> $b } keys %adj;
 	my @sortedkeys = sort keys %adj;
-	#my @sortedkeys = keys %adj;
 
 	foreach $c (@sortedkeys) {
 		$ids{$c} = 0;
@@ -729,16 +749,20 @@ sub render_matrix {
 		}
 	}
 
-	foreach $c (@tx) {
-		printx '<td ', $what_td, '><b><span title="', beacon_name($c), '">S', $ids{$c}, '</span></b></td>';
+	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr adj">', "\n";
+	printx '<tr><td class="beacname" style="font-style: italic" colspan="2">&darr; Sources \ Recipients &rarr;</td>';
+
+	foreach $c (@rx) {
+		printx '<td ', $what_td, ' class="beacord"><span title="', beacon_name($c), '">', $ids{$c}, '</span></td>';
 	}
 
 	printx "</tr>\n";
 
-	foreach $a (@rx) {
+	foreach $b (@tx) {
 		printx '<tr>';
-		printx '<td align="right" class="beacname">', beacon_name($a), ' <b>R', $ids{$a}, '</b></td>';
-		foreach $b (@tx) {
+		printx '<td class="beacname">', beacon_name($b), '</td>';
+		printx '<td>', print_beacord($ids{$b}), '</td>';
+		foreach $a (@rx) {
 			if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
 				my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
 				my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
@@ -790,9 +814,9 @@ sub render_matrix {
 	}
 	printx '</table>', "\n";
 
-	printx '<p />', "\n";
+	printx '<br />', "\n";
 
-	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adj"><tr>', "\n";
+	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr adj"><tr>', "\n";
 	printx '<td><b>Matrix cell colors:</b></td>', "\n";
 	printx '<td>Full connectivity (ASM and SSM)</td><td class="AAS">X</td>', "\n";
 	printx '<td>ASM only</td><td class="AA">X</td>', "\n";
@@ -805,8 +829,8 @@ sub render_matrix {
 		printx '</h4>', "\n";
 		printx '<ul>', "\n";
 		foreach $a (@repnosources) {
-			printx '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
-			printx ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
+			printx '<li>', print_beacord_name($ids{$a}, $a);
+			printx ' (', obsf_email($adj{$a}[CONTACT]), ')' if $adj{$a}[CONTACT];
 			printx '</li>', "\n";
 		}
 		printx '</ul>', "\n";
@@ -818,7 +842,7 @@ sub render_matrix {
 		printx '</h4>', "\n";
 		printx '<ul>', "\n";
 		foreach $a (@lowrx) {
-			printx '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
+			printx '<li>', print_beacord_name($ids{$a}, $a);
 
 			printx ' <small>Receives</small> { ';
 
@@ -828,7 +852,7 @@ sub render_matrix {
 				printx ', ' if not $first;
 				$first = 0;
 				if ($ids{$b}) {
-					printx '<b>S', $ids{$b}, '</b> ', beacon_name($b);
+					printx print_beacord_name($ids{$b}, $b);
 				} else {
 					printx '<span class="beacon">', $b;
 					printx ' (', $adj{$b}[NAME], ')' if $adj{$b}[NAME];
@@ -849,8 +873,8 @@ sub render_matrix {
 		printx '</h4>', "\n";
 		printx '<ul>', "\n";
 		foreach $a (@localnoreceive) {
-			printx '<li><b>R', $ids{$a}, '</b> ', beacon_name($a);
-			printx ' (', $adj{$a}[CONTACT], ')' if $adj{$a}[CONTACT];
+			printx '<li>', print_beacord_name($ids{$a}, $a);
+			printx ' (', obsf_email($adj{$a}[CONTACT]), ')' if $adj{$a}[CONTACT];
 			printx '</li>', "\n";
 		}
 		printx '</ul>', "\n";
@@ -863,7 +887,7 @@ sub render_matrix {
 		printx '<ul>', "\n";
 		foreach $a (@warmingup) {
 			printx '<li>', $a;
-			printx ' (', $adj{$a}[NAME], ', ', $adj{$a}[CONTACT], ')' if $adj{$a}[NAME];
+			printx ' (', $adj{$a}[NAME], ', ', obsf_email($adj{$a}[CONTACT]), ')' if $adj{$a}[NAME];
 			printx '</li>', "\n";
 		}
 		printx '</ul>', "\n";
@@ -880,7 +904,7 @@ sub render_matrix {
 			printx '<li>', $prob;
 			if ($adj{$prob}[NAME]) {
 				printx ' (', $adj{$prob}[NAME];
-				printx ', ', $adj{$prob}[CONTACT] if $adj{$prob}[CONTACT];
+				printx ', ', obsf_email($adj{$prob}[CONTACT]) if $adj{$prob}[CONTACT];
 				printx ')';
 			}
 
@@ -910,21 +934,22 @@ sub render_matrix {
 	}
 
 	if (not $atthideinfo) {
-		printx '<p></p>', "\n";
+		printx '<br />', "\n";
 		printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr" id="adjname">', "\n";
 
-		printx '<tr><td></td><td></td><td><b>Age</b></td><td><b>Source Address</b></td>';
-		printx '<td><b>Admin Contact</b></td><td><b>';
+		printx '<tr class="tablehead"><td /><td /><td /><td>Age</td><td>Source Address</td>';
+		printx '<td>Admin Contact</td><td>';
 		do_faq_link('L/M', 'lg_matrix');
-		printx '</b></td><td><b><a href="', $ssm_ping_url, '">SSM P</a>';
-		printx '</b></td></tr>', "\n";
+		printx '</td><td><a href="', $ssm_ping_url, '">SSM P</a>';
+		printx '</td></tr>', "\n";
 		foreach $a (@sortedkeys) {
 			if ($ids{$a} > 0) {
-				printx '<tr>', '<td align="right" class="beacname">';
+				printx '<tr>', '<td class="beacname">';
 				printx '<a class="beacon_url" href="', $adj{$a}[URL], '">' if $adj{$a}[URL];
 				printx beacon_short_name($a);
 				printx '</a>' if $adj{$a}[URL];
-				printx ' <b>R', $ids{$a}, '</b>', '</td>';
+				printx '</td>';
+				printx '<td>', print_beacord($ids{$a}), '</td>';
 
 				printx '<td>';
 				if ($flag_url_format ne '' and $adj{$a}[COUNTRY]) {
@@ -937,7 +962,7 @@ sub render_matrix {
 			        my $ip = $a;
 			        $ip =~ s/\/\d+$//;
 			        printx '<td class="addr"><a href="', make_ripe_search_url($ip), '">', $ip, '</a></td>';
-				printx '<td class="admincontact">', ($adj{$a}[CONTACT] or '-'), '</td>';
+				printx '<td class="admincontact">', obsf_email($adj{$a}[CONTACT]), '</td>';
 
 				my $urls;
 				$urls .= " <a href=\"" . $adj{$a}[LG] . "\">L</a>" if $adj{$a}[LG];
@@ -1604,35 +1629,39 @@ table.adjr td {
 	padding: 3px;
 	border-bottom: 0.1em solid white;
 }
-table#adj td.AAS, table#adj td.A_asm, table#adj td.A_ssm {
-	background-color: #96ef96;
+table.adj td.AAS, table.adj td.A_asm, table.adj td.A_ssm {
+	background-color: #99ff99;
 }
 
-table#adj td.AA {
-	background-color: #c0ffc0;
+table.adj td.AA {
+	/* background-color: #c0ffc0; */
+	background-color: #ccffcc;
 }
 
-table#adj td.AS {
-	background-color: #96d396;
+table.adj td.AS {
+	/* background-color: #96d396; */
+	/* background-color: #99cccc; */
+	background-color: #ccff66;
 }
 
-table#adj td.noreport {
+table.adj td.noreport {
 	background-color: #ccc;
 }
 
-table#adj td.blackhole {
+table.adj td.blackhole {
 	background-color: #000000;
 }
 
-table#adj td.corner {
-	background-color: #dddddd;
+table.adj td.corner {
+/*	background-color: #dddddd; */
+	background-color: white;
 }
 
-table#adj td.A_asm {
+table.adj td.A_asm {
 	border-right: 0.075em solid white;
 }
 
-table#adj td.noreport, td.blackhole, td.AAS, td.AS, td.AA, td.A_ssm, td.corner {
+table.adj td.noreport, td.blackhole, td.AAS, td.AS, td.AA, td.A_ssm, td.corner {
 	border-right: 0.2em solid white;
 }
 
@@ -1644,8 +1673,16 @@ table#adjname td.age {
 	font-size: 80%;
 }
 
+.tablehead {
+	font-weight: bold;
+}
+
+.beacord {
+	font-weight: bold;
+}
+
 .addr, .admincontact {
-	font-family: Monospace;
+	font-size: 80%;
 }
 
 .addr a, .addr a:visited {
