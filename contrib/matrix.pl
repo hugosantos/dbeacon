@@ -523,6 +523,9 @@ sub build_header {
 	my @view_name = ('TTL', 'Loss', 'Delay', 'Jitter');
 	my @view_type = ('hop count', 'percentage', 'ms', 'ms');
 
+	my @sources = qw(asm ssm both ssmorasm);
+	my @sources_name = ('ASM', 'SSM', 'Both', 'SSM or ASM');
+
 	my $view_len = scalar(@view);
 	my $i;
 
@@ -544,16 +547,28 @@ sub build_header {
 
 	printx ", <a href=\"$url$hideatt&amp;$whatatt&amp;att=$attname&amp;at=$at&amp;full=" . (!$full_matrix) . '">' . ($full_matrix ? 'Condensed' : 'Full') . '</a>';
 
-	if ($attwhat eq "asm") {
-		printx ", <a href=\"$url$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		printx ", <a href=\"$url$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
-	} elsif ($attwhat eq "ssmorasm") {
-		printx ", <a href=\"$url$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
-		printx ", <a href=\"$url$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
-	} else {
-		printx ", <a href=\"$url$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
-		printx ", <a href=\"$url$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+	for (my $k = 0; $k < scalar(@sources); $k++) {
+		printx ', ';
+		if ($sources[$k] ne $attwhat) {
+			printx '<a href="', $url, $hideatt, $fullatt, '&amp;what=', $sources[$k];
+			printx '&amp;att=', $attname, '&amp;at=', $at, '">';
+		}
+		printx $sources_name[$k];
+		if ($sources[$k] ne $attwhat) {
+			printx '</a>';
+		}
 	}
+
+	#if ($attwhat eq "asm") {
+	#	printx ", <a href=\"$url$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+	#	printx ", <a href=\"$url$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+	#} elsif ($attwhat eq "ssmorasm") {
+	#	printx ", <a href=\"$url$hideatt$fullatt&amp;what=both&amp;att=$attname&amp;at=$at\">ASM and SSM</a>";
+	#	printx ", <a href=\"$url$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+	#} else {
+	#	printx ", <a href=\"$url$hideatt$fullatt&amp;what=ssmorasm&amp;att=$attname&amp;at=$at\">SSM or ASM</a>";
+	#	printx ", <a href=\"$url$hideatt$fullatt&amp;what=asm&amp;att=$attname&amp;at=$at\">ASM only</a>";
+	#}
 
 	printx ')</small>:</span></p>';
 
@@ -680,14 +695,14 @@ sub render_matrix {
 	$attwhat ||= $default_what;
 	$full_matrix ||= $default_full_matrix;
 
-	my $what_td = 'colspan="2"';
+	my $what_td = '';
 
-	$what_td = '' if $attwhat eq 'asm' or $attwhat eq 'ssmorasm';
+	$what_td = 'colspan="2"' if $attwhat eq 'both';
 
 	my $attat = $page->param('at');
 	$attat = 0 if not defined $attat or $attat eq '';
 
-	my $addinfo;
+	my $addinfo = '';
 	if ($attat > 0) {
 		$addinfo = " (<a href=\"".$url."what=$attwhat&amp;att=$attname\">Live stats</a>)";
 	} elsif ($history_enabled) {
@@ -772,9 +787,44 @@ sub render_matrix {
 					$txtssm = sprintf "%.1f", $txtssm if defined $txtssm;
 				}
 
-				if ($attwhat eq 'asm' or $attwhat eq 'ssmorasm') {
+				if ($attwhat eq 'both') {
+					if (not defined $txt and not defined $txtssm) {
+						printx '<td ', $what_td, ' class="blackhole">XX</td>';
+					} else {
+						make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
+						make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
+					}
+				} else {
 					my $whattype = 'asm';
 					my $cssclass = 'AAS';
+
+					my $loss = $adj{$a}[NEIGH]{$b}[1]{'loss'};
+					my $ssmloss = $adj{$a}[NEIGH]{$b}[2]{'loss'};
+
+					if ($attwhat eq 'asm') {
+						if (not defined $loss) {
+							$loss = 100.;
+						}
+					} elsif ($attwhat eq 'ssm') {
+						if (not defined $ssmloss) {
+							$loss = 100.;
+						} else {
+							$loss = $ssmloss;
+						}
+					} else {
+						if (not defined $ssmloss) {
+							if (not defined $loss) {
+								$loss = 100.;
+							}
+						} else {
+							if (not defined $loss) {
+								$loss = $ssmloss;
+							} else {
+								$loss = ($loss + $ssmloss) / 2.;
+							}
+						}
+					}
+
 					if ($attwhat eq 'ssmorasm') {
 						if (defined $txtssm) {
 							if (not defined $txt) {
@@ -785,6 +835,14 @@ sub render_matrix {
 						} elsif (defined $txt) {
 							$cssclass = 'AA';
 						}
+					} elsif ($attwhat eq 'ssm') {
+						$txt = $txtssm;
+					}
+
+					if ($loss > 45.) {
+						$cssclass = 'loss';
+					} elsif ($loss > 10.) {
+						$cssclass = 'someloss';
 					}
 
 					if (not defined $txt) {
@@ -793,13 +851,6 @@ sub render_matrix {
 						printx '<td class="', $cssclass, '">';
 						make_history_link($b, $a, $whattype, $txt, 'historyurl');
 						printx '</td>';
-					}
-				} else {
-					if (not defined $txt and not defined $txtssm) {
-						printx '<td ', $what_td, ' class="blackhole">XX</td>';
-					} else {
-						make_matrix_cell($b, $a, 'asm', $txt, 'historyurl');
-						make_matrix_cell($b, $a, 'ssm', $txtssm, 'historyurl');
 					}
 				}
 			} elsif ($a eq $b) {
@@ -1657,11 +1708,19 @@ table.adj td.corner {
 	background-color: white;
 }
 
+table.adj td.loss {
+	background-color: red;
+}
+
+table.adj td.someloss {
+	background-color: orange;
+}
+
 table.adj td.A_asm {
 	border-right: 0.075em solid white;
 }
 
-table.adj td.noreport, td.blackhole, td.AAS, td.AS, td.AA, td.A_ssm, td.corner {
+table.adj td.noreport, td.blackhole, td.AAS, td.AS, td.AA, td.A_ssm, td.corner, td.loss, td.someloss {
 	border-right: 0.2em solid white;
 }
 
