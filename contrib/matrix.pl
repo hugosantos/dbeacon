@@ -872,6 +872,8 @@ sub render_matrix {
 	printx '<td>Full connectivity (ASM and SSM)</td><td class="AAS">X</td>', "\n";
 	printx '<td>ASM only</td><td class="AA">X</td>', "\n";
 	printx '<td>SSM only</td><td class="AS">X</td>', "\n";
+	printx '<td>Loss > 10%</td><td class="someloss">X</td>', "\n";
+	printx '<td>Loss > 45%</td><td class="loss">X</td>', "\n";
 	printx '</tr></table>', "\n";
 
 	if (scalar(@repnosources) > 0) {
