@@ -36,6 +36,8 @@ our $matrix_link_title = 0;
 our $default_full_matrix = 0;
 our $faq_page = 'http://artemis.av.it.pt/~hsantos/dbeacon/FAQ.html';
 
+our ($row_block, $column_block) = (15, 15);  # Repeat row/column headings
+
 my $ssm_ping_url = 'http://www.venaas.no/multicast/ssmping/';
 
 my $histbeacmatch;
@@ -681,6 +683,23 @@ sub obsf_email {
 	return $res;
 }
 
+sub column_header($$$) {
+	my ($rx, $what_td, $ids) = @_;
+
+	printx '<tr><td class="beacname style="font-style: italic" colspan="2"><span style="font-size: 75%">&darr; Sources \ Recipients &rarr;</span></td>';
+	my $ccount = 0;
+
+	foreach my $c (@$rx) {
+		if ($ccount && ($ccount % $column_block == 0)) {
+			printx '<td ', $what_td, '>&nbsp;</td>';
+		}
+		printx '<td ', $what_td, ' class="beacord ordback"><span title="', beacon_name($c), '">', $ids->{$c}, '</span></td>';
+		$ccount++;
+	}
+
+	printx "</tr>\n";
+}
+
 sub render_matrix {
 	my ($start, $step) = @_;
 
@@ -764,20 +783,17 @@ sub render_matrix {
 		}
 	}
 
+	my $rcount = 0;
 	printx '<table border="0" cellspacing="0" cellpadding="0" class="adjr adj">', "\n";
-	printx '<tr><td class="beacname" style="font-style: italic" colspan="2">&darr; Sources \ Recipients &rarr;</td>';
-
-	foreach $c (@rx) {
-		printx '<td ', $what_td, ' class="beacord"><span title="', beacon_name($c), '">', $ids{$c}, '</span></td>';
-	}
-
-	printx "</tr>\n";
 
 	foreach $b (@tx) {
+		$rcount++ % $row_block == 0 && column_header(\@rx, $what_td, \%ids);
 		printx '<tr>';
 		printx '<td class="beacname">', beacon_name($b), '</td>';
-		printx '<td>', print_beacord($ids{$b}), '</td>';
+		my $ccount = 0;
 		foreach $a (@rx) {
+			($ccount++ % $column_block == 0) &&
+				printx '<td class="beacord ordback"><span title="', beacon_name($b), '">', $ids{$b}, '</span></td>';
 			if ($b ne $a and defined $adj{$a}[NEIGH]{$b}) {
 				my $txt = $adj{$a}[NEIGH]{$b}[1]{$attname};
 				my $txtssm = $adj{$a}[NEIGH]{$b}[2]{$attname};
@@ -841,7 +857,7 @@ sub render_matrix {
 
 					if ($loss > 45.) {
 						$cssclass = 'loss';
-					} elsif ($loss > 10.) {
+					} elsif ($loss > 15.) {
 						$cssclass = 'someloss';
 					}
 
@@ -872,7 +888,7 @@ sub render_matrix {
 	printx '<td>Full connectivity (ASM and SSM)</td><td class="AAS">X</td>', "\n";
 	printx '<td>ASM only</td><td class="AA">X</td>', "\n";
 	printx '<td>SSM only</td><td class="AS">X</td>', "\n";
-	printx '<td>Loss > 10%</td><td class="someloss">X</td>', "\n";
+	printx '<td>Loss > 15%</td><td class="someloss">X</td>', "\n";
 	printx '<td>Loss > 45%</td><td class="loss">X</td>', "\n";
 	printx '</tr></table>', "\n";
 
@@ -1722,7 +1738,7 @@ table.adj td.A_asm {
 	border-right: 0.075em solid white;
 }
 
-table.adj td.noreport, td.blackhole, td.AAS, td.AS, td.AA, td.A_ssm, td.corner, td.loss, td.someloss {
+table.adj td.noreport, td.blackhole, td.AAS, td.AS, td.AA, td.A_ssm, td.corner, td.loss, td.someloss, td.beacord {
 	border-right: 0.2em solid white;
 }
 
@@ -1740,6 +1756,10 @@ table#adjname td.age {
 
 .beacord {
 	font-weight: bold;
+}
+
+.ordback {
+	background-color: #cee7ff;
 }
 
 .addr, .admincontact {
