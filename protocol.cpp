@@ -237,7 +237,7 @@ static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 	memcpy(&tmp, tlv + 2, sizeof(tmp));
 	st.timestamp = ntohl(tmp);
 	memcpy(&tmp, tlv + 6, sizeof(tmp));
-	extb.age = tmp;
+	extb.age = ntohl(tmp);
 
 	// st.timestamp = ntohl(*(uint32_t *)(tlv + 2));
 	// extb.age = ntohl(*(uint32_t *)(tlv + 6));
