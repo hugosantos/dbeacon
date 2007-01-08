@@ -256,7 +256,7 @@ static void debug(FILE *f, const char *format, ...) {
 	vsnprintf(buffer, sizeof(buffer), format, vl);
 	va_end(vl);
 
-	fprintf(f, "%s.%06li %s\n", tbuf, (unsigned int)tv.tv_usec, buffer);
+	fprintf(f, "%s.%06u %s\n", tbuf, (uint32_t)tv.tv_usec, buffer);
 }
 
 void fixDumpFile() {
@@ -1453,7 +1453,7 @@ void do_dump() {
 void doLaunchSomething() {
 	pid_t p = fork();
 	if (p == 0) {
-		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile, 0);
+		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile, NULL);
 	}
 }
 
