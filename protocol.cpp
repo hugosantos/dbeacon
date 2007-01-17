@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2005  Hugo Santos <hsantos@av.it.pt>
- * $Id$
+ * Copyright (C) 2005-7, Hugo Santos <hugo@fivebits.net>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -10,6 +9,8 @@
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
+ *
+ * $Id$
  */
 
 #include "dbeacon.h"

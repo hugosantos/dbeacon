@@ -34,7 +34,7 @@ our $default_ssm_group = 'ff3e::beac/10000';
 our $debug = 0;
 our $matrix_link_title = 0;
 our $default_full_matrix = 0;
-our $faq_page = 'http://artemis.av.it.pt/~hsantos/dbeacon/FAQ.html';
+our $faq_page = 'http://fivebits.net/proj/dbeacon/wiki/FAQ';
 
 our ($row_block, $column_block) = (15, 15);  # Repeat row/column headings
 
@@ -54,7 +54,7 @@ if ($history_enabled) {
 	use RRDs;
 }
 
-my $dbeacon = '<a href="http://artemis.av.it.pt/~hsantos/dbeacon/">dbeacon</a>';
+my $dbeacon = '<a href="http://fivebits.net/proj/dbeacon/">dbeacon</a>';
 
 use constant NEIGH => 0;
 use constant IN_EDGE => 1;

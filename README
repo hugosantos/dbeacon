@@ -8,17 +8,15 @@ multicast, collecting information via ASM and SSM.
 
 dbeacon was originally only IPv6 capable, designed to be used in the m6bone.
 
-  Copyright (c) 2005 - Hugo Santos <hsantos@av.it.pt>
+  Copyright (c) 2005-7, Hugo Santos <hugo@fivebits.net>
 
-  http://artemis.av.it.pt/~hsantos/software/dbeacon.html
+  http://fivebits.net/proj/dbeacon/
 
   o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;
   o Ideas and testing by Sebastien Chaumontet;
   o SSM Ping originaly by Stig Venaas
     - first proposed by Pavan Namburi, Kamil Sarac and Kevin C. Almeroth;
   o Bernhard Schmidt provided valuable resources and helped during testing.
-
-Check dbeacon's Wiki at http://dbeacon.innerghost.net/ for more information.
 
 Running
 -------

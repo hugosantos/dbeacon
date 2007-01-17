@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2005  Hugo Santos <hsantos@av.it.pt>
- * $Id$
+ * Copyright (C) 2005-7, Hugo Santos <hugo@fivebits.net>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -10,6 +9,8 @@
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
  * more details.
+ *
+ * $Id$
  */
 
 #include "dbeacon.h"
@@ -508,9 +509,9 @@ void show_version() {
 	fprintf(stderr, "\n");
 	fprintf(stderr, "dbeacon - a Multicast Beacon %s\n", versionInfo);
 	fprintf(stderr, "\n");
-	fprintf(stderr, "  Copyright (c) 2005 - Hugo Santos <hsantos@av.it.pt>\n");
+	fprintf(stderr, "  Copyright (c) 2005-7, Hugo Santos <hugo@fivebits.net>\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "  http://artemis.av.it.pt/~hsantos/dbeacon/\n");
+	fprintf(stderr, "  http://fivebits.net/proj/dbeacon\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "  o Ideas, IPv4 port, SSM pushing by Hoerdt Mickael;\n");
 	fprintf(stderr, "  o Ideas and testing by Sebastien Chaumontet;\n");
