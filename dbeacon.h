@@ -127,7 +127,7 @@ void SetupFDSet(int);
 int SetupSSMPing();
 void handle_ssmping(int s, address &, const address &, uint8_t *, int, uint64_t);
 
-extern const char *defaultPort;
+extern const char * const defaultPort;
 extern const int defaultTTL;
 
 extern int forceFamily;

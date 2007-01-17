@@ -23,28 +23,33 @@ Running
 
 Usage: dbeacon [OPTIONS...]
 
-  -n NAME                Specifies the beacon name
+  -n NAME, -name NAME    Specifies the beacon name
   -a MAIL                Supply administration contact
-  -i INTFNAME            Use INTFNAME instead of the default interface for multicast
+  -i IN, -interface IN   Use IN instead of the default interface for multicast
   -b BEACON_ADDR[/PORT]  Multicast group address to send probes to
   -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT
   -O                     Disables the joining of SSM groups but still sends via SSM.
                          Use this option if your operating system has problems with SSM
   -B ADDR                Bootstraps by joining the specified address
+  -P, -ssmping           Enable the SSMPing server capability
   -s ADDR                Bind to local address
   -d [FILE]              Dump periodic reports to dump.xml or specified file
-  -I NUMBER              Interval between dumps. Defaults to 5 secs
-  -W URL / type$URL      Specify a website to announce. If type$ (one of lg or matrix) is used
+  -I N, -interval N      Interval between dumps. Defaults to 5 secs
+  -W URL, -website URL   Specify a website to announce.
+  -Wm URL, -matrix URL   Specify your matrix URL
+  -Wl URL, -lg URL       Specify your LG URL
                          will announce an URL for that type instead
   -C CC                  Specify your two letter Country Code
-  -L program             Launch program after each dump. The first argument will be the dump filename
-  -F flag                Set a dbeacon flag to be announce. Available flags are: ssmping
-  -P                     Enable SSM Ping server capability
-  -4                     Force IPv4 usage
-  -6                     Force IPv6 usage
+  -L program             Launch program after each dump.
+                         The first argument will be the dump filename
+  -F flag                Set a dbeacon flag to be announced.
+                         Available flags are: ssmping
+  -4, -ipv4              Force IPv4 usage
+  -6, -ipv6              Force IPv6 usage
   -v                     be verbose (use several for more verbosity)
   -U                     Dump periodic bandwidth usage reports to stdout
-  -V                     Outputs version information and leaves
+  -V, -version           Outputs version information and leaves
+  -c FILE                Specifies the configuration file
 
 To join our experimental deployment in the m6bone use:
 
@@ -56,11 +61,10 @@ If you are interested in running the matrix script also use -d so dbeacon export
 
 A more complete command line would be
 
-	./dbeacon -a MAIL -n NAME -b ff1e::1:f00d:beac -S -W http://yoursite.com -W matrix\$http://yoursite.com/matrix/ -d
+	./dbeacon -a MAIL -n NAME -b ff1e::1:f00d:beac -S -W http://yoursite.com -Wm http://yoursite.com/matrix/ -d
 
 Licensing
 ---------
 
 This code is licensed under the GNU Public Licence (GPL) v2.
-
 

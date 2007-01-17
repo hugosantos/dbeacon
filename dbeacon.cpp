@@ -49,17 +49,17 @@
 
 using namespace std;
 
-static const char *versionInfo = "0.3.9 ($Rev$)";
+const char * const versionInfo = "0.4.0-pre ($Rev$)";
 
-static const char *defaultIPv6SSMChannel = "ff3e::beac";
-static const char *defaultIPv4SSMChannel = "232.2.3.2";
-const char *defaultPort = "10000";
+const char * const defaultIPv6SSMChannel = "ff3e::beac";
+const char * const defaultIPv4SSMChannel = "232.2.3.2";
+const char * const defaultPort = "10000";
 #ifndef SOLARIS
 const int defaultTTL = 127;
 #else
 const int defaultTTL = 64;
 #endif
-static const char *defaultDumpFile = "dump.xml";
+const char * const defaultDumpFile = "dump.xml";
 
 /* time related constants */
 static const int timeOutI = 6;
@@ -133,8 +133,8 @@ int mcastInterface = 0;
 
 static char sessionName[256];
 static address probeAddr;
-static const char *probeAddrLiteral = 0;
-static const char *probeSSMAddrLiteral = 0;
+static string probeAddrLiteral;
+static string probeSSMAddrLiteral;
 static bool useSSM = false;
 static bool listenForSSM = false;
 static bool useSSMPing = false;
@@ -149,7 +149,7 @@ static double beacInt = 5.;
 
 static uint64_t startTime = 0;
 
-static const char *dumpFile = 0;
+static string dumpFile;
 
 static vector<pair<address, content_type> > mcastListen;
 static vector<pair<int, content_type> > mcastSocks;
@@ -170,7 +170,6 @@ static uint64_t dumpBytesSent = 0;
 static uint64_t lastDumpDumpBwTS = 0;
 
 static int dumpInterval = 5;
-static const char *multicastInterface = 0;
 int forceFamily = AF_UNSPEC;
 
 static void next_event(timeval *);
@@ -209,34 +208,37 @@ static const int bufferLen = 8192;
 static uint8_t buffer[bufferLen];
 
 void usage() {
-	fprintf(stderr, "Usage: dbeacon [OPTIONS...]\n\n");
-	fprintf(stderr, "  -n NAME, -name NAME    Specifies the beacon name\n");
-	fprintf(stderr, "  -a MAIL                Supply administration contact\n");
-	fprintf(stderr, "  -i IN, -interface IN   Use IN instead of the default interface for multicast\n");
-	fprintf(stderr, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
-	fprintf(stderr, "  -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
-	fprintf(stderr, "  -O                     Disables the joining of SSM groups but still sends via SSM.\n");
-	fprintf(stderr, "                         Use this option if your operating system has problems with SSM\n");
-	fprintf(stderr, "  -B ADDR                Bootstraps by joining the specified address\n");
-	fprintf(stderr, "  -P, -ssmping           Enable the SSMPing server capability\n");
-	fprintf(stderr, "  -s ADDR                Bind to local address\n");
-	fprintf(stderr, "  -d [FILE]              Dump periodic reports to dump.xml or specified file\n");
-	fprintf(stderr, "  -I N, -interval N      Interval between dumps. Defaults to 5 secs\n");
-	fprintf(stderr, "  -W URL, -website URL   Specify a website to announce.\n");
-	fprintf(stderr, "  -Wm URL, -matrix URL   Specify your matrix URL\n");
-	fprintf(stderr, "  -Wl URL, -lg URL       Specify your LG URL\n");
-	fprintf(stderr, "                         will announce an URL for that type instead\n");
-	fprintf(stderr, "  -C CC                  Specify your two letter Country Code\n");
-	fprintf(stderr, "  -L program             Launch program after each dump.\n");
-	fprintf(stderr, "                         The first argument will be the dump filename\n");
-	fprintf(stderr, "  -F flag                Set a dbeacon flag to be announced.\n");
-	fprintf(stderr, "                         Available flags are: ssmping\n");
-	fprintf(stderr, "  -4, -ipv4              Force IPv4 usage\n");
-	fprintf(stderr, "  -6, -ipv6              Force IPv6 usage\n");
-	fprintf(stderr, "  -v                     be verbose (use several for more verbosity)\n");
-	fprintf(stderr, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
-	fprintf(stderr, "  -V, -version           Outputs version information and leaves\n");
-	fprintf(stderr, "\n");
+	fprintf(stdout, "Usage: dbeacon [OPTIONS...]\n\n");
+	fprintf(stdout, "  -n NAME, -name NAME    Specifies the beacon name\n");
+	fprintf(stdout, "  -a MAIL                Supply administration contact\n");
+	fprintf(stdout, "  -i IN, -interface IN   Use IN instead of the default interface for multicast\n");
+	fprintf(stdout, "  -b BEACON_ADDR[/PORT]  Multicast group address to send probes to\n");
+	fprintf(stdout, "  -S [GROUP_ADDR[/PORT]] Enables SSM reception/sending on optional GROUP_ADDR/PORT\n");
+	fprintf(stdout, "  -O                     Disables the joining of SSM groups but still sends via SSM.\n");
+	fprintf(stdout, "                         Use this option if your operating system has problems with SSM\n");
+	fprintf(stdout, "  -B ADDR                Bootstraps by joining the specified address\n");
+	fprintf(stdout, "  -P, -ssmping           Enable the SSMPing server capability\n");
+	fprintf(stdout, "  -s ADDR                Bind to local address\n");
+	fprintf(stdout, "  -d [FILE]              Dump periodic reports to dump.xml or specified file\n");
+	fprintf(stdout, "  -I N, -interval N      Interval between dumps. Defaults to 5 secs\n");
+	fprintf(stdout, "  -W URL, -website URL   Specify a website to announce.\n");
+	fprintf(stdout, "  -Wm URL, -matrix URL   Specify your matrix URL\n");
+	fprintf(stdout, "  -Wl URL, -lg URL       Specify your LG URL\n");
+	fprintf(stdout, "                         will announce an URL for that type instead\n");
+	fprintf(stdout, "  -C CC                  Specify your two letter Country Code\n");
+	fprintf(stdout, "  -L program             Launch program after each dump.\n");
+	fprintf(stdout, "                         The first argument will be the dump filename\n");
+	fprintf(stdout, "  -F flag                Set a dbeacon flag to be announced.\n");
+	fprintf(stdout, "                         Available flags are: ssmping\n");
+	fprintf(stdout, "  -4, -ipv4              Force IPv4 usage\n");
+	fprintf(stdout, "  -6, -ipv6              Force IPv6 usage\n");
+	fprintf(stdout, "  -v                     be verbose (use several for more verbosity)\n");
+	fprintf(stdout, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
+	fprintf(stdout, "  -V, -version           Outputs version information and leaves\n");
+	fprintf(stdout, "  -c FILE                Specifies the configuration file\n");
+	fprintf(stdout, "\n");
+
+	exit(1);
 }
 
 static void debug(FILE *f, const char *format, ...) {
@@ -258,9 +260,6 @@ static void debug(FILE *f, const char *format, ...) {
 	va_end(vl);
 
 	fprintf(f, "%s.%06u %s\n", tbuf, (uint32_t)tv.tv_usec, buffer);
-}
-
-void fixDumpFile() {
 }
 
 extern "C" void waitForMe(int) {
@@ -294,18 +293,8 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 
-	fixDumpFile();
-
-	if (multicastInterface) {
-		mcastInterface = if_nametoindex(multicastInterface);
-		if (mcastInterface <= 0) {
-			fprintf(stderr, "Specified interface doesn't exist.\n");
-			return -1;
-		}
-	}
-
-	if (probeAddrLiteral) {
-		if (!probeAddr.parse(probeAddrLiteral, true)) {
+	if (!probeAddrLiteral.empty()) {
+		if (!probeAddr.parse(probeAddrLiteral.c_str(), true)) {
 			return -1;
 		}
 
@@ -331,7 +320,7 @@ int main(int argc, char **argv) {
 		redist.push_back(probeAddr);
 
 		if (useSSM) {
-			if (!probeSSMAddrLiteral) {
+			if (probeSSMAddrLiteral.empty()) {
 				int family = forceFamily;
 
 				if (family == AF_UNSPEC) {
@@ -344,7 +333,7 @@ int main(int argc, char **argv) {
 				}
 			}
 
-			if (!ssmProbeAddr.parse(probeSSMAddrLiteral, true)) {
+			if (!ssmProbeAddr.parse(probeSSMAddrLiteral.c_str(), true)) {
 				fprintf(stderr, "Bad address format for SSM channel.\n");
 				return -1;
 			} else if (!ssmProbeAddr.is_unspecified()) {
@@ -446,7 +435,7 @@ int main(int argc, char **argv) {
 	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
-	if (dumpFile)
+	if (!dumpFile.empty())
 		insert_event(DUMP_EVENT, dumpInterval * 1000);
 
 	insert_event(DUMP_BW_EVENT, 10000);
@@ -546,7 +535,8 @@ enum {
 	HELP,
 	FORCEv4,
 	FORCEv6,
-	SHOWVERSION
+	SHOWVERSION,
+	CONFFILE
 };
 
 enum {
@@ -561,14 +551,14 @@ static const struct param_tok {
 	int param;
 } param_format[] = {
 	{ NAME,		"n", "name", REQ_ARG },
-	{ CONTACT,	"a", 0, REQ_ARG },
+	{ CONTACT,	"a", "contact", REQ_ARG },
 	{ INTERFACE,	"i", "interface", REQ_ARG },
-	{ BEACONADDR,	"b", 0, REQ_ARG },
-	{ SSMADDR,	"S", 0, OPT_ARG },
-	{ SSMSENDONLY,	"O", 0, NO_ARG },
+	{ BEACONADDR,	"b", "addr", REQ_ARG },
+	{ SSMADDR,	"S", "ssm_addr", OPT_ARG },
+	{ SSMSENDONLY,	"O", "ssm_send_only", OPT_ARG },
 	{ BOOTSTRAP,	"B", "bootstrap", REQ_ARG },
-	{ ENABLESSMPING,"P", "ssmping", NO_ARG },
-	{ SOURCEADDR,	"s", 0, REQ_ARG },
+	{ ENABLESSMPING,"P", "ssmping", OPT_ARG },
+	{ SOURCEADDR,	"s", "source", REQ_ARG },
 	{ DUMP,		"d", "dump", OPT_ARG },
 	{ DUMPINTERVAL,	"I", "interval", REQ_ARG },
 	{ DUMPEXEC,	"L", "exec", REQ_ARG },
@@ -577,16 +567,17 @@ static const struct param_tok {
 	{ SPECLG,	"Wl", "lg", REQ_ARG },
 	{ COUNTRY,	"C", "CC", REQ_ARG },
 	{ SPECFLAG,	"F", "flag", REQ_ARG },
-	{ VERBOSE,	"v", "verbose", NO_ARG },
-	{ DUMPBW,	"U", "dump-bw", NO_ARG },
+	{ VERBOSE,	"v", "verbose", OPT_ARG },
+	{ DUMPBW,	"U", "dump-bw", OPT_ARG },
 	{ HELP,		"h", "help", NO_ARG },
 	{ FORCEv4,	"4", "ipv4", NO_ARG },
 	{ FORCEv6,	"6", "ipv6", NO_ARG },
 	{ SHOWVERSION,	"V", "version", NO_ARG },
-	{ 0, 0, 0, 0 }
+	{ CONFFILE,	"c", NULL, REQ_ARG },
+	{ 0, NULL, NULL, 0 }
 };
 
-static void check_good_string(const char *what, const char *value) {
+static const char *check_good_string(const char *what, const char *value) {
 	int l = strlen(value);
 
 	for (int i = 0; i < l; i++) {
@@ -595,10 +586,264 @@ static void check_good_string(const char *what, const char *value) {
 			exit(1);
 		}
 	}
+
+	return value;
 }
 
+static void fatal(const char *fmt, ...) {
+	va_list vl;
+	va_start(vl, fmt);
+	vfprintf(stderr, fmt, vl);
+	va_end(vl);
+	exit(-1);
+}
+
+static void parse_or_fail(address *addr, const char *arg, bool mc, bool addport) {
+	if (!addr->parse(arg, mc, addport))
+		fatal("Bad address format.\n");
+}
+
+static void add_bootstrap_address(const char *arg) {
+	address addr;
+	parse_or_fail(&addr, arg, false, true);
+	ssmBootstrap.push_back(addr);
+}
+
+static uint32_t parse_u32(const char *name, const char *arg) {
+	uint32_t result;
+	char *end;
+
+	result = strtoul(arg, &end, 10);
+	if (end[0] != 0)
+		fatal("%s: Expected unsigned integer\n", name);
+
+	return result;
+}
+
+static bool parse_bool(const char *name, const char *arg, bool def) {
+	if (arg == NULL)
+		return def;
+
+	if (!strcasecmp(arg, "yes"))
+		return true;
+	else if (!strcasecmp(arg, "true"))
+		return true;
+	else if (!strcasecmp(arg, "1"))
+		return true;
+	else if (!strcasecmp(arg, "no"))
+		return false;
+	else if (!strcasecmp(arg, "false"))
+		return false;
+	else if (!strcasecmp(arg, "0"))
+		return false;
+
+	fatal("%s: Expected one of \'yes\', \'true\', \'no\' or \'false\'.\n");
+	return false;
+}
+
+static void parse_config_file(const char *);
+
+static void process_param(const param_tok *tok, const char *arg) {
+	switch (tok->name) {
+	case NAME:
+		beaconName = check_good_string("name", arg);
+		break;
+	case CONTACT:
+		if (!strchr(arg, '@'))
+			fatal("Not a valid email address.\n");
+
+		adminContact = check_good_string("admin contact", arg);
+		break;
+	case INTERFACE:
+		mcastInterface = if_nametoindex(arg);
+		if (mcastInterface <= 0)
+			fatal("Invalid interface name.\n");
+		break;
+	case BEACONADDR:
+		probeAddrLiteral = arg;
+		break;
+	case SSMADDR:
+		probeSSMAddrLiteral = arg;
+		useSSM = true;
+		listenForSSM = true;
+		break;
+	case SSMSENDONLY:
+		useSSM = true;
+		listenForSSM = parse_bool("SSMSendOnly", arg, false);
+		break;
+	case BOOTSTRAP:
+		add_bootstrap_address(arg);
+		break;
+	case ENABLESSMPING:
+		useSSMPing = parse_bool("SSMPing", arg, true);
+		break;
+	case SOURCEADDR:
+		parse_or_fail(&beaconUnicastAddr, arg, false, false);
+		break;
+	case DUMP:
+		dumpFile = arg ? arg : defaultDumpFile;
+		break;
+	case DUMPINTERVAL:
+		dumpInterval = parse_u32("Dump interval", arg);
+		if (dumpInterval < 5)
+			dumpInterval = 5;
+		break;
+	case DUMPEXEC:
+		launchSomething = arg;
+		break;
+	case SPECWEBSITE:
+		if (strncmp(arg, "lg$", 3) == 0) {
+			webSites[T_WEBSITE_LG] =
+				check_good_string("LG website", arg + 3);
+		} else if (strncmp(arg, "matrix$", 7) == 0) {
+			webSites[T_WEBSITE_MATRIX] =
+				check_good_string("matrix url", arg + 7);
+		} else {
+			webSites[T_WEBSITE_GENERIC] =
+				check_good_string("website", arg);
+		}
+		break;
+	case SPECMATRIX:
+		webSites[T_WEBSITE_MATRIX] =
+			check_good_string("matrix url", arg);
+		break;
+	case SPECLG:
+		webSites[T_WEBSITE_LG] =
+			check_good_string("lg url", arg);
+		break;
+	case COUNTRY:
+		if (strlen(arg) != 2)
+			fatal("Bad country code.\n");
+		twoLetterCC = check_good_string("country", arg);
+		break;
+	case SPECFLAG:
+		if (!strcmp(arg, "ssmping")) {
+			flags |= SSMPING_CAPABLE;
+		} else {
+			fprintf(stderr, "Unknown flag \"%s\"\n", arg);
+		}
+		break;
+	case VERBOSE:
+		if (arg)
+			verbose = parse_u32("Verbose", arg);
+		else
+			verbose ++;
+		break;
+	case DUMPBW:
+		dumpBwReport = parse_bool("DumpBandwidth", arg, true);
+		break;
+	case HELP:
+		usage();
+		break;
+	case FORCEv4:
+		forceFamily = AF_INET;
+		break;
+	case FORCEv6:
+		forceFamily = AF_INET6;
+		break;
+	case SHOWVERSION:
+		show_version();
+		break;
+	case CONFFILE:
+		parse_config_file(arg);
+		break;
+	}
+}
+
+static char *skip_spaces(char *in) {
+	while (isspace(in[0]))
+		in++;
+	return in;
+}
+
+static char *terminate_str(char *left, char *right) {
+	for (; left < right && isspace(*right); right--);
+	right[1] = 0;
+	return left;
+}
+
+static const param_tok *resolve_tok(const char *arg, bool longonly) {
+	for (int j = 0; param_format[j].sf != NULL; j++) {
+		if (param_format[j].lf && !strcmp(arg, param_format[j].lf))
+			return &param_format[j];
+
+		if (longonly)
+			continue;
+
+		if (!strcmp(arg, param_format[j].sf))
+			return &param_format[j];
+	}
+
+	return NULL;
+}
+
+static void resolve_string(const char *name, char **ptr) {
+	char *p, *str = (*ptr);
+
+	if (str[0] != '\"')
+		return;
+
+	for (p = str + 1; (*p) != '\"'; p++);
+
+	if (p[0] == 0 || p[1] != 0)
+		fatal("%s: Bad string format.\n", name);
+
+	p[0] = 0;
+
+	(*ptr) = str + 1;
+}
+
+static void parse_config_file(const char *filename) {
+	FILE *f = fopen(filename, "r");
+
+	if (f == NULL)
+		fatal("Failed to open configuration file.\n");
+
+	char linebuf[256];
+	int lc = 0;
+
+	while (fgets(linebuf, sizeof(linebuf), f)) {
+		char *lp = skip_spaces(linebuf);
+		char *val, *end = lp + strlen(lp);
+
+		lc++;
+
+		if (lp[0] == '#' || strncmp(lp, "//", 2) == 0)
+			continue;
+
+		if (lp[0] == 0)
+			continue;
+
+		val = strchr(lp, ':');
+		if (val == NULL)
+			fatal("%s:%i: error, option format is name: value\n",
+			      filename, lc);
+
+		terminate_str(lp, val - 1);
+		val = terminate_str(skip_spaces(val + 1), end - 1);
+
+		const param_tok *tok = resolve_tok(lp, true);
+		if (tok == NULL) {
+			fprintf(stderr, "Unknown option `%s`\n", lp);
+			continue;
+		}
+
+		if (tok->param == NO_ARG) {
+			fprintf(stderr, "Bad option `%s`, no argument expected.\n", lp);
+			continue;
+		}
+
+		resolve_string(lp, &val);
+		process_param(tok, val);
+	}
+
+	fclose(f);
+}
+
+typedef pair<const char *, const char *> string_pair;
+
 int parse_arguments(int argc, char **argv) {
-	vector< pair<const char *, const char *> > args;
+	vector<string_pair> args;
 	vector<const char *> stray;
 
 	for (int i = 1; i < argc; i++) {
@@ -615,146 +860,23 @@ int parse_arguments(int argc, char **argv) {
 		}
 	}
 
-	for (vector< pair<const char *, const char *> >::const_iterator i = args.begin();
-							i != args.end(); i++) {
-		const param_tok *tok = 0;
-		int j;
-		for (j = 0; !tok && param_format[j].name; j++) {
-			if ((param_format[j].sf && !strcmp(i->first, param_format[j].sf))
-				|| (param_format[j].lf && !strcmp(i->first, param_format[j].lf))) {
-				tok = &param_format[j];
-			}
-		}
-		if (!tok) {
-			fprintf(stderr, "Unknown parameter `%s`\n", i->first);
-		} else {
-			if (tok->param == REQ_ARG && !i->second) {
-				fprintf(stderr, "Parameter `%s` requires an argument\n", i->first);
-				return -1;
-			} else if (tok->param == NO_ARG && i->second) {
-				fprintf(stderr, "Parameter `%s` doesn't require an argument, ignoring.\n", i->first);
-			}
+	for (vector<string_pair>::const_iterator i = args.begin();
+						 i != args.end(); ++i) {
+		const param_tok *tok = resolve_tok(i->first, false);
 
-			switch (tok->name) {
-			case NAME:
-				check_good_string("name", i->second);
-				beaconName = i->second;
-				break;
-			case CONTACT:
-				if (!strchr(i->second, '@')) {
-					fprintf(stderr, "Not a valid email address.\n");
-					return -1;
-				}
-				check_good_string("admin contact", i->second);
-				adminContact = i->second;
-				break;
-			case INTERFACE:
-				multicastInterface = i->second;
-				break;
-			case BEACONADDR:
-				probeAddrLiteral = i->second;
-				break;
-			case SSMADDR:
-				if (i->second) {
-					probeSSMAddrLiteral = i->second;
-				}
-				useSSM = true;
-				listenForSSM = true;
-				break;
-			case SSMSENDONLY:
-				useSSM = true;
-				listenForSSM = false;
-				break;
-			case BOOTSTRAP:
-				{
-					address addr;
-					if (!addr.parse(i->second, false)) {
-						fprintf(stderr, "Bad address format.\n");
-						return -1;
-					}
-					ssmBootstrap.push_back(addr);
-				}
-				break;
-			case ENABLESSMPING:
-				useSSMPing = true;
-				break;
-			case SOURCEADDR:
-				if (!beaconUnicastAddr.parse(i->second, false, false)) {
-					fprintf(stderr, "Bad address format.\n");
-					return -1;
-				}
-				break;
-			case DUMP:
-				dumpFile = i->second ? i->second : defaultDumpFile;
-				break;
-			case DUMPINTERVAL:
-				{
-					char *end;
-					dumpInterval = strtoul(i->second, &end, 10);
-					if (*end || dumpInterval < 5) {
-						fprintf(stderr, "Bad interval.\n");
-						return -1;
-					}
-				}
-				break;
-			case DUMPEXEC:
-				launchSomething = i->second;
-				break;
-			case SPECWEBSITE:
-				if (strncmp(i->second, "lg$", 3) == 0) {
-					check_good_string("LG website", i->second + 3);
-					webSites[T_WEBSITE_LG] = i->second + 3;
-				} else if (strncmp(i->second, "matrix$", 7) == 0) {
-					check_good_string("matrix url", i->second + 7);
-					webSites[T_WEBSITE_MATRIX] = i->second + 7;
-				} else {
-					check_good_string("website", i->second);
-					webSites[T_WEBSITE_GENERIC] = i->second;
-				}
-				break;
-			case SPECMATRIX:
-				check_good_string("matrix url", i->second);
-				webSites[T_WEBSITE_MATRIX] = i->second;
-				break;
-			case SPECLG:
-				check_good_string("lg url", i->second);
-				webSites[T_WEBSITE_LG] = i->second;
-				break;
-			case COUNTRY:
-				check_good_string("country", i->second);
-				if (strlen(i->second) != 2) {
-					fprintf(stderr, "Bad country code.\n");
-					return -1;
-				}
-				twoLetterCC = i->second;
-				break;
-			case SPECFLAG:
-				if (!strcmp(i->second, "ssmping")) {
-					flags |= SSMPING_CAPABLE;
-				} else {
-					fprintf(stderr, "Unknown flag \"%s\"\n", i->second);
-				}
-				break;
-			case VERBOSE:
-				verbose ++;
-				break;
-			case DUMPBW:
-				dumpBwReport = true;
-				break;
-			case HELP:
-				usage();
-				return -1;
-			case FORCEv4:
-				forceFamily = AF_INET;
-				break;
-			case FORCEv6:
-				forceFamily = AF_INET6;
-				break;
-			case SHOWVERSION:
-				show_version();
-				break;
-			}
+		if (tok == NULL) {
+			fprintf(stderr, "Unknown parameter `%s`\n", i->first);
+			continue;
 		}
+
+		if (tok->param == REQ_ARG && !i->second) {
+			fprintf(stderr, "Parameter `%s` requires an argument\n", i->first);
+			return -1;
+		} else if (tok->param == NO_ARG && i->second) {
+			fprintf(stderr, "Parameter `%s` doesn't require an argument, ignoring.\n", i->first);
+		}
+
+		process_param(tok, i->second);
 	}
 
 	return 0;
@@ -1445,7 +1567,7 @@ void do_dump() {
 
 	fclose(fp);
 
-	rename(tmpf.c_str(), dumpFile);
+	rename(tmpf.c_str(), dumpFile.c_str());
 
 	if (!launchSomething.empty())
 		doLaunchSomething();
@@ -1454,7 +1576,8 @@ void do_dump() {
 void doLaunchSomething() {
 	pid_t p = fork();
 	if (p == 0) {
-		execlp(launchSomething.c_str(), launchSomething.c_str(), dumpFile, NULL);
+		execlp(launchSomething.c_str(), launchSomething.c_str(),
+		       dumpFile.c_str(), NULL);
 	}
 }
 
