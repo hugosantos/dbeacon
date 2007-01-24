@@ -1,8 +1,8 @@
 Source: dbeacon
 Section: base
 Priority: optional
-Maintainer: Hugo Santos <hsantos@av.it.pt>
-Build-Depends: debhelper (>= 4)
+Maintainer: Hugo Santos <hugo@fivebits.net>
+Build-Depends: debhelper (>= 4), g++
 Standards-Version: 3.6.1.1
 
 Package: dbeacon
