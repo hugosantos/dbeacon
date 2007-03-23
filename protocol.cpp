@@ -83,13 +83,18 @@ static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type,
 
 	uint32_t *stats = (uint32_t *)(b + 9);
 
-	val = htonl(*((uint32_t *)&st.s.avgdelay));
-	memcpy(stats + 0, &val, sizeof(val));
-	val = htonl(*((uint32_t *)&st.s.avgjitter));
-	memcpy(stats + 1, &val, sizeof(val));
+	union {
+		uint32_t u;
+		float f;
+	} tu;
 
-	// stats[0] = htonl(*((uint32_t *)&st.s.avgdelay));
-	// stats[1] = htonl(*((uint32_t *)&st.s.avgjitter));
+	tu.f = st.s.avgdelay;
+	val = htonl(tu.u);
+	memcpy(stats + 0, &val, sizeof(val));
+
+	tu.f = st.s.avgjitter;
+	val = htonl(tu.u);
+	memcpy(stats + 1, &val, sizeof(val));
 
 	/* average loss in 0..255 range */
 	b[17] = (uint8_t)(st.s.avgloss * 0xff);
@@ -245,17 +250,18 @@ static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 
 	st.rttl = tlv[10];
 
-	memcpy(&tmp, tlv + 11, sizeof(tmp));
-	tmp = ntohl(tmp);
+	union {
+		uint32_t u;
+		float f;
+	} tu;
 
-	// tmp = ntohl(*(uint32_t *)(tlv + 11));
-	st.avgdelay = *(float *)&tmp;
+	memcpy(&tmp, tlv + 11, sizeof(tmp));
+	tu.u = ntohl(tmp);
+	st.avgdelay = tu.f;
 
 	memcpy(&tmp, tlv + 15, sizeof(tmp));
-	tmp = ntohl(tmp);
-
-	// tmp = ntohl(*(uint32_t *)(tlv + 15));
-	st.avgjitter = *(float *)&tmp;
+	tu.u = ntohl(tmp);
+	st.avgjitter = tu.f;
 
 	st.avgloss = tlv[19] / 255.;
 	st.avgdup = tlv[20] == 0xff ? 1e10 : tlv[20] / 25.5;
