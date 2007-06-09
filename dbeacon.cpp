@@ -171,6 +171,7 @@ static uint64_t lastDumpDumpBwTS = 0;
 
 static int dumpInterval = 5;
 int forceFamily = AF_UNSPEC;
+bool daemonize = false;
 
 static void next_event(timeval *);
 static void insert_event(uint32_t, uint32_t);
@@ -235,6 +236,7 @@ void usage() {
 	fprintf(stdout, "  -v                     be verbose (use several for more verbosity)\n");
 	fprintf(stdout, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
 	fprintf(stdout, "  -V, -version           Outputs version information and leaves\n");
+	fprintf(stdout, "  -D, -daemon            fork to the background (daemonize)\n");
 	fprintf(stdout, "  -c FILE                Specifies the configuration file\n");
 	fprintf(stdout, "\n");
 
@@ -267,7 +269,7 @@ extern "C" void waitForMe(int) {
 	wait(&whocares);
 }
 
-static int parse_arguments(int, char **);
+static void parse_arguments(int, char **);
 
 int main(int argc, char **argv) {
 	int res;
@@ -282,9 +284,7 @@ int main(int argc, char **argv) {
 
 	beaconName = tmp;
 
-	res = parse_arguments(argc, argv);
-	if (res < 0)
-		return res;
+	parse_arguments(argc, argv);
 
 	MulticastStartup();
 
@@ -432,6 +432,9 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Tried to bootstrap using SSM when SSM is not enabled.\n");
 	}
 
+	if (daemonize)
+		daemon(0, 0);
+
 	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
 
@@ -536,6 +539,7 @@ enum {
 	FORCEv4,
 	FORCEv6,
 	SHOWVERSION,
+	DAEMON,
 	CONFFILE
 };
 
@@ -573,6 +577,7 @@ static const struct param_tok {
 	{ FORCEv4,	"4", "ipv4", NO_ARG },
 	{ FORCEv6,	"6", "ipv6", NO_ARG },
 	{ SHOWVERSION,	"V", "version", NO_ARG },
+	{ DAEMON,	"D", "daemon", NO_ARG },
 	{ CONFFILE,	"c", NULL, REQ_ARG },
 	{ 0, NULL, NULL, 0 }
 };
@@ -744,6 +749,9 @@ static void process_param(const param_tok *tok, const char *arg) {
 	case SHOWVERSION:
 		show_version();
 		break;
+	case DAEMON:
+		daemonize = true;
+		break;
 	case CONFFILE:
 		parse_config_file(arg);
 		break;
@@ -793,6 +801,21 @@ static void resolve_string(const char *name, char **ptr) {
 	(*ptr) = str + 1;
 }
 
+static void check_option_value(const param_tok *tok, const char *lp,
+	const char *value)
+{
+	if (tok == NULL)
+		fprintf(stderr, "Unknown option `%s`\n", lp);
+	else if (tok->param == REQ_ARG && value == NULL)
+		fprintf(stderr, "Parameter `%s` requires an argument.\n", lp);
+	else if (tok->param == NO_ARG && value != NULL)
+		fprintf(stderr, "Parameter `%s` doesn't accept an argument.\n", lp);
+	else
+		return;
+
+	exit(-1);
+}
+
 static void parse_config_file(const char *filename) {
 	FILE *f = fopen(filename, "r");
 
@@ -808,32 +831,23 @@ static void parse_config_file(const char *filename) {
 
 		lc++;
 
-		if (lp[0] == '#' || strncmp(lp, "//", 2) == 0)
-			continue;
-
-		if (lp[0] == 0)
+		if (lp[0] == 0 || lp[0] == '#' || strncmp(lp, "//", 2) == 0)
 			continue;
 
 		val = strchr(lp, ':');
-		if (val == NULL)
-			fatal("%s:%i: error, option format is name: value\n",
-			      filename, lc);
-
-		terminate_str(lp, val - 1);
-		val = terminate_str(skip_spaces(val + 1), end - 1);
+		if (val) {
+			terminate_str(lp, val - 1);
+			val = terminate_str(skip_spaces(val + 1), end - 1);
+		} else {
+			terminate_str(lp, lp + strlen(lp) - 1);
+		}
 
 		const param_tok *tok = resolve_tok(lp, true);
-		if (tok == NULL) {
-			fprintf(stderr, "Unknown option `%s`\n", lp);
-			continue;
-		}
 
-		if (tok->param == NO_ARG) {
-			fprintf(stderr, "Bad option `%s`, no argument expected.\n", lp);
-			continue;
-		}
+		check_option_value(tok, lp, val);
 
-		resolve_string(lp, &val);
+		if (val)
+			resolve_string(lp, &val);
 		process_param(tok, val);
 	}
 
@@ -842,7 +856,7 @@ static void parse_config_file(const char *filename) {
 
 typedef pair<const char *, const char *> string_pair;
 
-int parse_arguments(int argc, char **argv) {
+void parse_arguments(int argc, char **argv) {
 	vector<string_pair> args;
 	vector<const char *> stray;
 
@@ -863,23 +877,9 @@ int parse_arguments(int argc, char **argv) {
 	for (vector<string_pair>::const_iterator i = args.begin();
 						 i != args.end(); ++i) {
 		const param_tok *tok = resolve_tok(i->first, false);
-
-		if (tok == NULL) {
-			fprintf(stderr, "Unknown parameter `%s`\n", i->first);
-			continue;
-		}
-
-		if (tok->param == REQ_ARG && !i->second) {
-			fprintf(stderr, "Parameter `%s` requires an argument\n", i->first);
-			return -1;
-		} else if (tok->param == NO_ARG && i->second) {
-			fprintf(stderr, "Parameter `%s` doesn't require an argument, ignoring.\n", i->first);
-		}
-
+		check_option_value(tok, i->first, i->second);
 		process_param(tok, i->second);
 	}
-
-	return 0;
 }
 
 struct timer {
