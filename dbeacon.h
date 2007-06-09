@@ -144,5 +144,8 @@ extern address beaconUnicastAddr;
 
 extern int verbose;
 
+void info(const char *format, ...);
+void fatal(const char *format, ...);
+
 #endif
 

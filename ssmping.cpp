@@ -60,14 +60,15 @@ int SetupSSMPing() {
 	return 0;
 }
 
-void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer, int len, uint64_t ts) {
+void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer,
+					int len, uint64_t ts) {
 	if (buffer[0] != SSMPING_REQUEST || len > maxSSMPingMessage)
 		return;
 
 	if (verbose > 1) {
 		char tmp[64];
 		from.print(tmp, sizeof(tmp));
-		fprintf(stderr, "Got SSM Ping Request from %s\n", tmp);
+		info("Got SSM Ping Request from %s", tmp);
 	}
 
 	buffer[0] = SSMPING_ANSWER;

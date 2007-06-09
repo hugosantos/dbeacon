@@ -38,6 +38,7 @@
 #include <signal.h>
 #include <libgen.h>
 #include <ctype.h>
+#include <syslog.h>
 
 #include <assert.h>
 
@@ -172,6 +173,8 @@ static uint64_t lastDumpDumpBwTS = 0;
 static int dumpInterval = 5;
 int forceFamily = AF_UNSPEC;
 bool daemonize = false;
+bool use_syslog = false;
+bool past_init = false;
 
 static void next_event(timeval *);
 static void insert_event(uint32_t, uint32_t);
@@ -238,30 +241,55 @@ void usage() {
 	fprintf(stdout, "  -V, -version           Outputs version information and leaves\n");
 	fprintf(stdout, "  -D, -daemon            fork to the background (daemonize)\n");
 	fprintf(stdout, "  -c FILE                Specifies the configuration file\n");
+	fprintf(stdout, "  -syslog                Outputs using syslog facility.\n");
 	fprintf(stdout, "\n");
 
 	exit(1);
 }
 
-static void debug(FILE *f, const char *format, ...) {
-	timeval tv;
-	gettimeofday(&tv, 0);
-
-	char tbuf[64];
-
-	/* Some FreeBSDs' tv.tv_sec isn't time_t */
-	time_t tv_sec = tv.tv_sec;
-
-	strftime(tbuf, sizeof(tbuf), "%b %d %H:%M:%S", localtime(&tv_sec));
-
+static void logv(int level, const char *format, va_list vl)
+{
 	char buffer[256];
+	vsnprintf(buffer, sizeof(buffer), format, vl);
 
+	if (use_syslog && past_init) {
+		syslog(level, buffer);
+	} else {
+		char tbuf[64];
+		timeval tv;
+		gettimeofday(&tv, 0);
+
+		/* Some FreeBSDs' tv.tv_sec isn't time_t */
+		time_t tv_sec = tv.tv_sec;
+		strftime(tbuf, sizeof(tbuf), "%b %d %H:%M:%S", localtime(&tv_sec));
+
+		fprintf(stderr, "%s.%06u %s\n", tbuf, (uint32_t)tv.tv_usec, buffer);
+	}
+}
+
+static void log(int level, const char *format, ...)
+{
 	va_list vl;
 	va_start(vl, format);
-	vsnprintf(buffer, sizeof(buffer), format, vl);
+	logv(level, format, vl);
 	va_end(vl);
+}
 
-	fprintf(f, "%s.%06u %s\n", tbuf, (uint32_t)tv.tv_usec, buffer);
+void info(const char *format, ...)
+{
+	va_list vl;
+	va_start(vl, format);
+	logv(LOG_INFO, format, vl);
+	va_end(vl);
+}
+
+void fatal(const char *format, ...)
+{
+	va_list vl;
+	va_start(vl, format);
+	logv(LOG_CRIT, format, vl);
+	va_end(vl);
+	exit(-1);
 }
 
 extern "C" void waitForMe(int) {
@@ -288,27 +316,21 @@ int main(int argc, char **argv) {
 
 	MulticastStartup();
 
-	if (beaconName.empty()) {
-		fprintf(stderr, "No name supplied.\n");
-		return -1;
-	}
+	if (beaconName.empty())
+		fatal("No name supplied.");
 
 	if (!probeAddrLiteral.empty()) {
-		if (!probeAddr.parse(probeAddrLiteral.c_str(), true)) {
+		if (!probeAddr.parse(probeAddrLiteral.c_str(), true))
 			return -1;
-		}
 
 		probeAddr.print(sessionName, sizeof(sessionName));
 
-		if (!probeAddr.is_multicast()) {
-			fprintf(stderr, "Specified probe addr (%s) is not of a multicast group\n", sessionName);
-			return -1;
-		}
+		if (!probeAddr.is_multicast())
+			fatal("Specified probe addr (%s) is not of a multicast group.",
+					sessionName);
 
-		if (adminContact.empty()) {
-			fprintf(stderr, "No administration contact supplied.\n");
-			return -1;
-		}
+		if (adminContact.empty())
+			fatal("No administration contact supplied.");
 
 		mcastListen.push_back(make_pair(probeAddr, NPROBE));
 
@@ -334,8 +356,7 @@ int main(int argc, char **argv) {
 			}
 
 			if (!ssmProbeAddr.parse(probeSSMAddrLiteral.c_str(), true)) {
-				fprintf(stderr, "Bad address format for SSM channel.\n");
-				return -1;
+				fatal("Bad address format for SSM channel.");
 			} else if (!ssmProbeAddr.is_unspecified()) {
 				insert_event(SSM_SENDING_EVENT, 100);
 				insert_event(SSM_REPORT_EVENT, 15000);
@@ -346,12 +367,10 @@ int main(int argc, char **argv) {
 			}
 		}
 	} else {
-		if (mcastListen.empty()) {
-			fprintf(stderr, "Nothing to do, check `dbeacon -h`.\n");
-			return -1;
-		} else {
+		if (mcastListen.empty())
+			fatal("Nothing to do, check `dbeacon -h`.");
+		else
 			strcpy(sessionName, beaconName.c_str());
-		}
 	}
 
 	FD_ZERO(&readSet);
@@ -414,11 +433,10 @@ int main(int argc, char **argv) {
 	}
 
 	if (useSSMPing) {
-		if (SetupSSMPing() < 0) {
-			fprintf(stderr, "Failed to setup SSM Ping\n");
-		} else {
+		if (SetupSSMPing() < 0)
+			log(LOG_ERR, "Failed to setup SSM Ping.");
+		else
 			flags |= SSMPING_CAPABLE;
-		}
 	}
 
 	if (ssmMcastSock) {
@@ -428,9 +446,15 @@ int main(int argc, char **argv) {
 		for (vector<address>::const_iterator i = ssmBootstrap.begin(); i != ssmBootstrap.end(); i++) {
 			getSource(*i, 0, now, 0, false);
 		}
-	} else if (!ssmBootstrap.empty()) {
-		fprintf(stderr, "Tried to bootstrap using SSM when SSM is not enabled.\n");
+	} else if (!ssmBootstrap.empty())
+		log(LOG_WARNING, "Tried to bootstrap using SSM when SSM is not enabled.");
+
+	if (daemonize || use_syslog) {
+		use_syslog = true;
+		openlog("dbeacon", LOG_NDELAY | LOG_PID, LOG_DAEMON);
 	}
+
+	past_init = true;
 
 	if (daemonize)
 		daemon(0, 0);
@@ -450,8 +474,8 @@ int main(int argc, char **argv) {
 
 	beaconUnicastAddr.print(tmp, sizeof(tmp), false);
 
-	fprintf(stdout, "Local name is %s [Beacon group: %s, Local address: %s]\n",
-					beaconName.c_str(), sessionName, tmp);
+	info("Local name is `%s` [Beacon group: %s, Local address: %s]",
+			beaconName.c_str(), sessionName, tmp);
 
 	signal(SIGUSR1, dumpBigBwStats);
 	signal(SIGINT, sendLeaveReport);
@@ -470,17 +494,13 @@ int main(int argc, char **argv) {
 
 		res = select(largestSock + 1, &readset, 0, 0, &eventm);
 
-		if (verbose > 5) {
-			fprintf(stderr, "select(): res = %i\n", res);
-		}
-
 		if (res < 0) {
 			if (errno == EINTR)
 				continue;
-			perror("Select failed");
-			return -1;
+			fatal("Select failed: %s", strerror(errno));
 		} else {
-			for (vector<pair<int, content_type> >::const_iterator i = mcastSocks.begin(); i != mcastSocks.end(); ++i)
+			for (vector<pair<int, content_type> >::const_iterator
+					i = mcastSocks.begin(); i != mcastSocks.end(); ++i)
 				if (FD_ISSET(i->first, &readset))
 					handle_mcast(i->first, i->second);
 
@@ -540,6 +560,7 @@ enum {
 	FORCEv6,
 	SHOWVERSION,
 	DAEMON,
+	USE_SYSLOG,
 	CONFFILE
 };
 
@@ -578,6 +599,7 @@ static const struct param_tok {
 	{ FORCEv6,	"6", "ipv6", NO_ARG },
 	{ SHOWVERSION,	"V", "version", NO_ARG },
 	{ DAEMON,	"D", "daemon", NO_ARG },
+	{ USE_SYSLOG, "Y", "syslog", NO_ARG },
 	{ CONFFILE,	"c", NULL, REQ_ARG },
 	{ 0, NULL, NULL, 0 }
 };
@@ -595,17 +617,9 @@ static const char *check_good_string(const char *what, const char *value) {
 	return value;
 }
 
-static void fatal(const char *fmt, ...) {
-	va_list vl;
-	va_start(vl, fmt);
-	vfprintf(stderr, fmt, vl);
-	va_end(vl);
-	exit(-1);
-}
-
 static void parse_or_fail(address *addr, const char *arg, bool mc, bool addport) {
 	if (!addr->parse(arg, mc, addport))
-		fatal("Bad address format.\n");
+		fatal("Bad address format.");
 }
 
 static void add_bootstrap_address(const char *arg) {
@@ -620,7 +634,7 @@ static uint32_t parse_u32(const char *name, const char *arg) {
 
 	result = strtoul(arg, &end, 10);
 	if (end[0] != 0)
-		fatal("%s: Expected unsigned integer\n", name);
+		fatal("%s: Expected unsigned integer.", name);
 
 	return result;
 }
@@ -642,7 +656,7 @@ static bool parse_bool(const char *name, const char *arg, bool def) {
 	else if (!strcasecmp(arg, "0"))
 		return false;
 
-	fatal("%s: Expected one of \'yes\', \'true\', \'no\' or \'false\'.\n");
+	fatal("%s: Expected one of \'yes\', \'true\', \'no\' or \'false\'.");
 	return false;
 }
 
@@ -655,14 +669,14 @@ static void process_param(const param_tok *tok, const char *arg) {
 		break;
 	case CONTACT:
 		if (!strchr(arg, '@'))
-			fatal("Not a valid email address.\n");
+			fatal("Not a valid email address.");
 
 		adminContact = check_good_string("admin contact", arg);
 		break;
 	case INTERFACE:
 		mcastInterface = if_nametoindex(arg);
 		if (mcastInterface <= 0)
-			fatal("Invalid interface name.\n");
+			fatal("Invalid interface name.");
 		break;
 	case BEACONADDR:
 		probeAddrLiteral = arg;
@@ -718,7 +732,7 @@ static void process_param(const param_tok *tok, const char *arg) {
 		break;
 	case COUNTRY:
 		if (strlen(arg) != 2)
-			fatal("Bad country code.\n");
+			fatal("Bad country code.");
 		twoLetterCC = check_good_string("country", arg);
 		break;
 	case SPECFLAG:
@@ -751,6 +765,9 @@ static void process_param(const param_tok *tok, const char *arg) {
 		break;
 	case DAEMON:
 		daemonize = true;
+		break;
+	case USE_SYSLOG:
+		use_syslog = true;
 		break;
 	case CONFFILE:
 		parse_config_file(arg);
@@ -794,7 +811,7 @@ static void resolve_string(const char *name, char **ptr) {
 	for (p = str + 1; (*p) != '\"'; p++);
 
 	if (p[0] == 0 || p[1] != 0)
-		fatal("%s: Bad string format.\n", name);
+		fatal("%s: Bad string format.", name);
 
 	p[0] = 0;
 
@@ -805,22 +822,18 @@ static void check_option_value(const param_tok *tok, const char *lp,
 	const char *value)
 {
 	if (tok == NULL)
-		fprintf(stderr, "Unknown option `%s`\n", lp);
+		fatal("Unknown option `%s`", lp);
 	else if (tok->param == REQ_ARG && value == NULL)
-		fprintf(stderr, "Parameter `%s` requires an argument.\n", lp);
+		fatal("Parameter `%s` requires an argument.", lp);
 	else if (tok->param == NO_ARG && value != NULL)
-		fprintf(stderr, "Parameter `%s` doesn't accept an argument.\n", lp);
-	else
-		return;
-
-	exit(-1);
+		fatal("Parameter `%s` doesn't accept an argument.", lp);
 }
 
 static void parse_config_file(const char *filename) {
 	FILE *f = fopen(filename, "r");
 
 	if (f == NULL)
-		fatal("Failed to open configuration file.\n");
+		fatal("Failed to open configuration file.");
 
 	char linebuf[256];
 	int lc = 0;
@@ -898,10 +911,7 @@ static void update_taccum() {
 	uint64_t now = get_timestamp();
 	int32_t diff = now - (int64_t)lastclk;
 
-	if (now < lastclk) {
-		fprintf(stderr, "BAD behaviour. now=%llu lastclk=%llu diff=%i\n", now, lastclk, diff);
-		assert(0);
-	}
+	assert(now >= lastclk);
 
 	lastclk = now;
 	taccum += diff;
@@ -923,8 +933,6 @@ void next_event(timeval *eventm) {
 
 	eventm->tv_sec = h.target / 1000;
 	eventm->tv_usec = (h.target % 1000) * 1000;
-
-	/* debug(stderr, "next_event %s %u %u", EventName(h.type), eventm->tv_sec, eventm->tv_usec); */
 }
 
 void insert_sorted_event(timer &t) {
@@ -1089,7 +1097,7 @@ void handle_mcast(int sock, content_type type) {
 	if (verbose > 3) {
 		char tmp[64];
 		from.print(tmp, sizeof(tmp));
-		fprintf(stderr, "RecvMsg(%s): len = %u\n", tmp, len);
+		info("RecvMsg(%s): len = %u", tmp, len);
 	}
 
 	if (type == SSMPING) {
@@ -1132,9 +1140,9 @@ beaconSource &getSource(const address &baddr, const char *name, uint64_t now, ui
 		baddr.print(tmp, sizeof(tmp));
 
 		if (name) {
-			fprintf(stderr, "Adding source %s [%s]\n", tmp, name);
+			info("Adding source %s [%s]", tmp, name);
 		} else {
-			fprintf(stderr, "Adding source %s\n", tmp);
+			info("Adding source %s", tmp);
 		}
 	}
 
@@ -1151,14 +1159,14 @@ beaconSource &getSource(const address &baddr, const char *name, uint64_t now, ui
 			if (verbose) {
 				char tmp[64];
 				baddr.print(tmp, sizeof(tmp));
-				fprintf(stderr, "Failed to join SSM (S,G) where S = %s, reason: %s\n",
-								tmp, strerror(errno));
+				info("Failed to join SSM (S,G) where S = %s, reason: %s",
+					tmp, strerror(errno));
 			}
 		} else {
 			if (verbose > 1) {
 				char tmp[64];
 				baddr.print(tmp, sizeof(tmp));
-				fprintf(stderr, "Joined SSM (S, G) where S = %s\n", tmp);
+				info("Joined SSM (S, G) where S = %s", tmp);
 			}
 		}
 	}
@@ -1175,10 +1183,10 @@ void removeSource(const address &baddr, bool timeout) {
 			baddr.print(tmp, sizeof(tmp));
 
 			if (i->second.identified) {
-				fprintf(stderr, "Removing source %s [%s]%s\n",
+				info("Removing source %s [%s]%s",
 					tmp, i->second.name.c_str(), (timeout ? " by Timeout" : ""));
 			} else {
-				fprintf(stderr, "Removing source %s%s\n",
+				info("Removing source %s%s",
 					tmp, (timeout ? " by Timeout" : ""));
 			}
 		}
@@ -1215,7 +1223,7 @@ beaconExternalStats &beaconSource::getExternal(const address &baddr, uint64_t no
 		baddr.print(tmp, sizeof(tmp));
 
 		if (verbose)
-			fprintf(stderr, "Adding external source (%s) %s\n", name.c_str(), tmp);
+			info("Adding external source (%s) %s", name.c_str(), tmp);
 	}
 
 	beaconExternalStats &stats = k->second;
@@ -1229,7 +1237,7 @@ template<typename T> T udiff(T a, T b) { if (a > b) return a - b; return b - a; 
 
 void beaconSource::update(uint8_t ttl, uint32_t seqnum, uint64_t timestamp, uint64_t now, uint64_t recvts, bool ssm) {
 	if (verbose > 2)
-		fprintf(stderr, "beacon(%s%s) update %u, %llu, %llu\n",
+		info("beacon(%s%s) update %u, %llu, %llu",
 			name.c_str(), (ssm ? "/SSM" : ""), seqnum, timestamp, now);
 
 	beaconMcastState *st = ssm ? &SSM : &ASM;
@@ -1581,9 +1589,11 @@ void doLaunchSomething() {
 	}
 }
 
-static void outputBwStats(uint32_t diff, uint64_t txbytes, double txrate, uint64_t rxbytes, double rxrate) {
-	fprintf(stdout, "BW Usage for %u secs: RX %llu bytes (%.2f Kb/s) TX %llu bytes (%.2f Kb/s)\n",
-			diff, txbytes, txrate, rxbytes, rxrate);
+static void
+outputBwStats(uint32_t diff, uint64_t txbytes, double txrate, uint64_t rxbytes,
+				double rxrate) {
+	info("BW Usage for %u secs: RX %llu bytes (%.2f Kb/s) TX %llu "
+			"bytes (%.2f Kb/s)", diff, txbytes, txrate, rxbytes, rxrate);
 }
 
 void do_bw_dump(bool big) {
@@ -1597,7 +1607,7 @@ void do_bw_dump(bool big) {
 		double incomingRate = bytesReceived * 8 / 10000.;
 
 		if (dumpBwReport) {
-			debug(stdout, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)",
+			log(LOG_DEBUG, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)",
 					bytesReceived, incomingRate, bytesSent, bytesSent * 8 / 10000.);
 		}
 

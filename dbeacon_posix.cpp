@@ -103,9 +103,8 @@ void MulticastStartup() {
 
 		if (getsockopt(sock, IPPROTO_IP, MCAST_FILTER, &flt, &fltlen) == 0
 				&& errno != ENOPROTOOPT) {
-			if (verbose) {
-				fprintf(stderr, "Using new Multicast Filter API\n");
-			}
+			if (verbose)
+				info("Using new Multicast Filter API");
 
 			_McastListen = _McastListenNewAPI;
 		}
@@ -408,7 +407,7 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 	hint.ai_socktype = SOCK_DGRAM;
 
 	if ((cres = getaddrinfo(*tmp ? tmp : 0, port, &hint, &rres)) != 0) {
-		fprintf(stderr, "getaddrinfo failed: %s\n", gai_strerror(cres));
+		info("getaddrinfo failed: %s", gai_strerror(cres));
 		return false;
 	}
 
@@ -424,7 +423,7 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 	freeaddrinfo(rres);
 
 	if (!res) {
-		fprintf(stderr, "No usable records for %s\n", tmp);
+		info("No usable records for %s", tmp);
 		return false;
 	}
 
