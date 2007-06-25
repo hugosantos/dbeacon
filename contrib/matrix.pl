@@ -50,8 +50,15 @@ if (-f 'matrix.conf') {
 	do 'matrix.conf';
 }
 
+my $RRDs = "RRDs";
+
 if ($history_enabled) {
-	use RRDs;
+	eval "use $RRDs";
+	die ("RRDs not available: $!") if ($@);
+}
+
+if (exists $ENV{'DBEACON_DUMP'}) {
+	$dumpfile = $ENV{'DBEACON_DUMP'};
 }
 
 my $dbeacon = '<a href="http://fivebits.net/proj/dbeacon/">dbeacon</a>';
@@ -159,10 +166,10 @@ sub build_vertex_one {
 	my ($start, $step, $names, $data);
 
 	($start, $step, $names, $data) =
-		RRDs::fetch($path, 'AVERAGE', '-s',
+		$RRDs::{fetch}($path, 'AVERAGE', '-s',
 		$page->param('at'), '-e', $page->param('at'));
 
-	return [-1, -1] if RRDs::error;
+	return [-1, -1] if $RRDs::{error};
 
 	if (not defined($adj{$srcaddr})) {
 		$adj{$srcaddr}[IN_EDGE] = 0;
@@ -1217,7 +1224,7 @@ sub check_rrd {
 			print "New combination: RRD file $rrdfile needs to be created\n";
 		}
 
-		if (!RRDs::create($rrdfile,
+		if (!$RRDs::{create}($rrdfile,
 			'-s 60',			# steps in seconds
 			'DS:ttl:GAUGE:90:0:255',	# 90 seconds befor reporting it as unknown
 			'DS:loss:GAUGE:90:0:100',	# 0 to 100%
@@ -1262,7 +1269,7 @@ sub storedata {
 	print F2 time;
 	close F2;
 
-	return RRDs::update($rrdfile, $updatestring);
+	return $RRDs::{update}($rrdfile, $updatestring);
 }
 
 sub graphgen {
@@ -1328,8 +1335,8 @@ sub graphgen {
 
 	push (@args, 'GPRINT:Max:LAST:Last '.$unit.'\n');
 
-	if (!RRDs::graph(@args)) {
-		die(RRDs::error);
+	if (!$RRDs::{graph}(@args)) {
+		die($RRDs::{error});
 	}
 }
 
