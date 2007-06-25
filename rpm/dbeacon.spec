@@ -30,7 +30,7 @@ multicast, collecting information via ASM and SSM.
 
 %files
 %defattr(-, root, root)
-%doc README docs/FAQ.html docs/large_scale_beaconing.txt docs/PROTOCOL
+%doc README docs/FAQ docs/PROTOCOL
 %{_bindir}/*
 
 %changelog

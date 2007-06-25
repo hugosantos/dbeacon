@@ -1,19 +1,21 @@
 Source: dbeacon
-Section: base
+Section: net
 Priority: optional
-Maintainer: Hugo Santos <hugo@fivebits.net>
-Build-Depends: debhelper (>= 4), g++
-Standards-Version: 3.6.1.1
+Maintainer: Faidon Liambotis <paravoid@debian.org>
+Build-Depends: debhelper (>= 4)
+Standards-Version: 3.7.2
 
 Package: dbeacon
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${perl:Depends}, libcgi-perl, libxml-parser-perl
+Recommends: librrds-perl
 Description: A Multicast Beacon
-
-Package: dbeacon-matrix
-Architecture: all
-Section: perl
-Depends: ${perl:Depends}
-Recommends: dbeacon (>= ${Source-Version})
-Description: dbeacon's Matrix script
-
+ dbeacon is a multicast beacon. Its main purpose is to monitor other beacon's
+ reachability and collect statistics such as loss, delay and jitter between 
+ them.
+ .
+ dbeacon supports both IPv4 and IPv6 multicast, collecting information using
+ both Any Source Multicast (ASM) and Source-Specific Multicast (SSM).
+ .
+ This package also includes dbeacon matrix, a Perl script to generate beacon
+ reachability matrices in HTML.
