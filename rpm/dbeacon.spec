@@ -2,9 +2,9 @@ Name:		dbeacon
 Summary:	Multicast Beacon
 Version:	0.3.8
 Release:	1
-URL:		http://hng.av.it.pt/~hsantos/dbeacon/
+URL:		http://fivebits.net/proj/dbeacon/
 License:	GPL
-Source0:	http://hng.av.it.pt/~hsantos/dbeacon/dbeacon-%{version}.tar.gz
+Source0:	http://fivebits.net/files/dbeacon/dbeacon-%{version}.tar.gz
 Group:		Networking
 Packager:	Nick Lamb <njl195@zepler.org.uk>
 BuildRoot:	%{_builddir}/%{name}-root

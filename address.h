@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005  Hugo Santos <hsantos@av.it.pt>
+ * Copyright (C) 2005  Hugo Santos <hugo@fivebits.net>
  * $Id$
  *
  * This program is free software; you can redistribute it and/or modify it

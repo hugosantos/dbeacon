@@ -8,19 +8,19 @@ dbeacon (0.3.9-1) unstable; urgency=low
 
   * Updated to 0.3.9.
 
- -- Hugo Santos <hsantos@av.it.pt>  Fri, 17 Feb 2006 21:16:23 +0000
+ -- Hugo Santos <hugo@fivebits.net>  Fri, 17 Feb 2006 21:16:23 +0000
 
 dbeacon (0.3.8) unstable; urgency=low
 
   * Updated to 0.3.8.
 
- -- Hugo Santos <hsantos@av.it.pt>  Mon,  5 Sep 2005 13:05:14 +0100
+ -- Hugo Santos <hugo@fivebits.net>  Mon,  5 Sep 2005 13:05:14 +0100
 
 dbeacon (0.3.7) unstable; urgency=low
 
   * Updated to 0.3.7.
 
- -- Hugo Santos <hsantos@av.it.pt>  Wed, 10 Aug 2005 16:31:56 +0100
+ -- Hugo Santos <hugo@fivebits.net>  Wed, 10 Aug 2005 16:31:56 +0100
 
 dbeacon (0.3.6) unstable; urgency=low
 
@@ -32,29 +32,29 @@ dbeacon (0.3.5) unstable; urgency=low
 
   * Upstream version update.
 
- -- Hugo Santos <hsantos@av.it.pt>  Sun, 10 Apr 2005 02:19:57 +0100
+ -- Hugo Santos <hugo@fivebits.net>  Sun, 10 Apr 2005 02:19:57 +0100
 
 dbeacon (0.3.2) unstable; urgency=low
 
   * Another version bump.
 
- -- Hugo Santos <hsantos@av.it.pt>  Thu,  7 Apr 2005 12:42:18 +0100
+ -- Hugo Santos <hugo@fivebits.net>  Thu,  7 Apr 2005 12:42:18 +0100
 
 dbeacon (0.3.1) unstable; urgency=low
 
   * Bumped version
 
- -- Hugo Santos <hsantos@av.it.pt>  Wed,  6 Apr 2005 02:25:01 +0100
+ -- Hugo Santos <hugo@fivebits.net>  Wed,  6 Apr 2005 02:25:01 +0100
 
 dbeacon (0.3) unstable; urgency=low
 
   * Bumped version
 
- -- Hugo Santos <hsantos@av.it.pt>  Tue,  5 Apr 2005 01:39:52 +0100
+ -- Hugo Santos <hugo@fivebits.net>  Tue,  5 Apr 2005 01:39:52 +0100
 
 dbeacon (0.1-1) unstable; urgency=low
 
   * Initial Release.
 
- -- Hugo Santos <hsantos@av.it.pt>  Sun,  19 Mar 2005 18:19:00 +0000
+ -- Hugo Santos <hugo@fivebits.net>  Sun,  19 Mar 2005 18:19:00 +0000
 
