@@ -1,5 +1,10 @@
 ScriptAlias /matrix/ /usr/share/dbeacon-matrix/matrix.pl
 
+# You may specify the dbeacon dump file to be used by
+# using environment the following environment variable:
+#
+# SetEnv DBEACON_DUMP /path/to/dbeacon-dump.xml
+
 #
 # If your Apache 2 has the DEFLATE module you may reduce
 # bw usage with this
