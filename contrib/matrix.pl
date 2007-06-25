@@ -42,12 +42,16 @@ my $ssm_ping_url = 'http://www.venaas.no/multicast/ssmping/';
 
 my $histbeacmatch;
 
-if (-f '/etc/dbeacon/matrix.conf') {
-	do '/etc/dbeacon/matrix.conf';
-}
+if (exists $ENV{'DBEACON_CONF'}) {
+	do $ENV{'DBEACON_CONF'} or die "Failed to open configuration: $!";
+} else {
+	if (-f '/etc/dbeacon/matrix.conf') {
+		do '/etc/dbeacon/matrix.conf';
+	}
 
-if (-f 'matrix.conf') {
-	do 'matrix.conf';
+	if (-f 'matrix.conf') {
+		do 'matrix.conf';
+	}
 }
 
 my $RRDs = "RRDs";

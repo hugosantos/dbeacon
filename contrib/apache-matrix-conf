@@ -3,7 +3,16 @@ ScriptAlias /matrix/ /usr/share/dbeacon-matrix/matrix.pl
 # You may specify the dbeacon dump file to be used by
 # using environment the following environment variable:
 #
-# SetEnv DBEACON_DUMP /path/to/dbeacon-dump.xml
+# <Location /matrix/>
+#  SetEnv DBEACON_DUMP /path/to/dbeacon-dump.xml
+# </Location>
+#
+# It also works DBEACON_CONF, to specify the configuration
+# instead of default to /etc/dbeacon/matrix.conf
+#
+# <Location /matrix/>
+#  SetEnv DBEACON_CONF /path/to/mymatrix.conf
+# </Location>
 
 #
 # If your Apache 2 has the DEFLATE module you may reduce
