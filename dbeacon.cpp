@@ -176,6 +176,8 @@ bool daemonize = false;
 bool use_syslog = false;
 bool past_init = false;
 
+const char *pidfile = NULL;
+
 static void next_event(timeval *);
 static void insert_event(uint32_t, uint32_t);
 static void handle_mcast(int, content_type);
@@ -240,6 +242,7 @@ void usage() {
 	fprintf(stdout, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
 	fprintf(stdout, "  -V, -version           Outputs version information and leaves\n");
 	fprintf(stdout, "  -D, -daemon            fork to the background (daemonize)\n");
+	fprintf(stdout, "  -pidfile FILE          Specifies the PID filename to use\n");
 	fprintf(stdout, "  -c FILE                Specifies the configuration file\n");
 	fprintf(stdout, "  -syslog                Outputs using syslog facility.\n");
 	fprintf(stdout, "\n");
@@ -456,8 +459,21 @@ int main(int argc, char **argv) {
 
 	past_init = true;
 
-	if (daemonize)
-		daemon(0, 0);
+	if (daemonize) {
+		if (daemon(0, 0)) {
+			perror("Failed to daemon()ize.");
+		}
+	}
+
+	if (pidfile) {
+		FILE *f = fopen(pidfile, "w");
+		if (f) {
+			fprintf(f, "%u\n", getpid());
+			fclose(f);
+		} else {
+			log(LOG_ERR, "Failed to open PID file to write.");
+		}
+	}
 
 	// Init timer events
 	insert_event(GARBAGE_COLLECT_EVENT, 30000);
@@ -479,6 +495,7 @@ int main(int argc, char **argv) {
 
 	signal(SIGUSR1, dumpBigBwStats);
 	signal(SIGINT, sendLeaveReport);
+	signal(SIGTERM, sendLeaveReport);
 
 	signal(SIGCHLD, waitForMe); // bloody fork, we dont want to wait for thee
 
@@ -560,6 +577,7 @@ enum {
 	FORCEv6,
 	SHOWVERSION,
 	DAEMON,
+	PIDFILE,
 	USE_SYSLOG,
 	CONFFILE
 };
@@ -599,6 +617,7 @@ static const struct param_tok {
 	{ FORCEv6,	"6", "ipv6", NO_ARG },
 	{ SHOWVERSION,	"V", "version", NO_ARG },
 	{ DAEMON,	"D", "daemon", NO_ARG },
+	{ PIDFILE,	"p", "pidfile", REQ_ARG },
 	{ USE_SYSLOG, "Y", "syslog", NO_ARG },
 	{ CONFFILE,	"c", NULL, REQ_ARG },
 	{ 0, NULL, NULL, 0 }
@@ -765,6 +784,9 @@ static void process_param(const param_tok *tok, const char *arg) {
 		break;
 	case DAEMON:
 		daemonize = true;
+		break;
+	case PIDFILE:
+		pidfile = check_good_string("pidfile", arg);
 		break;
 	case USE_SYSLOG:
 		use_syslog = true;
@@ -1635,6 +1657,8 @@ void dumpBigBwStats(int) {
 
 void sendLeaveReport(int) {
 	send_report(LEAVE_REPORT);
+	if (pidfile)
+		unlink(pidfile);
 	exit(0);
 }
 
