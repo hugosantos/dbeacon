@@ -10,7 +10,7 @@
 # Default-Stop:		0 1 6
 # Short-Description:	Multicast Beacon
 # Description:		Multicast Beacon supporting both IPv4 and IPv6 multicast, collecting information using
-# 			both Any Source Multicast (ASM) and Source-Specific Multicast (SSM).
+#			both Any Source Multicast (ASM) and Source-Specific Multicast (SSM).
 ### END INIT INFO
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
