@@ -18,6 +18,7 @@
 #include <math.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <string.h>
 #include <ctype.h>
 
 using namespace std;

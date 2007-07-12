@@ -240,11 +240,11 @@ void usage() {
 	fprintf(stdout, "  -6, -ipv6              Force IPv6 usage\n");
 	fprintf(stdout, "  -v                     be verbose (use several for more verbosity)\n");
 	fprintf(stdout, "  -U                     Dump periodic bandwidth usage reports to stdout\n");
-	fprintf(stdout, "  -V, -version           Outputs version information and leaves\n");
 	fprintf(stdout, "  -D, -daemon            fork to the background (daemonize)\n");
 	fprintf(stdout, "  -pidfile FILE          Specifies the PID filename to use\n");
-	fprintf(stdout, "  -c FILE                Specifies the configuration file\n");
 	fprintf(stdout, "  -syslog                Outputs using syslog facility.\n");
+	fprintf(stdout, "  -c FILE                Specifies the configuration file\n");
+	fprintf(stdout, "  -V, -version           Outputs version information and leaves\n");
 	fprintf(stdout, "\n");
 
 	exit(1);
@@ -462,16 +462,16 @@ int main(int argc, char **argv) {
 	if (daemonize) {
 		if (daemon(0, 0)) {
 			perror("Failed to daemon()ize.");
+			return -1;
 		}
-	}
-
-	if (pidfile) {
-		FILE *f = fopen(pidfile, "w");
-		if (f) {
-			fprintf(f, "%u\n", getpid());
-			fclose(f);
-		} else {
-			log(LOG_ERR, "Failed to open PID file to write.");
+		if (pidfile) {
+			FILE *f = fopen(pidfile, "w");
+			if (f) {
+				fprintf(f, "%u\n", getpid());
+				fclose(f);
+			} else {
+				log(LOG_ERR, "Failed to open PID file to write.");
+			}
 		}
 	}
 
@@ -615,11 +615,11 @@ static const struct param_tok {
 	{ HELP,		"h", "help", NO_ARG },
 	{ FORCEv4,	"4", "ipv4", NO_ARG },
 	{ FORCEv6,	"6", "ipv6", NO_ARG },
-	{ SHOWVERSION,	"V", "version", NO_ARG },
 	{ DAEMON,	"D", "daemon", NO_ARG },
 	{ PIDFILE,	"p", "pidfile", REQ_ARG },
-	{ USE_SYSLOG, "Y", "syslog", NO_ARG },
+	{ USE_SYSLOG,	"Y", "syslog", NO_ARG },
 	{ CONFFILE,	"c", NULL, REQ_ARG },
+	{ SHOWVERSION,	"V", "version", NO_ARG },
 	{ 0, NULL, NULL, 0 }
 };
 
@@ -1657,7 +1657,7 @@ void dumpBigBwStats(int) {
 
 void sendLeaveReport(int) {
 	send_report(LEAVE_REPORT);
-	if (pidfile)
+	if (daemonize && pidfile)
 		unlink(pidfile);
 	exit(0);
 }

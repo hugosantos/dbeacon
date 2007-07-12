@@ -12,18 +12,32 @@ dbeacon \- Distributed IPv4/IPv6 multicast beacon
 \fBdbeacon\fR is a network level management tool aiming at getting various statistics about multicast connectivity. Its first usage is to check out if you can send/receive toward/from an IPv4/IPv6 multicast network. Its second usage is to gather various statistics by using a known multicast ASM group, for example TTL between each multicast peers, loss or jitter figures. Theses statistics are kept internally but can be dumped periodically in a file in xml format for latter processing. Statistics gathering is completetly distributed and rely on the powerful nature of ASM. No server is required, but maybe a http server for accessing the statistics and build an adjacency matrix of the peers.
 .SH OPTIONS
 .TP
+\fB-n\fR \fINAME\fR, \fB-name\fR \fINAME\fR
+The name identifying you on the dbeacon session. If not specified, dbeacon will use the hostname of the running machine.
+.TP
 \fB-a\fR \fIMAIL\fR
 Administrative contact. This is an e-mail used for join you, for example to
 notify you that something is wrong is your multicast connectivity
 .TP
+\fB-i\fR \fIIN\fR, \fB-interface\fR \fIIN\fR
+Use IN instead of the default interface for multicast.
+.TP
 \fB-b\fR \fIBEACON_ADDR\fR/\fIPORT\fR
 This is the IPv4/IPv6 address of the ASM group used by dbeacon to gather statistics. It can be specified as a DNS name too.
 .TP
-\fB-n\fR \fINAME\fR
-The name identifying you on the dbeacon session. If not specified, dbeacon will use the hostname of the running machine.
-.TP
 \fB-S\fR \fIGROUP_ADDR\fR/\fIPORT\fR
 Enables SSM reception/sending on optional GROUP_ADDR/PORT
+.TP
+\fB-O\fR
+This option enable SSM data sending in addition to ASM data. It can be used to
+check if people can reach you via SSM.
+.TP
+\fB-B\fR \fIADDR\fR
+This allows you to bootstrap from an ADDR that is already in the matrix. This
+option is useful when you ASM connectivity is broken but SSM connectivity works.
+.TP
+\fB-P\fR, \fB-ssmping\fR
+Enable SSM Ping server capability.
 .TP
 \fB-s\fR \fIADDR\fR
 Bind to local address. This allow you to specify the multicast source of the packets sent by your beacon.
@@ -32,46 +46,53 @@ Bind to local address. This allow you to specify the multicast source of the pac
 Dump periodic reports to dump.xml or specified file. This file may be latter processed by any XML compliant script. On a http server, you
 can process the dump to create a nice adjacency matrix.
 .TP
-\fB-I\fR \fINUMBER\fR
+\fB-I\fR \fINUMBER\fR, \fB-interval\fR \fINUMBER\fR
 Interval between refresh of the dump file. Defaults to 5 secs if not specified
 .TP
-\fB-W\fR \fItype$url\fR
-Specify a website to announce. type is one of lg, matrix, if type is not specified a generic url will be announced.
+\fB-W\fR \fIURL\fR, \fB-website\fR \fIURL\fR
+Specify a website to announce. 
 .TP
-\fB-L\fR \fIprogram\fR
-Launch program after each dump. The first argument will be the dump filename.
+\fB-Wm\fR \fIURL\fR, \fB-matrix\fR \fIURL\fR
+Specify your matrix URL.
 .TP
-\fB-4\fR
-Force IPv4 usage (Default is IPv6).
-.TP
-\fB-6\fR
-Force IPv6 usage
-.TP
-\fB-v\fR
-verbose mode (use several for more verbosity)
-.TP
-\fB-P\fR
-Enable SSM Ping server capability.
-.TP
-\fB-U\fR
-Dump periodic bandwidth usage reports to stdout
+\fB-Wl\fR \fIURL\fR, \fB-lg\fR \fIURL\fR
+Specify your looking glass URL.
 .TP
 \fB-C\fR \fICC\fR
 Specify your two letter Country Code.
+.TP
+\fB-L\fR \fIprogram\fR
+Launch program after each dump. The first argument will be the dump filename.
 .TP
 \fB-F\fR \fIflag\fR
 Specify a flag to announce. For example to announce that your host is running a
 ssmpingd deamon, use 'ssmping' as a flag.
 .TP
-\fB-B\fR \fIADDR\fR
-This allows you to bootstrap from an ADDR that is already in the matrix. This
-option is useful when you ASM connectivity is broken but SSM connectivity works.
+\fB-4\fR, \fB-ipv4\fR
+Force IPv4 usage (Default is IPv6).
 .TP
-\fB-O\fR
-This option enable SSM data sending in addition to ASM data. It can be used to
-check if people can reach you via SSM.
+\fB-6\fR, \fB-ipv6\fR
+Force IPv6 usage
 .TP
-\fB-V\fR
+\fB-v\fR
+verbose mode (use several for more verbosity)
+.TP
+\fB-U\fR
+Dump periodic bandwidth usage reports to stdout
+.TP
+\fB-D\fR, \fB-daemon\fR
+fork to the background (daemonize)
+.TP
+\fB-pidfile\fR \fIFILE\fR
+Path to the PID file to write to.
+.TP
+\fB-syslog\fR
+Outputs using syslog facility.
+.TP
+\fB-c\fR \fIFILE\fR
+Specifies the configuration file to use. Each of the above command-line parameters can be defined there.
+.TP
+\fB-V\fR, \fB-version\fR
 Outputs version information and leaves
 .SH BUGS
 Should be reported to the core developer Hugo Santos <hugo@fivebits.net>.
