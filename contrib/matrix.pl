@@ -45,7 +45,9 @@ my $histbeacmatch;
 if (exists $ENV{'DBEACON_CONF'}) {
 	do $ENV{'DBEACON_CONF'} or die "Failed to open configuration: $!";
 } else {
-	if (-f '/etc/dbeacon/matrix.conf') {
+	if (-f '/etc/dbeacon/matrix/matrix.conf') {
+		do '/etc/dbeacon/matrix/matrix.conf';
+	} elsif (-f '/etc/dbeacon/matrix.conf') {
 		do '/etc/dbeacon/matrix.conf';
 	}
 
