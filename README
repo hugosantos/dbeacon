@@ -48,8 +48,11 @@ Usage: dbeacon [OPTIONS...]
   -6, -ipv6              Force IPv6 usage
   -v                     be verbose (use several for more verbosity)
   -U                     Dump periodic bandwidth usage reports to stdout
-  -V, -version           Outputs version information and leaves
+  -D, -daemon            fork to the background (daemonize)
+  -pidfile FILE          Specifies the PID filename to use
+  -syslog                Outputs using syslog facility.
   -c FILE                Specifies the configuration file
+  -V, -version           Outputs version information and leaves
 
 To join our experimental deployment in the m6bone use:
 
@@ -67,4 +70,3 @@ Licensing
 ---------
 
 This code is licensed under the GNU Public Licence (GPL) v2.
-

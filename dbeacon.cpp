@@ -50,7 +50,7 @@
 
 using namespace std;
 
-const char * const versionInfo = "0.4.0-pre ($Rev$)";
+const char * const versionInfo = "0.3.9.1 ($Rev$)";
 
 const char * const defaultIPv6SSMChannel = "ff3e::beac";
 const char * const defaultIPv4SSMChannel = "232.2.3.2";
