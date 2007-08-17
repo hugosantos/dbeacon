@@ -701,7 +701,8 @@ static void process_param(const param_tok *tok, const char *arg) {
 		probeAddrLiteral = arg;
 		break;
 	case SSMADDR:
-		probeSSMAddrLiteral = arg;
+		if (arg)
+			probeSSMAddrLiteral = arg;
 		useSSM = true;
 		listenForSSM = true;
 		break;
