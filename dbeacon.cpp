@@ -1664,6 +1664,18 @@ outputBwStats(uint32_t diff, uint64_t txbytes, double txrate, uint64_t rxbytes,
 			"bytes (%.2f Kb/s)", diff, txbytes, txrate, rxbytes, rxrate);
 }
 
+static void scaleBeaconInterval(double rate) {
+	/* `rate' is the incoming data rate in kbit/s gathered from the
+	 * last 10 seconds. */
+
+	/* smooth our values */
+	if (rate < 4.)
+		rate = 4.;
+
+	// Increase traffic will result in a larger interval between probe sending events
+	beacInt = 4 * (log(rate) / 1.38);
+}
+
 void do_bw_dump(bool big) {
 	if (big) {
 		outputBwStats(600, bigBytesReceived, bigBytesReceived * 8 / (1000. * 600),
@@ -1686,12 +1698,7 @@ void do_bw_dump(bool big) {
 		bytesReceived = 0;
 		bytesSent = 0;
 
-		// adjust beacInt
-		if (incomingRate < 4.)
-			incomingRate = 4.;
-
-		// Increase traffic will result in a larger interval between probe sending events
-		beacInt = 4 * (log(incomingRate) / 1.38);
+		scaleBeaconInterval(incomingRate);
 	}
 }
 
