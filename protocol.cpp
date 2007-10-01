@@ -309,7 +309,7 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 		for (uint8_t *hd = tlv_begin(buff + 5, len); hd; hd = tlv_next(hd, len)) {
 			if (verbose > 4) {
 				char tmp[64];
-				from.print(tmp, sizeof(tmp));
+				from.to_string(tmp, sizeof(tmp));
 				fprintf(stderr, "Parsing TLV (%i, %i) for %s [len is now %i]\n", (int)hd[0], (int)hd[1], tmp, len);
 			}
 

@@ -73,7 +73,7 @@ void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer,
 
 	if (verbose > 1) {
 		char tmp[64];
-		info("Got SSM Ping Request from %s", from.print(tmp, sizeof(tmp)));
+		info("Got SSM Ping Request from %s", from.to_string(tmp, sizeof(tmp)));
 	}
 
 	buffer[0] = SSMPING_ANSWER;

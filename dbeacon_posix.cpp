@@ -489,7 +489,7 @@ int address::port() const {
 	return -1;
 }
 
-char *address::print(char *str, size_t len, bool printport) const {
+char *address::to_string(char *str, size_t len, bool printport) const {
 	uint16_t port;
 
 	if (stor.ss_family == AF_INET6) {
@@ -506,6 +506,11 @@ char *address::print(char *str, size_t len, bool printport) const {
 		snprintf(str + strlen(str), len - strlen(str), "/%u", port);
 
 	return str;
+}
+
+std::string address::to_string(bool printport) const {
+	char tmp[128];
+	return std::string(to_string(tmp, sizeof(tmp), printport));
 }
 
 bool address::is_equal(const address &a) const {

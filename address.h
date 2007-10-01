@@ -18,6 +18,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include <string>
+
 struct sockaddr_in;
 struct sockaddr_in6;
 
@@ -57,7 +59,8 @@ struct address {
 
 	void set(const sockaddr *);
 
-	char *print(char *, size_t, bool port = true) const;
+	char *to_string(char *, size_t, bool port = true) const;
+	std::string to_string(bool port = true) const;
 
 	friend bool operator== (const address &a1, const address &a2) {
 		return a1.is_equal(a2);

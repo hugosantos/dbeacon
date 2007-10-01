@@ -330,7 +330,7 @@ int main(int argc, char **argv) {
 		if (!probeAddr.parse(probeAddrLiteral.c_str(), true))
 			return -1;
 
-		probeAddr.print(sessionName, sizeof(sessionName));
+		probeAddr.to_string(sessionName, sizeof(sessionName));
 
 		if (!probeAddr.is_multicast())
 			fatal("Specified probe addr (%s) is not of a multicast group.",
@@ -492,10 +492,8 @@ int main(int argc, char **argv) {
 
 	send_report(WEBSITE_REPORT_EVENT);
 
-	beaconUnicastAddr.print(tmp, sizeof(tmp), false);
-
 	info("Local name is `%s` [Beacon group: %s, Local address: %s]",
-			beaconName.c_str(), sessionName, tmp);
+		beaconName.c_str(), sessionName, beaconUnicastAddr.to_string(tmp, sizeof(tmp), false));
 
 	signal(SIGUSR1, dumpBigBwStats);
 	signal(SIGINT, sendLeaveReport);
@@ -1070,40 +1068,36 @@ void handle_event() {
 	}
 }
 
-void handle_gc() {
-	Sources::iterator i = sources.begin();
+static inline bool isStillValid(uint64_t now, uint64_t last_event) {
+	return (now - last_event) <= timeFact(timeOutI);
+}
 
+void handle_gc() {
 	uint64_t now = get_timestamp();
 
+	Sources::iterator i = sources.begin();
 	while (i != sources.end()) {
-		bool remove = false;
-		if ((now - i->second.lastevent) > timeFact(timeOutI)) {
-			remove = true;
-		}
-		if (!remove) {
-			i->second.ASM.s.check_validity(now);
-			i->second.SSM.s.check_validity(now);
+		Sources::iterator k = i;
+		i++;
 
-			beaconSource::ExternalSources::iterator j = i->second.externalSources.begin();
-			while (j != i->second.externalSources.end()) {
-				if ((now - j->second.lastupdate) > timeFact(timeOutI)) {
-					beaconSource::ExternalSources::iterator k = j;
-					j++;
-					i->second.externalSources.erase(k);
+		if (isStillValid(now, k->second.lastevent)) {
+			k->second.ASM.s.check_validity(now);
+			k->second.SSM.s.check_validity(now);
+
+			beaconSource::ExternalSources::iterator j = k->second.externalSources.begin();
+			while (j != k->second.externalSources.end()) {
+				beaconSource::ExternalSources::iterator m = j;
+				j++;
+
+				if (isStillValid(now, m->second.lastupdate)) {
+					m->second.ASM.check_validity(now);
+					m->second.SSM.check_validity(now);
 				} else {
-					j->second.ASM.check_validity(now);
-					j->second.SSM.check_validity(now);
-
-					j++;
+					k->second.externalSources.erase(m);
 				}
 			}
-
-			i++;
 		} else {
-			Sources::iterator j = i;
-			i++;
-
-			removeSource(j->first, true);
+			removeSource(k->first, true);
 		}
 	}
 }
@@ -1123,8 +1117,7 @@ void handle_mcast(int sock, content_type type) {
 
 	if (verbose > 3) {
 		char tmp[64];
-		from.print(tmp, sizeof(tmp));
-		info("RecvMsg(%s): len = %u", tmp, len);
+		info("RecvMsg(%s): len = %u", from.to_string(tmp, sizeof(tmp)), len);
 	}
 
 	if (type == SSMPING) {
@@ -1168,19 +1161,15 @@ static void CountSSMJoin(const address &group, const address &source) {
 		j->second.count++;
 
 	if (j->second.flags & SGINFO_F_JOIN_FAILED) {
+		char tmp[64];
+
 		if (SSMJoin(ssmMcastSock, group, source) < 0) {
-			if (verbose) {
-				char tmp[64];
-				source.print(tmp, sizeof(tmp));
+			if (verbose)
 				info("Failed to join SSM (S,G) where S = %s, reason: %s",
-					tmp, strerror(errno));
-			}
+					source.to_string(tmp, sizeof(tmp)), strerror(errno));
 		} else {
-			if (verbose > 1) {
-				char tmp[64];
-				source.print(tmp, sizeof(tmp));
-				info("Joined SSM (S, G) where S = %s", tmp);
-			}
+			if (verbose > 1)
+				info("Joined SSM (S, G) where S = %s", source.to_string(tmp, sizeof(tmp)));
 
 			j->second.flags &= ~SGINFO_F_JOIN_FAILED;
 		}
@@ -1220,13 +1209,10 @@ beaconSource &getSource(const address &baddr, const char *name, uint64_t now, ui
 	if (verbose) {
 		char tmp[64];
 
-		baddr.print(tmp, sizeof(tmp));
-
-		if (name) {
-			info("Adding source %s [%s]", tmp, name);
-		} else {
-			info("Adding source %s", tmp);
-		}
+		if (name)
+			info("Adding source %s [%s]", baddr.to_string(tmp, sizeof(tmp)), name);
+		else
+			info("Adding source %s", baddr.to_string(tmp, sizeof(tmp)));
 	}
 
 	if (name)
@@ -1249,14 +1235,13 @@ void removeSource(const address &baddr, bool timeout) {
 		if (verbose) {
 			char tmp[64];
 
-			baddr.print(tmp, sizeof(tmp));
-
 			if (i->second.identified) {
 				info("Removing source %s [%s]%s",
-					tmp, i->second.name.c_str(), (timeout ? " by Timeout" : ""));
+					baddr.to_string(tmp, sizeof(tmp)), i->second.name.c_str(),
+					(timeout ? " by Timeout" : ""));
 			} else {
 				info("Removing source %s%s",
-					tmp, (timeout ? " by Timeout" : ""));
+					baddr.to_string(tmp, sizeof(tmp)), (timeout ? " by Timeout" : ""));
 			}
 		}
 
@@ -1287,11 +1272,10 @@ beaconExternalStats &beaconSource::getExternal(const address &baddr, uint64_t no
 
 		k->second.age = 0;
 
-		char tmp[64];
-		baddr.print(tmp, sizeof(tmp));
-
-		if (verbose)
-			info("Adding external source (%s) %s", name.c_str(), tmp);
+		if (verbose) {
+			char tmp[64];
+			info("Adding external source (%s) %s", name.c_str(), baddr.to_string(tmp, sizeof(tmp)));
+		}
 	}
 
 	beaconExternalStats &stats = k->second;
@@ -1469,17 +1453,14 @@ int send_report(int type) {
 			const address *to = &(*i);
 
 			char tmp[64];
-			to->print(tmp, sizeof(tmp));
 
-			if (verbose) {
-				cerr << "Sending Report to " << tmp << endl;
-			}
+			if (verbose)
+				cerr << "Sending Report to " << to->to_string(tmp, sizeof(tmp)) << endl;
 
-			if ((res = sendto(mcastSock, buffer, len, 0, to->saddr(), to->addrlen())) < 0) {
-				cerr << "Failed to send report to " << tmp << ": " << strerror(errno) << endl;
-			} else {
+			if ((res = sendto(mcastSock, buffer, len, 0, to->saddr(), to->addrlen())) < 0)
+				cerr << "Failed to send report to " << to->to_string(tmp, sizeof(tmp)) << ": " << strerror(errno) << endl;
+			else
 				bytesSent += res;
-			}
 		}
 	}
 
@@ -1514,8 +1495,6 @@ void do_dump() {
 	if (!fp)
 		return;
 
-	char tmp[64];
-
 	uint64_t now = get_timestamp();
 	uint64_t diff = now - lastDumpDumpBwTS;
 	lastDumpDumpBwTS = now;
@@ -1529,17 +1508,16 @@ void do_dump() {
 
 	fprintf(fp, "<group addr=\"%s\"", sessionName);
 
-	if (IsSSMEnabled()) {
-		ssmProbeAddr.print(tmp, sizeof(tmp));
-		fprintf(fp, " ssmgroup=\"%s\"", tmp);
-	}
+	char tmp[64];
+
+	if (IsSSMEnabled())
+		fprintf(fp, " ssmgroup=\"%s\"", ssmProbeAddr.to_string(tmp, sizeof(tmp)));
 
 	fprintf(fp, " int=\"%.2f\">\n", beacInt);
 
 	if (!probeAddr.is_unspecified()) {
-		beaconUnicastAddr.print(tmp, sizeof(tmp));
-
-		fprintf(fp, "\t<beacon name=\"%s\" addr=\"%s\"", beaconName.c_str(), tmp);
+		fprintf(fp, "\t<beacon name=\"%s\" addr=\"%s\"", beaconName.c_str(),
+				beaconUnicastAddr.to_string(tmp, sizeof(tmp)));
 		if (!adminContact.empty())
 			fprintf(fp, " contact=\"%s\"", adminContact.c_str());
 		if (!twoLetterCC.empty())
@@ -1561,8 +1539,7 @@ void do_dump() {
 		fprintf(fp, "\t\t<sources>\n");
 
 		for (Sources::const_iterator i = sources.begin(); i != sources.end(); i++) {
-			i->first.print(tmp, sizeof(tmp));
-			fprintf(fp, "\t\t\t<source addr=\"%s\"", tmp);
+			fprintf(fp, "\t\t\t<source addr=\"%s\"", i->first.to_string(tmp, sizeof(tmp)));
 			if (i->second.identified) {
 				fprintf(fp, " name=\"%s\"", i->second.name.c_str());
 				if (!i->second.adminContact.empty())
@@ -1596,8 +1573,7 @@ void do_dump() {
 			if (!i->second.adminContact.empty())
 				fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 		}
-		i->first.print(tmp, sizeof(tmp));
-		fprintf(fp, " addr=\"%s\"", tmp);
+		fprintf(fp, " addr=\"%s\"", i->first.to_string(tmp, sizeof(tmp)));
 		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
 		fprintf(fp, " rxlocal=\"%s\"", i->second.rxlocal(now) ? "true" : "false");
 		fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
@@ -1625,8 +1601,7 @@ void do_dump() {
 				fprintf(fp, " name=\"%s\"", j->second.name.c_str());
 				fprintf(fp, " contact=\"%s\"", j->second.contact.c_str());
 			}
-			j->first.print(tmp, sizeof(tmp));
-			fprintf(fp, " addr=\"%s\"", tmp);
+			fprintf(fp, " addr=\"%s\"", j->first.to_string(tmp, sizeof(tmp)));
 			fprintf(fp, " age=\"%u\">\n", j->second.age);
 			if (j->second.ASM.valid)
 				dumpStats(fp, "asm", j->second.ASM, now, i->second.sttl, false);
