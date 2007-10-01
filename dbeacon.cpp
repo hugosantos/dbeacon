@@ -302,6 +302,10 @@ extern "C" void waitForMe(int) {
 
 static void parse_arguments(int, char **);
 
+static inline bool IsSSMEnabled() {
+	return ssmMcastSock != 0;
+}
+
 int main(int argc, char **argv) {
 	int res;
 
@@ -442,7 +446,7 @@ int main(int argc, char **argv) {
 			flags |= SSMPING_CAPABLE;
 	}
 
-	if (ssmMcastSock) {
+	if (IsSSMEnabled()) {
 		flags |= SSM_CAPABLE;
 
 		uint64_t now = get_timestamp();
@@ -1144,6 +1148,62 @@ void Stats::check_validity(uint64_t now) {
 		valid = false;
 }
 
+typedef std::pair<address, address> SGPair;
+struct SGInfo {
+	int count;
+#define SGINFO_F_JOIN_FAILED	0x0001
+	uint32_t flags;
+};
+typedef std::map<SGPair, SGInfo> SGCountMap;
+static SGCountMap countMap;
+
+static void CountSSMJoin(const address &group, const address &source) {
+	SGCountMap::iterator j = countMap.find(SGPair(group, source));
+
+	if (j == countMap.end()) {
+		j = countMap.insert(std::make_pair(SGPair(group, source), SGInfo())).first;
+		j->second.count = 1;
+		j->second.flags = SGINFO_F_JOIN_FAILED;
+	} else
+		j->second.count++;
+
+	if (j->second.flags & SGINFO_F_JOIN_FAILED) {
+		if (SSMJoin(ssmMcastSock, group, source) < 0) {
+			if (verbose) {
+				char tmp[64];
+				source.print(tmp, sizeof(tmp));
+				info("Failed to join SSM (S,G) where S = %s, reason: %s",
+					tmp, strerror(errno));
+			}
+		} else {
+			if (verbose > 1) {
+				char tmp[64];
+				source.print(tmp, sizeof(tmp));
+				info("Joined SSM (S, G) where S = %s", tmp);
+			}
+
+			j->second.flags &= ~SGINFO_F_JOIN_FAILED;
+		}
+	}
+}
+
+static void CountSSMLeave(const address &group, const address &source) {
+	SGCountMap::iterator j = countMap.find(SGPair(group, source));
+
+	/* This should actually be assert(j != countMap.end()); */
+	if (j == countMap.end())
+		return;
+
+	j->second.count--;
+
+	if (j->second.count == 0) {
+		if (!(j->second.flags & SGINFO_F_JOIN_FAILED))
+			SSMLeave(ssmMcastSock,group, source);
+
+		countMap.erase(j);
+	}
+}
+
 beaconExternalStats::beaconExternalStats() : identified(false) {}
 
 beaconSource &getSource(const address &baddr, const char *name, uint64_t now, uint64_t recvdts, bool rx_local) {
@@ -1177,22 +1237,8 @@ beaconSource &getSource(const address &baddr, const char *name, uint64_t now, ui
 	if (rx_local)
 		src.lastlocalevent = now;
 
-	if (ssmMcastSock) {
-		if (SSMJoin(ssmMcastSock, ssmProbeAddr, baddr) != 0) {
-			if (verbose) {
-				char tmp[64];
-				baddr.print(tmp, sizeof(tmp));
-				info("Failed to join SSM (S,G) where S = %s, reason: %s",
-					tmp, strerror(errno));
-			}
-		} else {
-			if (verbose > 1) {
-				char tmp[64];
-				baddr.print(tmp, sizeof(tmp));
-				info("Joined SSM (S, G) where S = %s", tmp);
-			}
-		}
-	}
+	if (IsSSMEnabled())
+		CountSSMJoin(ssmProbeAddr, baddr);
 
 	return src;
 }
@@ -1214,9 +1260,8 @@ void removeSource(const address &baddr, bool timeout) {
 			}
 		}
 
-		if (ssmMcastSock) {
-			SSMLeave(ssmMcastSock, ssmProbeAddr, baddr);
-		}
+		if (IsSSMEnabled())
+			CountSSMLeave(ssmProbeAddr, baddr);
 
 		sources.erase(i);
 	}
@@ -1484,7 +1529,7 @@ void do_dump() {
 
 	fprintf(fp, "<group addr=\"%s\"", sessionName);
 
-	if (ssmMcastSock) {
+	if (IsSSMEnabled()) {
 		ssmProbeAddr.print(tmp, sizeof(tmp));
 		fprintf(fp, " ssmgroup=\"%s\"", tmp);
 	}
