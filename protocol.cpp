@@ -61,6 +61,21 @@ static bool write_tlv_uint(uint8_t *buff, int maxlen, int &ptr, uint8_t type,
 	return true;
 }
 
+static inline void write_u32(uint8_t *ptr, uint32_t value) {
+	/* We use memcpy due to non-aligned write problems in some archs */
+	value = htonl(value);
+	memcpy(ptr, &value, sizeof(uint32_t));
+}
+
+static inline void write_f(uint8_t *ptr, float value) {
+	union {
+		uint32_t u;
+		float f;
+	} u;
+	u.f = value;
+	write_u32(ptr, u.u);
+}
+
 /* Protocol method. writes a Stats block into a TLV block */
 static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type,
 			uint32_t age, int sttl, const beaconMcastState &st) {
@@ -69,33 +84,13 @@ static bool write_tlv_stats(uint8_t *buff, int maxlen, int &ptr, uint8_t type,
 
 	uint8_t *b = buff + ptr;
 
-	uint32_t val;
-
-	/* We use memcpy due to non-aligned write problems in some archs */
-	val = htonl((uint32_t)st.s.timestamp);
-	memcpy(b + 0, &val, sizeof(val));
-	val = htonl(age);
-	memcpy(b + 4, &val, sizeof(val));
-
-	// *((uint32_t *)(b + 0)) = htonl((uint32_t)st.s.timestamp);
-	// *((uint32_t *)(b + 4)) = htonl(age);
+	write_u32(b + 0, st.s.timestamp);
+	write_u32(b + 4, age);
 
 	b[8] = (sttl ? sttl : defaultTTL) - st.s.rttl;
 
-	uint32_t *stats = (uint32_t *)(b + 9);
-
-	union {
-		uint32_t u;
-		float f;
-	} tu;
-
-	tu.f = st.s.avgdelay;
-	val = htonl(tu.u);
-	memcpy(stats + 0, &val, sizeof(val));
-
-	tu.f = st.s.avgjitter;
-	val = htonl(tu.u);
-	memcpy(stats + 1, &val, sizeof(val));
+	write_f(b + 9, st.s.avgdelay);
+	write_f(b + 13, st.s.avgjitter);
 
 	/* average loss in 0..255 range */
 	b[17] = (uint8_t)(st.s.avgloss * 0xff);
@@ -218,8 +213,8 @@ int build_probe(uint8_t *buff, int maxlen, uint32_t sn, uint64_t ts) {
 	// 4 packet type
 	buff[3] = 0; // Probe
 
-	*((uint32_t *)(buff + 4)) = htonl(sn);
-	*((uint32_t *)(buff + 8)) = htonl((uint32_t)ts);
+	write_u32(buff + 4, sn);
+	write_u32(buff + 8, ts);
 
 	return 4 + 4 + 4;
 }
@@ -235,34 +230,34 @@ static inline uint8_t *tlv_next(uint8_t *hd, int &len) {
 	return tlv_begin(hd + hd[1] + 2, len);
 }
 
+static inline uint32_t read_u32(uint8_t *data) {
+	uint32_t v;
+	memcpy(&v, data, 4);
+	return ntohl(v);
+}
+
+/* black magic ._.' */
+static inline float read_f(uint8_t *data) {
+	union {
+		uint32_t u;
+		float f;
+	} u;
+
+	u.u = read_u32(data);
+	return u.f;
+}
+
 static bool read_tlv_stats(uint8_t *tlv, beaconExternalStats &extb, Stats &st) {
 	if (tlv[1] != 20)
 		return false;
 
-	uint32_t tmp;
-
-	memcpy(&tmp, tlv + 2, sizeof(tmp));
-	st.timestamp = ntohl(tmp);
-	memcpy(&tmp, tlv + 6, sizeof(tmp));
-	extb.age = ntohl(tmp);
-
-	// st.timestamp = ntohl(*(uint32_t *)(tlv + 2));
-	// extb.age = ntohl(*(uint32_t *)(tlv + 6));
+	st.timestamp = read_u32(tlv + 2);
+	extb.age = read_u32(tlv + 6);
 
 	st.rttl = tlv[10];
 
-	union {
-		uint32_t u;
-		float f;
-	} tu;
-
-	memcpy(&tmp, tlv + 11, sizeof(tmp));
-	tu.u = ntohl(tmp);
-	st.avgdelay = tu.f;
-
-	memcpy(&tmp, tlv + 15, sizeof(tmp));
-	tu.u = ntohl(tmp);
-	st.avgjitter = tu.f;
+	st.avgdelay = read_f(tlv + 11);
+	st.avgjitter = read_f(tlv + 15);
 
 	st.avgloss = tlv[19] / 255.;
 	st.avgdup = tlv[20] == 0xff ? 1e10 : tlv[20] / 25.5;
@@ -296,8 +291,8 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 
 	if (buff[3] == 0) {
 		if (len == 12) {
-			uint32_t seq = ntohl(*((uint32_t *)(buff + 4)));
-			uint32_t ts = ntohl(*((uint32_t *)(buff + 8)));
+			uint32_t seq = read_u32(buff + 4);
+			uint32_t ts = read_u32(buff + 8);
 			getSource(from, 0, now, recvdts, true).update(ttl, seq, ts, now, recvdts, ssm);
 		}
 		return;
@@ -383,11 +378,8 @@ void handle_nmsg(const address &from, uint64_t recvdts, int ttl, uint8_t *buff, 
 					src.CC = string((char *)hd + 2, 2);
 				}
 			} else if (hd[0] == T_SOURCE_FLAGS) {
-				if (hd[1] == 4) {
-					uint32_t v;
-					memcpy(&v, hd + 2, 4);
-					src.Flags = ntohl(v);
-				}
+				if (hd[1] == 4)
+					src.Flags = read_u32(hd + 2);
 			} else if (hd[0] == T_LEAVE) {
 				removeSource(from, false);
 				break;
