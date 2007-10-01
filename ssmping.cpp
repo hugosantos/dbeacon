@@ -17,6 +17,7 @@
 #include "address.h"
 #include "msocket.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -29,6 +30,8 @@ static const int maxSSMPingMessage = 1000;
 
 static const char *SSMPingV6ResponseChannel = "ff3e::4321:1234";
 static const char *SSMPingV4ResponseChannel = "232.43.211.234";
+
+static address SSMPingV6Addr(AF_INET6), SSMPingV4Addr(AF_INET);
 
 static int ssmPingSocket = -1;
 
@@ -55,6 +58,9 @@ int SetupSSMPing() {
 		return -1;
 	}
 
+	assert(SSMPingV4Addr.set_addr(SSMPingV4ResponseChannel));
+	assert(SSMPingV6Addr.set_addr(SSMPingV6ResponseChannel));
+
 	ListenTo(SSMPING, ssmPingSocket);
 
 	return 0;
@@ -67,8 +73,7 @@ void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer,
 
 	if (verbose > 1) {
 		char tmp[64];
-		from.print(tmp, sizeof(tmp));
-		info("Got SSM Ping Request from %s", tmp);
+		info("Got SSM Ping Request from %s", from.print(tmp, sizeof(tmp)));
 	}
 
 	buffer[0] = SSMPING_ANSWER;
@@ -76,11 +81,10 @@ void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer,
 	if (SendTo(s, buffer, len, to, from) < 0)
 		return;
 
-	/* reuse address structure */
-	if (!from.set_addr(from.family() == AF_INET6 ? SSMPingV6ResponseChannel :
-							SSMPingV4ResponseChannel))
-		return;
+	address mcastDest(from.family() == AF_INET6 ?
+			SSMPingV6Addr : SSMPingV4Addr);
+	mcastDest.set_port(from.port());
 
-	SendTo(s, buffer, len, to, from);
+	SendTo(s, buffer, len, to, mcastDest);
 }
 

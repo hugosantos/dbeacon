@@ -23,6 +23,8 @@ struct sockaddr_in6;
 
 struct address {
 	address();
+	address(int family);
+	address(const address &address);
 
 	sockaddr_in *v4();
 	sockaddr_in6 *v6();
@@ -46,12 +48,16 @@ struct address {
 	bool is_multicast() const;
 	bool is_unspecified() const;
 
+	int port() const;
+
 	bool is_equal(const address &) const;
 	int compare(const address &) const;
 
+	bool copy_address(const address &source);
+
 	void set(const sockaddr *);
 
-	void print(char *, size_t, bool port = true) const;
+	char *print(char *, size_t, bool port = true) const;
 
 	friend bool operator== (const address &a1, const address &a2) {
 		return a1.is_equal(a2);

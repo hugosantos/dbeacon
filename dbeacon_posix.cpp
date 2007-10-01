@@ -359,6 +359,15 @@ address::address() {
 	memset(&stor, 0, sizeof(stor));
 }
 
+address::address(int family) {
+	memset(&stor, 0, sizeof(stor));
+	stor.ss_family = family;
+}
+
+address::address(const address &original)
+	: stor(original.stor) {
+}
+
 sockaddr_in *address::v4() { return (sockaddr_in *)&stor; }
 sockaddr_in6 *address::v6() { return (sockaddr_in6 *)&stor; }
 
@@ -472,7 +481,15 @@ bool address::is_unspecified() const {
 	return true;
 }
 
-void address::print(char *str, size_t len, bool printport) const {
+int address::port() const {
+	if (stor.ss_family == AF_INET6)
+		return ntohs(v6()->sin6_port);
+	else if (stor.ss_family == AF_INET)
+		return ntohs(v4()->sin_port);
+	return -1;
+}
+
+char *address::print(char *str, size_t len, bool printport) const {
 	uint16_t port;
 
 	if (stor.ss_family == AF_INET6) {
@@ -482,11 +499,13 @@ void address::print(char *str, size_t len, bool printport) const {
 		inet_ntop(AF_INET, &v4()->sin_addr, str, len);
 		port = ntohs(v4()->sin_port);
 	} else {
-		return;
+		return NULL;
 	}
 
 	if (printport)
 		snprintf(str + strlen(str), len - strlen(str), "/%u", port);
+
+	return str;
 }
 
 bool address::is_equal(const address &a) const {
@@ -512,6 +531,18 @@ void address::set(const sockaddr *sa) {
 		v4()->sin_addr = ((const sockaddr_in *)sa)->sin_addr;
 		v4()->sin_port = ((const sockaddr_in *)sa)->sin_port;
 	}
+}
+
+bool address::copy_address(const address &source) {
+	if (family() != source.family())
+		return false;
+
+	if (stor.ss_family == AF_INET6)
+		v6()->sin6_addr = source.v6()->sin6_addr;
+	else
+		v4()->sin_addr = source.v4()->sin_addr;
+
+	return true;
 }
 
 uint64_t get_timestamp() {
