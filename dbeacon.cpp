@@ -1629,6 +1629,7 @@ void doLaunchSomething() {
 	if (p == 0) {
 		execlp(launchSomething.c_str(), launchSomething.c_str(),
 		       dumpFile.c_str(), NULL);
+		exit(errno);
 	}
 }
 
