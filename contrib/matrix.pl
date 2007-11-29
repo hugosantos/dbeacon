@@ -36,6 +36,8 @@ our $matrix_link_title = 0;
 our $default_full_matrix = 0;
 our $faq_page = 'http://fivebits.net/proj/dbeacon/wiki/FAQ';
 
+our $max_beacon_name_length = 30;
+
 our ($row_block, $column_block) = (15, 15);  # Repeat row/column headings
 
 my $ssm_ping_url = 'http://www.venaas.no/multicast/ssmping/';
@@ -296,7 +298,7 @@ sub beacon_short_name {
 	my ($d) = @_;
 
 	my $name = beacon_name($d);
-	if (length($name) > 20) {
+	if (length($name) > $max_beacon_name_length) {
 		$name = substr($name, 0, 17);
 		$name .= '...';
 	}
