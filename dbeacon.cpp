@@ -250,7 +250,7 @@ void usage() {
 	exit(1);
 }
 
-static void logv(int level, const char *format, va_list vl)
+static void d_logv(int level, const char *format, va_list vl)
 {
 	char buffer[256];
 	vsnprintf(buffer, sizeof(buffer), format, vl);
@@ -270,11 +270,11 @@ static void logv(int level, const char *format, va_list vl)
 	}
 }
 
-static void log(int level, const char *format, ...)
+void d_log(int level, const char *format, ...)
 {
 	va_list vl;
 	va_start(vl, format);
-	logv(level, format, vl);
+	d_logv(level, format, vl);
 	va_end(vl);
 }
 
@@ -282,7 +282,7 @@ void info(const char *format, ...)
 {
 	va_list vl;
 	va_start(vl, format);
-	logv(LOG_INFO, format, vl);
+	d_logv(LOG_INFO, format, vl);
 	va_end(vl);
 }
 
@@ -290,7 +290,7 @@ void fatal(const char *format, ...)
 {
 	va_list vl;
 	va_start(vl, format);
-	logv(LOG_CRIT, format, vl);
+	d_logv(LOG_CRIT, format, vl);
 	va_end(vl);
 	exit(-1);
 }
@@ -441,7 +441,7 @@ int main(int argc, char **argv) {
 
 	if (useSSMPing) {
 		if (SetupSSMPing() < 0)
-			log(LOG_ERR, "Failed to setup SSM Ping.");
+			d_log(LOG_ERR, "Failed to setup SSM Ping.");
 		else
 			flags |= SSMPING_CAPABLE;
 	}
@@ -454,7 +454,7 @@ int main(int argc, char **argv) {
 			getSource(*i, 0, now, 0, false);
 		}
 	} else if (!ssmBootstrap.empty())
-		log(LOG_WARNING, "Tried to bootstrap using SSM when SSM is not enabled.");
+		d_log(LOG_WARNING, "Tried to bootstrap using SSM when SSM is not enabled.");
 
 	if (daemonize || use_syslog) {
 		use_syslog = true;
@@ -464,18 +464,9 @@ int main(int argc, char **argv) {
 	past_init = true;
 
 	if (daemonize) {
-		if (daemon(0, 0)) {
+		if (dbeacon_daemonize(pidfile)) {
 			perror("Failed to daemon()ize.");
 			return -1;
-		}
-		if (pidfile) {
-			FILE *f = fopen(pidfile, "w");
-			if (f) {
-				fprintf(f, "%u\n", getpid());
-				fclose(f);
-			} else {
-				log(LOG_ERR, "Failed to open PID file to write.");
-			}
 		}
 	}
 
@@ -1663,7 +1654,7 @@ void do_bw_dump(bool big) {
 		double incomingRate = bytesReceived * 8 / 10000.;
 
 		if (dumpBwReport) {
-			log(LOG_DEBUG, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)",
+			d_log(LOG_DEBUG, "BW: Received %u bytes (%.2f Kb/s) Sent %u bytes (%.2f Kb/s)",
 					bytesReceived, incomingRate, bytesSent, bytesSent * 8 / 10000.);
 		}
 

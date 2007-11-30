@@ -147,5 +147,7 @@ extern int verbose;
 void info(const char *format, ...);
 void fatal(const char *format, ...);
 
-#endif
+void d_log(int level, const char *format, ...);
+int dbeacon_daemonize(const char *pidfile);
 
+#endif

@@ -17,16 +17,20 @@
 #include "msocket.h"
 #include "address.h"
 
-#include <string.h>
 #include <stdio.h>
 #include <errno.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/time.h>
+#include <fcntl.h>
 #include <netdb.h>
+#include <string.h>
+#include <syslog.h>
 #include <unistd.h>
 #include <sys/uio.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <sys/times.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 #ifndef CMSG_LEN
 #define CMSG_LEN(size)	(sizeof(struct cmsghdr) + (size))
@@ -432,7 +436,7 @@ bool address::parse(const char *str, bool multicast, bool addport) {
 	freeaddrinfo(rres);
 
 	if (!res) {
-		info("No usable records for %s", tmp);
+		info("Failed to resolve %s", tmp);
 		return false;
 	}
 
@@ -572,3 +576,41 @@ uint64_t get_time_of_day() {
 	return timestamp;
 }
 
+int
+dbeacon_daemonize(const char *pidfile)
+{
+	if (chdir("/") < 0)
+		return -1;
+
+	int ch = fork();
+	if (ch < 0)
+		return -1;
+
+	/* exit parent */
+	if (ch != 0)
+		_exit(0);
+
+	/* child, lets prepare for daemonizing */
+
+	int null = open("/dev/null", O_RDWR);
+	if (null >= 0) {
+		dup2(null, 0);
+		dup2(null, 1);
+		dup2(null, 2);
+	}
+
+	umask(022);
+	setsid();
+
+	if (pidfile) {
+		FILE *f = fopen(pidfile, "w");
+		if (f) {
+			fprintf(f, "%u\n", getpid());
+			fclose(f);
+		} else {
+			d_log(LOG_ERR, "Failed to open PID file to write.");
+		}
+	}
+
+	return 0;
+}
