@@ -26,7 +26,7 @@ enum {
 	SSMPING_ANSWER = 'A'
 };
 
-static const int maxSSMPingMessage = 1000;
+static const size_t maxSSMPingMessage = 1000;
 
 static const char *SSMPingV6ResponseChannel = "ff3e::4321:1234";
 static const char *SSMPingV4ResponseChannel = "232.43.211.234";
@@ -35,11 +35,31 @@ static address SSMPingV6Addr(AF_INET6), SSMPingV4Addr(AF_INET);
 
 static int ssmPingSocket = -1;
 
-int SetupSSMPing() {
-	address addr;
+static void handle_ssmping(int s, const Message &msg)
+{
+	if (msg.buffer[0] != SSMPING_REQUEST || msg.len > maxSSMPingMessage)
+		return;
 
-	if (!addr.set_family(beaconUnicastAddr.family()))
-		return -1;
+	if (verbose > 1) {
+		char tmp[64];
+		info("Got SSM Ping Request from %s",
+			msg.from.to_string(tmp, sizeof(tmp)));
+	}
+
+	msg.buffer[0] = SSMPING_ANSWER;
+
+	if (SendTo(s, msg.buffer, msg.len, msg.to, msg.from) < 0)
+		return;
+
+	address mcastDest(msg.from.family() == AF_INET6 ?
+			SSMPingV6Addr : SSMPingV4Addr);
+	mcastDest.set_port(msg.from.port());
+
+	SendTo(s, msg.buffer, msg.len, msg.to, mcastDest);
+}
+
+int SetupSSMPing() {
+	address addr(beaconUnicastAddr.family());
 
 	if (!addr.set_port(4321))
 		return -1;
@@ -61,30 +81,9 @@ int SetupSSMPing() {
 	assert(SSMPingV4Addr.set_addr(SSMPingV4ResponseChannel));
 	assert(SSMPingV6Addr.set_addr(SSMPingV6ResponseChannel));
 
-	ListenTo(SSMPING, ssmPingSocket);
+	ListenTo(ssmPingSocket, handle_ssmping);
 
 	return 0;
 }
 
-void handle_ssmping(int s, address &from, const address &to, uint8_t *buffer,
-					int len, uint64_t ts) {
-	if (buffer[0] != SSMPING_REQUEST || len > maxSSMPingMessage)
-		return;
-
-	if (verbose > 1) {
-		char tmp[64];
-		info("Got SSM Ping Request from %s", from.to_string(tmp, sizeof(tmp)));
-	}
-
-	buffer[0] = SSMPING_ANSWER;
-
-	if (SendTo(s, buffer, len, to, from) < 0)
-		return;
-
-	address mcastDest(from.family() == AF_INET6 ?
-			SSMPingV6Addr : SSMPingV4Addr);
-	mcastDest.set_port(from.port());
-
-	SendTo(s, buffer, len, to, mcastDest);
-}
 

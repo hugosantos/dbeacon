@@ -47,6 +47,7 @@
 #include <iostream>
 #include <list>
 #include <vector>
+#include <set>
 
 using namespace std;
 
@@ -152,8 +153,13 @@ static uint64_t startTime = 0;
 
 static string dumpFile;
 
-static vector<pair<address, content_type> > mcastListen;
-static vector<pair<int, content_type> > mcastSocks;
+typedef pair<address, bool> ContentDesc;
+typedef vector<ContentDesc> McastListen;
+static McastListen mcastListen;
+
+typedef pair<int, SocketHandler> SocketDesc;
+typedef set<SocketDesc> McastSocks;
+static McastSocks mcastSocks;
 
 static vector<address> redist;
 
@@ -180,7 +186,6 @@ const char *pidfile = NULL;
 
 static void next_event(timeval *);
 static void insert_event(uint32_t, uint32_t);
-static void handle_mcast(int, content_type);
 static void handle_event();
 static void handle_gc();
 static int send_probe();
@@ -191,8 +196,6 @@ static void do_dump();
 static void do_bw_dump(bool);
 extern "C" void dumpBigBwStats(int);
 extern "C" void sendLeaveReport(int);
-
-static int SetupSocketAndFDSet(const address &, bool, bool);
 
 static inline double Rand() {
 	double f = rand();
@@ -306,6 +309,41 @@ static inline bool IsSSMEnabled() {
 	return ssmMcastSock != 0;
 }
 
+static void handle_asm(int sock, const Message &msg)
+{
+	bytesReceived += msg.len;
+	handle_nmsg(msg.from, msg.timestamp, msg.ttl, msg.buffer, msg.len, false);
+}
+
+static void handle_ssm(int sock, const Message &msg)
+{
+	bytesReceived += msg.len;
+	handle_nmsg(msg.from, msg.timestamp, msg.ttl, msg.buffer, msg.len, true);
+}
+
+static void handle_mcast(const SocketDesc &desc)
+{
+	Message msg;
+  
+	int len = RecvMsg(desc.first, msg.from, msg.to, buffer, bufferLen, msg.ttl,
+		msg.timestamp);
+	if (len < 0)
+		return;
+
+	if (msg.from.is_equal(beaconUnicastAddr))
+		return;
+
+	msg.buffer = buffer;
+	msg.len = len;
+
+	if (verbose > 3) {
+		char tmp[64];
+		info("RecvMsg(%s): len = %u", msg.from.to_string(tmp, sizeof(tmp)), len);
+	}
+
+	desc.second(desc.first, msg);
+}
+
 int main(int argc, char **argv) {
 	int res;
 
@@ -339,7 +377,7 @@ int main(int argc, char **argv) {
 		if (adminContact.empty())
 			fatal("No administration contact supplied.");
 
-		mcastListen.push_back(make_pair(probeAddr, NPROBE));
+		mcastListen.push_back(ContentDesc(probeAddr, false));
 
 		insert_event(SENDING_EVENT, 100);
 		insert_event(REPORT_EVENT, 10000);
@@ -369,7 +407,7 @@ int main(int argc, char **argv) {
 				insert_event(SSM_REPORT_EVENT, 15000);
 
 				if (listenForSSM) {
-					mcastListen.push_back(make_pair(ssmProbeAddr, NSSMPROBE));
+					mcastListen.push_back(ContentDesc(ssmProbeAddr, true));
 				}
 			}
 		}
@@ -385,57 +423,34 @@ int main(int argc, char **argv) {
 	address local;
 	local.set_family(probeAddr.family());
 
-	mcastSock = SetupSocketAndFDSet(local, false, false);
+	mcastSock = SetupSocket(local, false, false);
 	if (mcastSock < 0)
 		return -1;
 
-	// connect the socket to probeAddr, so the source address can be determined
-
-	socklen_t addrlen = probeAddr.addrlen();
-
-	if (beaconUnicastAddr.is_unspecified()) {
-		int tmpSock = socket(probeAddr.family(), SOCK_DGRAM, 0);
-		if (tmpSock < 0) {
-			perror("Failed to create socket to discover local addr");
-			return -1;
-		}
-
-		if (connect(tmpSock, probeAddr.saddr(), addrlen) != 0) {
-			perror("Failed to connect multicast socket");
-			return -1;
-		}
-
-		beaconUnicastAddr.set_family(probeAddr.family());
-		addrlen = beaconUnicastAddr.addrlen();
-
-		if (getsockname(tmpSock, beaconUnicastAddr.saddr(), &addrlen) != 0) {
-			perror("getsockname");
-			return -1;
-		}
-
-		close(tmpSock);
-	}
+	if (beaconUnicastAddr.is_unspecified())
+		beaconUnicastAddr = get_local_address_for(probeAddr);
 
 	if (bind(mcastSock, beaconUnicastAddr.saddr(), beaconUnicastAddr.addrlen()) != 0) {
 		perror("Failed to bind local socket");
 		return -1;
 	}
 
-	addrlen = beaconUnicastAddr.addrlen();
-
-	// Retrieve the used port
-	if (getsockname(mcastSock, beaconUnicastAddr.saddr(), &addrlen) != 0) {
+	if (beaconUnicastAddr.fromsocket(mcastSock) < 0) {
 		perror("getsockname");
 		return -1;
 	}
 
-	for (vector<pair<address, content_type> >::iterator i = mcastListen.begin(); i != mcastListen.end(); i++) {
-		int sock = SetupSocket(i->first, true, i->second == NSSMPROBE);
+	for (McastListen::const_iterator i = mcastListen.begin();
+			i != mcastListen.end(); ++i) {
+		int sock = SetupSocket(i->first, true, i->second);
 		if (sock < 0)
 			return -1;
-		ListenTo(i->second, sock);
-		if (i->second == NSSMPROBE) {
+
+		if (i->second) {
+			ListenTo(sock, handle_ssm);
 			ssmMcastSock = sock;
+		} else {
+			ListenTo(sock, handle_asm);
 		}
 	}
 
@@ -450,9 +465,9 @@ int main(int argc, char **argv) {
 		flags |= SSM_CAPABLE;
 
 		uint64_t now = get_timestamp();
-		for (vector<address>::const_iterator i = ssmBootstrap.begin(); i != ssmBootstrap.end(); i++) {
+		for (vector<address>::const_iterator i = ssmBootstrap.begin();
+				i != ssmBootstrap.end(); ++i)
 			getSource(*i, 0, now, 0, false);
-		}
 	} else if (!ssmBootstrap.empty())
 		d_log(LOG_WARNING, "Tried to bootstrap using SSM when SSM is not enabled.");
 
@@ -481,10 +496,10 @@ int main(int argc, char **argv) {
 	if (dumpBwReport)
 		insert_event(DUMP_BIG_BW_EVENT, 600000);
 
-	send_report(WEBSITE_REPORT_EVENT);
-
 	info("Local name is `%s` [Beacon group: %s, Local address: %s]",
 		beaconName.c_str(), sessionName, beaconUnicastAddr.to_string(tmp, sizeof(tmp), false));
+
+	send_report(WEBSITE_REPORT_EVENT);
 
 	signal(SIGUSR1, dumpBigBwStats);
 	signal(SIGINT, sendLeaveReport);
@@ -509,10 +524,10 @@ int main(int argc, char **argv) {
 				continue;
 			fatal("Select failed: %s", strerror(errno));
 		} else {
-			for (vector<pair<int, content_type> >::const_iterator
-					i = mcastSocks.begin(); i != mcastSocks.end(); ++i)
+			for (McastSocks::const_iterator i = mcastSocks.begin();
+					i != mcastSocks.end(); ++i)
 				if (FD_ISSET(i->first, &readset))
-					handle_mcast(i->first, i->second);
+					handle_mcast(*i);
 
 			handle_event();
 		}
@@ -521,10 +536,9 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
-void ListenTo(content_type content, int sock) {
-	SetupFDSet(sock);
-
-	mcastSocks.push_back(make_pair(sock, content));
+void ListenTo(int sock, SocketHandler handler)
+{
+	mcastSocks.insert(SocketDesc(sock, handler));
 }
 
 void show_version() {
@@ -1093,33 +1107,6 @@ void handle_gc() {
 	}
 }
 
-void handle_mcast(int sock, content_type type) {
-	address from, to;
-
-	uint64_t recvdts;
-	int ttl;
-
-	int len = RecvMsg(sock, from, to, buffer, bufferLen, ttl, recvdts);
-	if (len < 0)
-		return;
-
-	if (from.is_equal(beaconUnicastAddr))
-		return;
-
-	if (verbose > 3) {
-		char tmp[64];
-		info("RecvMsg(%s): len = %u", from.to_string(tmp, sizeof(tmp)), len);
-	}
-
-	if (type == SSMPING) {
-		handle_ssmping(sock, from, to, buffer, len, recvdts);
-	} else if (type == NPROBE || type == NSSMPROBE) {
-		bytesReceived += len;
-
-		handle_nmsg(from, recvdts, ttl, buffer, len, type == NSSMPROBE);
-	}
-}
-
 Stats::Stats() {
 	valid = false;
 	timestamp = lastupdate = 0;
@@ -1434,22 +1421,23 @@ int send_report(int type) {
 	int res;
 
 	if (type == SSM_REPORT) {
-		if ((res = sendto(mcastSock, buffer, len, 0, ssmProbeAddr.saddr(), ssmProbeAddr.addrlen())) < 0) {
-			cerr << "Failed to send SSM report: " << strerror(errno) << endl;
-		} else {
+		if ((res = sendto(mcastSock, buffer, len, 0, ssmProbeAddr.saddr(), ssmProbeAddr.addrlen())) < 0)
+			d_log(LOG_DEBUG, "Failed to send SSM report: %s", strerror(errno));
+		else
 			bytesSent += res;
-		}
 	} else {
-		for (vector<address>::const_iterator i = redist.begin(); i != redist.end(); i++) {
-			const address *to = &(*i);
-
+		for (vector<address>::const_iterator i = redist.begin();
+				i != redist.end(); ++i) {
 			char tmp[64];
 
 			if (verbose)
-				cerr << "Sending Report to " << to->to_string(tmp, sizeof(tmp)) << endl;
+				d_log(LOG_DEBUG, "Sending Report to %s",
+					i->to_string(tmp, sizeof(tmp)));
 
-			if ((res = sendto(mcastSock, buffer, len, 0, to->saddr(), to->addrlen())) < 0)
-				cerr << "Failed to send report to " << to->to_string(tmp, sizeof(tmp)) << ": " << strerror(errno) << endl;
+			if ((res = sendto(mcastSock, buffer, len, 0, i->saddr(),
+					i->addrlen())) < 0)
+				d_log(LOG_DEBUG, "Failed to send report to %s: %s",
+					i->to_string(tmp, sizeof(tmp)), strerror(errno));
 			else
 				bytesSent += res;
 		}
@@ -1687,15 +1675,5 @@ void SetupFDSet(int sock) {
 		largestSock = sock;
 
 	FD_SET(sock, &readSet);
-}
-
-int SetupSocketAndFDSet(const address &addr, bool shouldbind, bool ssm) {
-	int sock = SetupSocket(addr, shouldbind, ssm);
-
-	if (sock > 0) {
-		SetupFDSet(sock);
-	}
-
-	return sock;
 }
 

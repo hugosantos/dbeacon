@@ -59,6 +59,8 @@ struct address {
 
 	void set(const sockaddr *);
 
+	int fromsocket(int sock);
+
 	char *to_string(char *, size_t, bool port = true) const;
 	std::string to_string(bool port = true) const;
 

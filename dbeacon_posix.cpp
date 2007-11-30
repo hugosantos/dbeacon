@@ -517,6 +517,12 @@ std::string address::to_string(bool printport) const {
 	return std::string(to_string(tmp, sizeof(tmp), printport));
 }
 
+int address::fromsocket(int sock)
+{
+	socklen_t addrlen = this->addrlen();
+	return getsockname(sock, this->saddr(), &addrlen);
+}
+
 bool address::is_equal(const address &a) const {
 	if (stor.ss_family != a.stor.ss_family)
 		return false;
@@ -613,4 +619,27 @@ dbeacon_daemonize(const char *pidfile)
 	}
 
 	return 0;
+}
+
+address get_local_address_for(const address &remote)
+{
+	int tmpSock = socket(remote.family(), SOCK_DGRAM, 0);
+	if (tmpSock < 0) {
+		perror("Failed to create socket to discover local addr");
+		exit(-1);
+	}
+
+	if (connect(tmpSock, remote.saddr(), remote.addrlen()) != 0) {
+		perror("Failed to connect multicast socket");
+		exit(-1);
+	}
+
+	address result(remote.family());
+	if (result.fromsocket(tmpSock) < 0) {
+		perror("getsockname");
+		exit(-1);
+	}
+
+	close(tmpSock);
+	return result;
 }

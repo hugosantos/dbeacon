@@ -115,17 +115,7 @@ void removeSource(const address &, bool);
 uint64_t get_timestamp();
 uint64_t get_time_of_day();
 
-enum content_type {
-	NPROBE,
-	NSSMPROBE,
-	SSMPING
-};
-
-void ListenTo(content_type, int);
-void SetupFDSet(int);
-
 int SetupSSMPing();
-void handle_ssmping(int s, address &, const address &, uint8_t *, int, uint64_t);
 
 extern const char * const defaultPort;
 extern const int defaultTTL;
@@ -147,7 +137,20 @@ extern int verbose;
 void info(const char *format, ...);
 void fatal(const char *format, ...);
 
+address get_local_address_for(const address &);
+
 void d_log(int level, const char *format, ...);
 int dbeacon_daemonize(const char *pidfile);
+
+struct Message {
+	address from, to;
+	uint64_t timestamp;
+	int ttl;
+	uint8_t *buffer;
+	size_t len;
+};
+
+typedef void (*SocketHandler)(int socket, const Message &);
+void ListenTo(int sock, SocketHandler);
 
 #endif
