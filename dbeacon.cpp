@@ -525,9 +525,12 @@ int main(int argc, char **argv) {
 			fatal("Select failed: %s", strerror(errno));
 		} else {
 			for (McastSocks::const_iterator i = mcastSocks.begin();
-					i != mcastSocks.end(); ++i)
-				if (FD_ISSET(i->first, &readset))
+					res > 0 && i != mcastSocks.end(); ++i) {
+				if (FD_ISSET(i->first, &readset)) {
 					handle_mcast(*i);
+					res--;
+				}
+			}
 
 			handle_event();
 		}
