@@ -142,8 +142,6 @@ static bool listenForSSM = false;
 static bool useSSMPing = false;
 static address ssmProbeAddr;
 static int mcastSock, ssmMcastSock = 0;
-static int largestSock = 0;
-static fd_set readSet;
 static bool dumpBwReport = false;
 static string launchSomething;
 
@@ -362,7 +360,7 @@ int main(int argc, char **argv) {
 	MulticastStartup();
 
 	if (beaconName.empty())
-		fatal("No name supplied.");
+		fatal("No name supplied, check `dbeacon -h`.");
 
 	if (!probeAddrLiteral.empty()) {
 		if (!probeAddr.parse(probeAddrLiteral.c_str(), true))
@@ -375,7 +373,7 @@ int main(int argc, char **argv) {
 					sessionName);
 
 		if (adminContact.empty())
-			fatal("No administration contact supplied.");
+			fatal("No administration contact supplied, check `dbeacon -h`.");
 
 		mcastListen.push_back(ContentDesc(probeAddr, false));
 
@@ -417,8 +415,6 @@ int main(int argc, char **argv) {
 		else
 			strcpy(sessionName, beaconName.c_str());
 	}
-
-	FD_ZERO(&readSet);
 
 	address local;
 	local.set_family(probeAddr.family());
@@ -513,11 +509,15 @@ int main(int argc, char **argv) {
 		fd_set readset;
 		timeval eventm;
 
-		memcpy(&readset, &readSet, sizeof(fd_set));
+		FD_ZERO(&readset);
+
+		for (McastSocks::const_iterator i = mcastSocks.begin();
+				i != mcastSocks.end(); ++i)
+			FD_SET(i->first, &readset);
 
 		next_event(&eventm);
 
-		res = select(largestSock + 1, &readset, 0, 0, &eventm);
+		res = select(mcastSocks.rbegin()->first + 1, &readset, 0, 0, &eventm);
 
 		if (res < 0) {
 			if (errno == EINTR)
@@ -1668,12 +1668,5 @@ void sendLeaveReport(int) {
 	if (daemonize && pidfile)
 		unlink(pidfile);
 	exit(0);
-}
-
-void SetupFDSet(int sock) {
-	if (sock > largestSock)
-		largestSock = sock;
-
-	FD_SET(sock, &readSet);
 }
 
