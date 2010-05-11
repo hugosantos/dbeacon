@@ -1,12 +1,17 @@
-dbeacon, a Multicast Beacon
----------------------------
+This is dbeacon, a multicast connectivity monitoring tool.
+
+Update: As of 2010 dbeacon is no longer being developed. The source code is
+        still available for reference but unfortunately it's the result of
+		some quick organic development back in 2005 (initially it supported
+		another protocol that was being used at the time). I'm also
+		re-licensing the code from GPL to MIT. The original README follows.
 
 dbeacon is a Multicast Beacon written in C++. The main purpose of a beacon is
 to monitor other beacon's reachability and collect statistics such as loss,
 delay and jitter between beacons. dbeacon supports both IPv4 and IPv6
 multicast, collecting information via ASM and SSM.
 
-dbeacon was originally only IPv6 capable, designed to be used in the m6bone.
+dbeacon was originally IPv6-only, designed to be used in the m6bone.
 
   Copyright (c) 2005-7, Hugo Santos <hugo@fivebits.net>
 
@@ -65,8 +70,3 @@ If you are interested in running the matrix script also use -d so dbeacon export
 A more complete command line would be
 
 	./dbeacon -a MAIL -n NAME -b ff1e::1:f00d:beac -S -W http://yoursite.com -Wm http://yoursite.com/matrix/ -d
-
-Licensing
----------
-
-This code is licensed under the GNU Public Licence (GPL) v2.
