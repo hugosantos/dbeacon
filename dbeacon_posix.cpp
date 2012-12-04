@@ -21,6 +21,7 @@
 #include <sys/times.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <cstdlib>
 
 #ifndef CMSG_LEN
 #define CMSG_LEN(size)	(sizeof(struct cmsghdr) + (size))
