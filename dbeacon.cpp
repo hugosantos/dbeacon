@@ -247,7 +247,7 @@ static void d_logv(int level, const char *format, va_list vl)
 	vsnprintf(buffer, sizeof(buffer), format, vl);
 
 	if (use_syslog && past_init) {
-		syslog(level, buffer);
+		syslog(level, "%s",buffer);
 	} else {
 		char tbuf[64];
 		timeval tv;
@@ -1494,7 +1494,7 @@ void do_dump() {
 			fprintf(fp, " contact=\"%s\"", adminContact.c_str());
 		if (!twoLetterCC.empty())
 			fprintf(fp, " country=\"%s\"", twoLetterCC.c_str());
-		fprintf(fp, " age=\"%llu\" lastupdate=\"0\" rxlocal=\"true\">\n", (now - startTime) / 1000);
+		fprintf(fp, " age=\"%lu\" lastupdate=\"0\" rxlocal=\"true\">\n", (now - startTime) / 1000);
 
 		for (uint32_t k = 0; k < KnownFlags; k++) {
 			if (flags & (1 << k)) {
@@ -1521,8 +1521,8 @@ void do_dump() {
 			if (!i->second.CC.empty())
 				fprintf(fp, " country=\"%s\"", i->second.CC.c_str());
 
-			fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
-			fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
+			fprintf(fp, " age=\"%lu\"", (now - i->second.creation) / 1000);
+			fprintf(fp, " lastupdate=\"%lu\">\n", (now - i->second.lastevent) / 1000);
 
 			if (i->second.ASM.s.valid)
 				dumpStats(fp, "asm", i->second.ASM.s, now, i->second.sttl, true);
@@ -1546,9 +1546,9 @@ void do_dump() {
 				fprintf(fp, " contact=\"%s\"", i->second.adminContact.c_str());
 		}
 		fprintf(fp, " addr=\"%s\"", i->first.to_string(tmp, sizeof(tmp)));
-		fprintf(fp, " age=\"%llu\"", (now - i->second.creation) / 1000);
+		fprintf(fp, " age=\"%lu\"", (now - i->second.creation) / 1000);
 		fprintf(fp, " rxlocal=\"%s\"", i->second.rxlocal(now) ? "true" : "false");
-		fprintf(fp, " lastupdate=\"%llu\">\n", (now - i->second.lastevent) / 1000);
+		fprintf(fp, " lastupdate=\"%lu\">\n", (now - i->second.lastevent) / 1000);
 
 		for (uint32_t k = 0; k < KnownFlags; k++) {
 			if (i->second.Flags & (1 << k)) {

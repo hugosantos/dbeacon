@@ -283,7 +283,7 @@ int RecvMsg(int sock, address &from, address &to, uint8_t *buffer, int buflen, i
 	if (msg.msg_controllen > 0) {
 		for (cmsghdr *hdr = CMSG_FIRSTHDR(&msg); hdr; hdr = CMSG_NXTHDR(&msg, hdr)) {
 			if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_HOPLIMIT) {
-				ttl = *(int *)CMSG_DATA(hdr);
+				ttl = *(uint8_t *)CMSG_DATA(hdr);
 #ifdef IPV6_PKTINFO
 			} else if (hdr->cmsg_level == IPPROTO_IPV6 && hdr->cmsg_type == IPV6_PKTINFO) {
 				if (hdr->cmsg_len == CMSG_LEN(sizeof(in6_pktinfo))) {
@@ -297,7 +297,7 @@ int RecvMsg(int sock, address &from, address &to, uint8_t *buffer, int buflen, i
 				ttl = *(uint8_t *)CMSG_DATA(hdr);
 #endif
 			} else if (hdr->cmsg_level == IPPROTO_IP && hdr->cmsg_type == IP_TTL) {
-				ttl = *(int *)CMSG_DATA(hdr);
+				ttl = *(uint8_t *)CMSG_DATA(hdr);
 #ifdef SO_TIMESTAMP
 			} else if (hdr->cmsg_level == SOL_SOCKET && hdr->cmsg_type == SO_TIMESTAMP) {
 				timeval *tv = (timeval *)CMSG_DATA(hdr);
